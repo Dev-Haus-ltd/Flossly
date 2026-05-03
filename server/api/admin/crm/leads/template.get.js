@@ -1,3 +1,3 @@
-import { downloadAdminLeadTemplate } from '../../../../controllers/admin';
+import { downloadAdminLeadTemplate } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => downloadAdminLeadTemplate(event));

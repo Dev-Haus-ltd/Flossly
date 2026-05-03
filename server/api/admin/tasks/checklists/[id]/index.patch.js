@@ -1,3 +1,3 @@
-import { updateChecklist } from '../../../../../controllers/admin';
+import { updateChecklist } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => updateChecklist(event));

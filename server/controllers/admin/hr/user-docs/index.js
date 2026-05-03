@@ -13,14 +13,19 @@ export const getUserHrDocumentStatus = async (event) => {
 
   try {
     const { UserHrDocument } = await import('../../../../models/auth/userHrDocuments');
-    const userId = getRouterParam(event, 'userId');
+    const userIdParam = getRouterParam(event, 'id');
 
-    if (!userId) {
-      return error(400, 'userId is required');
+    if (!userIdParam) {
+      return error(400, 'User id is required');
+    }
+
+    const userId = parseInt(userIdParam, 10);
+    if (Number.isNaN(userId)) {
+      return error(400, 'User id must be a valid number');
     }
 
     const userDocs = await UserHrDocument.findAll({
-      where: { userId: parseInt(userId, 10) },
+      where: { userId },
       order: [['type', 'ASC'], ['name', 'ASC']],
     });
 
@@ -28,7 +33,7 @@ export const getUserHrDocumentStatus = async (event) => {
     const pendingCount = userDocs.filter((d) => d.status === 'Pending').length;
 
     return success({
-      userId: parseInt(userId, 10),
+      userId,
       documents: userDocs,
       summary: {
         total: userDocs.length,
@@ -148,11 +153,16 @@ export const updateUserHrDocument = async (event) => {
     const { UserHrDocument } = await import('../../../../models/auth/userHrDocuments');
     const rawBody = await readBody(event);
     const body = typeof rawBody === 'string' ? parseJsonBody(rawBody) : rawBody;
-    const id = getRouterParam(event, 'docId');
+    const idParam = getRouterParam(event, 'id');
     const { status, link } = body;
 
-    if (!id) {
-      return error(400, 'id is required');
+    if (!idParam) {
+      return error(400, 'User HR document id is required');
+    }
+
+    const id = parseInt(idParam, 10);
+    if (Number.isNaN(id)) {
+      return error(400, 'User HR document id must be a valid number');
     }
 
     if (!status) {
@@ -163,7 +173,7 @@ export const updateUserHrDocument = async (event) => {
       return error(400, 'status must be either Completed or Pending');
     }
 
-    const userDoc = await UserHrDocument.findByPk(parseInt(id, 10));
+    const userDoc = await UserHrDocument.findByPk(id);
 
     if (!userDoc) {
       return error(404, 'User HR document not found');

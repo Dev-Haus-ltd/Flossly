@@ -117,11 +117,17 @@ export const updateDefaultPriority = async (event) => {
 
   try {
     const { DefaultPriority, OrganisationPriority } = await import('../../../../models/index.js');
+    const idParam = getRouterParam(event, 'id');
     const body = await readBody(event);
-    const { id, name, color, sortOrder } = typeof body === 'string' ? JSON.parse(body) : body;
+    const { name, color, sortOrder } = typeof body === 'string' ? JSON.parse(body) : body;
 
-    if (!id) {
+    if (!idParam) {
       return error(400, "Priority ID is required");
+    }
+
+    const id = parseInt(idParam, 10);
+    if (Number.isNaN(id)) {
+      return error(400, "Priority ID must be a valid number");
     }
 
     // Find the default priority
@@ -224,11 +230,17 @@ export const updateDefaultStatus = async (event) => {
 
   try {
     const { DefaultStatus, OrganisationStatus } = await import('../../../../models/index.js');
+    const idParam = getRouterParam(event, 'id');
     const body = await readBody(event);
-    const { id, name, color, description } = typeof body === 'string' ? JSON.parse(body) : body;
+    const { name, color, description } = typeof body === 'string' ? JSON.parse(body) : body;
 
-    if (!id) {
+    if (!idParam) {
       return error(400, "Status ID is required");
+    }
+
+    const id = parseInt(idParam, 10);
+    if (Number.isNaN(id)) {
+      return error(400, "Status ID must be a valid number");
     }
 
     // Find the default status

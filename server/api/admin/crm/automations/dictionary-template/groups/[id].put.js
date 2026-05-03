@@ -1,3 +1,3 @@
-import { updateCrmAutomationDictionaryGroup } from '../../../../../../controllers/admin';
+import { updateCrmAutomationDictionaryGroup } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => updateCrmAutomationDictionaryGroup(event));

@@ -190,10 +190,12 @@ export const updateUserStatus = async (event) => {
   }
 
   const body = await readBody(event);
-  const { userId, organisationId, status } = body;
+  const { organisationId, status } = body;
 
-  if (!userId || !organisationId || !status) {
-    return error(400, "userId, organisationId, and status are required");
+  const userId = getRouterParam(event, 'id');
+
+  if (!organisationId || !status) {
+    return error(400, "organisationId and status are required");
   }
 
   // Valid status values matching the UserOrganisation model enum
@@ -258,11 +260,17 @@ export const getUserLoginHistory = async (event) => {
     return error(403, "Admin access required");
   }
 
+  const idParam = getRouterParam(event, 'id');
   const query = getQuery(event);
-  const { userId, limit = 50, offset = 0 } = query;
+  const { limit = 50, offset = 0 } = query;
 
-  if (!userId) {
-    return error(400, "userId is required");
+  if (!idParam) {
+    return error(400, "User id is required");
+  }
+
+  const userId = parseInt(idParam, 10);
+  if (Number.isNaN(userId)) {
+    return error(400, "User id must be a valid number");
   }
 
   try {
@@ -298,7 +306,9 @@ export const resetUserPassword = async (event) => {
   }
 
   const body = await readBody(event);
-  const { userId, newPassword } = body;
+  const { newPassword } = body;
+
+  const userId = getRouterParam(event, 'id');
 
   if (!userId || !newPassword) {
     return error(400, "userId and newPassword are required");
@@ -545,11 +555,9 @@ export const resendInvite = async (event) => {
   }
 
   const body = await readBody(event);
-  const { userId, organisationId } = body;
+  const { organisationId } = body;
 
-  if (!userId) {
-    return error(400, "userId is required");
-  }
+  const userId = getRouterParam(event, 'id');
 
   try {
     // Get user details

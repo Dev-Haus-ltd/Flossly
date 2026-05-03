@@ -1,3 +1,3 @@
-import { extendOrganisationTrial } from '../../../../controllers/admin';
+import { extendOrganisationTrial } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => extendOrganisationTrial(event));

@@ -1,3 +1,3 @@
-import { broadcastNotification } from '../../../controllers/admin';
+import { broadcastNotification } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => broadcastNotification(event));

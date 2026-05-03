@@ -1,3 +1,3 @@
-import { exportAllTasks } from '../../../../controllers/admin';
+import { exportAllTasks } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => exportAllTasks(event));

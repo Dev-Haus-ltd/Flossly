@@ -1,3 +1,3 @@
-import { resetUserPassword } from '../../../../controllers/admin';
+import { resetUserPassword } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => resetUserPassword(event));

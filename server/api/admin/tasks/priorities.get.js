@@ -1,3 +1,3 @@
-import { getDefaultPriorities } from '../../../controllers/admin';
+import { getDefaultPriorities } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => getDefaultPriorities(event));

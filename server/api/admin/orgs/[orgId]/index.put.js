@@ -1,3 +1,3 @@
-import { updateOrganisationInfo } from '../../../../controllers/admin';
+import { updateOrganisationInfo } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => updateOrganisationInfo(event));

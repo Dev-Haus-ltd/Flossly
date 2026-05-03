@@ -1,3 +1,3 @@
-import { seedConsentFormTemplates } from '../../../controllers/admin';
+import { seedConsentFormTemplates } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => seedConsentFormTemplates(event));

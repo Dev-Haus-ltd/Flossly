@@ -1,3 +1,3 @@
-import { updateTaskCategory } from '../../../../../controllers/admin';
+import { updateTaskCategory } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => updateTaskCategory(event));

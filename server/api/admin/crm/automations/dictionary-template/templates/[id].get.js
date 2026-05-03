@@ -1,3 +1,3 @@
-import { getCrmAutomationDictionaryTemplateById } from '../../../../../../controllers/admin';
+import { getCrmAutomationDictionaryTemplateById } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => getCrmAutomationDictionaryTemplateById(event));

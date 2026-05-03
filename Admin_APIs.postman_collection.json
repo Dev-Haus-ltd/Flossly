@@ -183,7 +183,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/users/login-history?userId=123&limit=20&offset=0",
+              "raw": "{{base_url}}/api/admin/users/123/login-history?limit=20&offset=0",
               "host": [
                 "{{base_url}}"
               ],
@@ -191,14 +191,10 @@
                 "api",
                 "admin",
                 "users",
+                "123",
                 "login-history"
               ],
               "query": [
-                {
-                  "key": "userId",
-                  "value": "123",
-                  "description": "User ID (required)"
-                },
                 {
                   "key": "limit",
                   "value": "20",
@@ -679,7 +675,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/automations/library/global",
+              "raw": "{{baseUrl}}/api/admin/crm/automations",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -687,9 +683,7 @@
                 "api",
                 "admin",
                 "crm",
-                "automations",
-                "library",
-                "global"
+                "automations"
               ]
             }
           },
@@ -701,7 +695,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/automations/library/practice",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/automations",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -709,10 +703,9 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
-                "automations",
-                "library",
-                "practice"
+                "automations"
               ],
               "query": []
             }
@@ -734,7 +727,7 @@
               "raw": "{\n  \"templateId\": 1,\n  \"enabled\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/automations/library/toggle-template",
+              "raw": "{{baseUrl}}/api/admin/crm/automations/toggle-template",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -743,7 +736,6 @@
                 "admin",
                 "crm",
                 "automations",
-                "library",
                 "toggle-template"
               ]
             }
@@ -766,7 +758,7 @@
               ]
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/automations/library/bulk-upload",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/automations/bulk-upload",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -774,13 +766,13 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "automations",
-                "library",
                 "bulk-upload"
               ]
             },
-            "description": "Bulk upload CRM automations as superadmin using a CSV/XLS/XLSX file upload. Organisation is determined from the URL path segment after `/crm/`. Only the file field is required in the form body."
+            "description": "Bulk upload CRM automations as superadmin using a CSV/XLS/XLSX file upload. Organisation is determined from the URL path segment after `/crm/org/`. Only the file field is required in the form body."
           },
           "response": []
         },
@@ -790,7 +782,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/automations/library/template-sample",
+              "raw": "{{baseUrl}}/api/admin/crm/automations/template-sample",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -799,7 +791,6 @@
                 "admin",
                 "crm",
                 "automations",
-                "library",
                 "template-sample"
               ]
             },
@@ -818,7 +809,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/feature-flags",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/feature-flags",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -826,6 +817,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "feature-flags"
               ],
@@ -850,7 +842,7 @@
               "raw": "{\n  \"meta\": true,\n  \"whatsapp\": false,\n  \"chatbot\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/feature-flags",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/feature-flags",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -858,6 +850,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "feature-flags"
               ]
@@ -872,7 +865,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/treatments",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/treatments",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -880,6 +873,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "treatments"
               ],
@@ -894,7 +888,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/treatments/1",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/treatments/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -902,6 +896,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "treatments",
                 "1"
@@ -926,7 +921,7 @@
               "raw": "{\n  \"name\": \"Composite Bonding\",\n  \"ordering\": 1,\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/treatments",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/treatments",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -934,6 +929,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "treatments"
               ]
@@ -956,7 +952,7 @@
               "raw": "{\n  \"name\": \"Composite Bonding Updated\",\n  \"ordering\": 2,\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/treatments/1",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/treatments/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -964,6 +960,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "treatments",
                 "1"
@@ -987,7 +984,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/treatments/1",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/treatments/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -995,6 +992,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "treatments",
                 "1"
@@ -1009,7 +1007,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/lead-sources",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/lead-sources",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1017,6 +1015,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "lead-sources"
               ],
@@ -1031,7 +1030,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/lead-sources/1",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/lead-sources/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1039,6 +1038,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "lead-sources",
                 "1"
@@ -1063,7 +1063,7 @@
               "raw": "{\n  \"name\": \"Google Ads\",\n  \"ordering\": 1,\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/lead-sources",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/lead-sources",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1071,6 +1071,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "lead-sources"
               ]
@@ -1093,7 +1094,7 @@
               "raw": "{\n  \"name\": \"Google Ads Updated\",\n  \"ordering\": 2,\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/lead-sources/1",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/lead-sources/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1101,6 +1102,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "lead-sources",
                 "1"
@@ -1124,7 +1126,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/lead-sources/1",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/lead-sources/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1132,6 +1134,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "lead-sources",
                 "1"
@@ -1146,7 +1149,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/alerts",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/alerts",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1154,6 +1157,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "alerts"
               ],
@@ -1168,7 +1172,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/alerts/hot",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/alerts/hot",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1176,6 +1180,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "alerts",
                 "hot"
@@ -1200,7 +1205,7 @@
               "raw": "{\n  \"key\": \"vip\",\n  \"label\": \"VIP lead\",\n  \"emoji\": \"\u2b50\",\n  \"color\": \"warning\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/alerts",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/alerts",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1208,6 +1213,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "alerts"
               ]
@@ -1230,7 +1236,7 @@
               "raw": "{\n  \"label\": \"VIP lead updated\",\n  \"emoji\": \"\u2b50\",\n  \"color\": \"error\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/alerts/vip",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/alerts/vip",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1238,6 +1244,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "alerts",
                 "vip"
@@ -1261,7 +1268,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/alerts/vip",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/alerts/vip",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1269,6 +1276,7 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "alerts",
                 "vip"
@@ -1321,7 +1329,7 @@
               ]
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/crm/1/leads/bulk-upload",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/leads/bulk-upload",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1329,12 +1337,13 @@
                 "api",
                 "admin",
                 "crm",
+                "org",
                 "1",
                 "leads",
                 "bulk-upload"
               ]
             },
-            "description": "Bulk upload CRM leads as superadmin using a CSV/XLS/XLSX file upload. Organisation is taken from the URL path after `/crm/`. Only the file field is required in the form body."
+            "description": "Bulk upload CRM leads as superadmin using a CSV/XLS/XLSX file upload. Organisation is taken from the URL path after `/crm/org/`. Only the file field is required in the form body."
           },
           "response": []
         }
@@ -2428,10 +2437,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"name\": \"Critical\",\n  \"color\": \"#FF0000\",\n  \"sortOrder\": 1\n}"
+              "raw": "{\n  \"name\": \"Critical\",\n  \"color\": \"#FF0000\",\n  \"sortOrder\": 1\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/tasks/priorities",
+              "raw": "{{base_url}}/api/admin/tasks/priorities/1",
               "host": [
                 "{{base_url}}"
               ],
@@ -2439,10 +2448,11 @@
                 "api",
                 "admin",
                 "tasks",
-                "priorities"
+                "priorities",
+                "1"
               ]
             },
-            "description": "Update a default priority. Changes cascade to ALL organisation priorities with the same key."
+            "description": "Update a default priority by id (URL). Changes cascade to ALL organisation priorities with the same key."
           },
           "response": []
         },
@@ -2488,10 +2498,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"name\": \"To Do\",\n  \"color\": \"#808080\",\n  \"description\": \"Task pending completion\"\n}"
+              "raw": "{\n  \"name\": \"To Do\",\n  \"color\": \"#808080\",\n  \"description\": \"Task pending completion\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/tasks/statuses",
+              "raw": "{{base_url}}/api/admin/tasks/statuses/1",
               "host": [
                 "{{base_url}}"
               ],
@@ -2499,10 +2509,11 @@
                 "api",
                 "admin",
                 "tasks",
-                "statuses"
+                "statuses",
+                "1"
               ]
             },
-            "description": "Update a default status. Changes cascade to ALL organisation statuses with the same key."
+            "description": "Update a default status by id (URL). Changes cascade to ALL organisation statuses with the same key."
           },
           "response": []
         }
@@ -2703,7 +2714,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas?limit=100&offset=0",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas?limit=100&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2711,7 +2722,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas"
               ],
@@ -2750,7 +2761,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2758,7 +2769,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1"
@@ -2789,7 +2800,7 @@
               "raw": "{\n  \"name\": \"Week 1 Rota\",\n  \"startDate\": \"2026-04-01\",\n  \"endDate\": \"2026-04-07\",\n  \"duration\": 7,\n  \"notes\": \"Spring week rota\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2797,7 +2808,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas"
               ]
@@ -2826,7 +2837,7 @@
               "raw": "{\n  \"name\": \"Updated Week 1 Rota\",\n  \"startDate\": \"2026-04-01\",\n  \"endDate\": \"2026-04-07\",\n  \"notes\": \"Updated notes\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2834,7 +2845,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1"
@@ -2864,7 +2875,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2872,7 +2883,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1"
@@ -2902,7 +2913,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1/publish",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/publish",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2910,7 +2921,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1",
@@ -2941,7 +2952,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1/unpublish",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/unpublish",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2949,7 +2960,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1",
@@ -2978,7 +2989,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1/shifts?limit=500&offset=0",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts?limit=500&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2986,7 +2997,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1",
@@ -3021,7 +3032,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1/shifts/1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3029,7 +3040,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1",
@@ -3062,7 +3073,7 @@
               "raw": "{\n  \"dentistId\": 10,\n  \"nurseId\": 11,\n  \"surgeryId\": 1,\n  \"label\": \"Morning Shift\",\n  \"color\": \"#3498db\",\n  \"startDate\": \"2026-04-01T09:00:00\",\n  \"endDate\": \"2026-04-01T17:00:00\",\n  \"breakTime\": 60,\n  \"notes\": \"Regular morning shift\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1/shifts",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3070,7 +3081,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1",
@@ -3101,7 +3112,7 @@
               "raw": "{\n  \"dentistId\": 10,\n  \"nurseId\": 12,\n  \"label\": \"Updated Morning Shift\",\n  \"startDate\": \"2026-04-01T09:00:00\",\n  \"endDate\": \"2026-04-01T17:30:00\",\n  \"breakTime\": 45\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1/shifts/1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3109,7 +3120,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1",
@@ -3141,7 +3152,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1/shifts/1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3149,7 +3160,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1",
@@ -3181,7 +3192,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1/shifts/1/start",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts/1/start",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3189,7 +3200,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1",
@@ -3222,7 +3233,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/rotas/1/shifts/1/complete",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts/1/complete",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3230,7 +3241,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "rotas",
                 "1",
@@ -3601,7 +3612,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/user-docs/users/1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/user-docs/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3609,14 +3620,13 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "user-docs",
-                "users",
                 "1"
               ]
             },
-            "description": "Get a specific user's HR document completion status with summary stats."
+            "description": "Get a specific user's HR document completion status with summary stats. The path id is the user id."
           },
           "response": []
         },
@@ -3632,7 +3642,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/user-docs&type=Recruitment",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/user-docs&type=Recruitment",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3640,7 +3650,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "user-docs&type=Recruitment"
               ],
@@ -3682,10 +3692,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"status\": \"Completed\",\n  \"link\": \"https://example.com/document.pdf\"\n}"
+              "raw": "{\n  \"status\": \"Completed\",\n  \"link\": \"https://example.com/document.pdf\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/user-docs/1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/user-docs/1",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3693,13 +3703,13 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "user-docs",
                 "1"
               ]
             },
-            "description": "Update (mark complete/incomplete) a user's HR document status."
+            "description": "Update (mark complete/incomplete) a user's HR document row. The path id is the UserHrDocument record id."
           },
           "response": []
         }
@@ -3721,7 +3731,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/leaves&status=Pending&limit=100&offset=0",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/leaves&status=Pending&limit=100&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3729,7 +3739,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "leaves&status=Pending&limit=100&offset=0"
               ],
@@ -3782,7 +3792,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/leaves/1/approve",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/leaves/1/approve",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3790,7 +3800,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "leaves",
                 "1",
@@ -3821,7 +3831,7 @@
               "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/hr/orgs/1/leaves/1/reject",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/leaves/1/reject",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3829,7 +3839,7 @@
                 "api",
                 "admin",
                 "hr",
-                "orgs",
+                "org",
                 "1",
                 "leaves",
                 "1",

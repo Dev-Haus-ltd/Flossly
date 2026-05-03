@@ -1,3 +1,3 @@
-import { getTaskCategoryById } from '../../../../../controllers/admin';
+import { getTaskCategoryById } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => getTaskCategoryById(event));

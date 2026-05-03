@@ -1,3 +1,3 @@
-import { getStorageUsagePerPractice } from '../../../controllers/admin';
+import { getStorageUsagePerPractice } from '~/server/controllers/admin';
 
 export default defineEventHandler((event) => getStorageUsagePerPractice(event));
