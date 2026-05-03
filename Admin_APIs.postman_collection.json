@@ -614,10 +614,19 @@
         {
           "name": "Get Usage Metrics",
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 10,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\"\n}"
+            },
             "url": {
-              "raw": "{{base_url}}/api/admin/orgs/10/metrics",
+              "raw": "{{base_url}}/api/admin/orgs/metrics",
               "host": [
                 "{{base_url}}"
               ],
@@ -625,25 +634,63 @@
                 "api",
                 "admin",
                 "orgs",
-                "10",
                 "metrics"
               ],
               "query": [
                 {
                   "key": "startDate",
                   "value": "2026-01-01",
-                  "description": "Filter records from this date (optional)",
+                  "description": "Optional when not in body; filter from this date",
                   "disabled": true
                 },
                 {
                   "key": "endDate",
                   "value": "2026-12-31",
-                  "description": "Filter records until this date (optional)",
+                  "description": "Optional when not in body",
+                  "disabled": true
+                },
+                {
+                  "key": "organisationId",
+                  "value": "",
+                  "description": "Optional GET fallback; prefer JSON body for POST",
                   "disabled": true
                 }
               ]
             },
-            "description": "Get comprehensive usage metrics across all modules: users, storage, documents, leads, tasks, appointments, and notifications. Includes conversion rates and completion rates."
+            "description": "Usage metrics for one organisation or (if organisationId is omitted) across all organisations. Pass organisationId in the JSON body (`orgId` accepted). Optional date range in body or query. GET /api/admin/orgs/metrics also works: optional organisationId and dates as query params."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Usage Metrics (all organisations, GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/orgs/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "orgs",
+                "metrics"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-12-31",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Same as POST but without a body; omit organisationId to aggregate across all practices."
           },
           "response": []
         },

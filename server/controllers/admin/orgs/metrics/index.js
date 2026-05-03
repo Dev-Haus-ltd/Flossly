@@ -10,7 +10,7 @@ import {
   UserNotification,
 } from '../../../../models';
 import { Op } from 'sequelize';
-import { getRouterParam, getQuery } from 'h3';
+import { getQuery, getMethod, readBody } from 'h3';
 
 export const getUsageMetrics = async (event) => {
   const admin = event.context.admin;
@@ -20,18 +20,27 @@ export const getUsageMetrics = async (event) => {
   }
 
   const query = getQuery(event);
-  const organisationId = getRouterParam(event, 'orgId');
-  const { startDate, endDate } = query;
-
-  if (!organisationId) {
-    return error(400, 'orgId is required');
+  const method = getMethod(event);
+  const body = method === 'GET' || method === 'HEAD' ? {} : (await readBody(event).catch(() => ({}))) || {};
+  const idRaw = body.organisationId ?? body.orgId ?? query.organisationId ?? query.orgId;
+  let organisationIdNum = null;
+  if (idRaw != null && idRaw !== '') {
+    organisationIdNum = parseInt(String(idRaw), 10);
+    if (Number.isNaN(organisationIdNum)) {
+      return error(400, 'Invalid organisation id');
+    }
   }
+
+  const startDate = body.startDate ?? query.startDate;
+  const endDate = body.endDate ?? query.endDate;
 
   try {
     const whereClause = {};
     const dateFilter = {};
 
-    whereClause.organisationId = parseInt(organisationId, 10);
+    if (organisationIdNum != null) {
+      whereClause.organisationId = organisationIdNum;
+    }
 
     if (startDate || endDate) {
       if (startDate) dateFilter[Op.gte] = new Date(startDate);
@@ -39,9 +48,9 @@ export const getUsageMetrics = async (event) => {
     }
 
     let userQuery = {};
-    if (organisationId) {
+    if (organisationIdNum != null) {
       const userOrgs = await UserOrganisation.findAll({
-        where: { organisationId: parseInt(organisationId) },
+        where: { organisationId: organisationIdNum },
         attributes: ['userId'],
       });
       const userIds = userOrgs.map((uo) => uo.userId);
@@ -101,16 +110,16 @@ export const getUsageMetrics = async (event) => {
       UserNotification.count({ where: { ...whereClause, isRead: false } }),
     ]);
 
-    let organisationName = null;
-    if (organisationId) {
-      const org = await Organisation.findByPk(organisationId, { attributes: ['name'] });
+    let organisationName = 'All organisations';
+    if (organisationIdNum != null) {
+      const org = await Organisation.findByPk(organisationIdNum, { attributes: ['name'] });
       organisationName = org?.name || 'Unknown';
     }
 
     return success({
       filters: {
-        organisationId: parseInt(organisationId, 10),
-        organisationName: organisationName || 'Unknown',
+        organisationId: organisationIdNum,
+        organisationName,
         startDate: startDate || null,
         endDate: endDate || null,
       },
