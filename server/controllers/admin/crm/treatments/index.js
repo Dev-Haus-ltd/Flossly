@@ -4,7 +4,7 @@ import { getRouterParam } from 'h3';
 import {
   requireAdmin,
   parseRequestPayload,
-  readOrganisationId,
+  parseOrganisationIdFromPath,
   normalizeCrmOptionName,
   listAdminCrmOptionsByCategory,
   getAdminCrmOptionById,
@@ -14,8 +14,8 @@ import {
 export const listCrmTreatments = async (event) => {
   requireAdmin(event);
   try {
-    const organisation = await readOrganisationId(event);
-    const items = await listAdminCrmOptionsByCategory(organisation.id, 'treatment');
+    const organisationId = parseOrganisationIdFromPath(event);
+    const items = await listAdminCrmOptionsByCategory(organisationId, 'treatment');
     return success(items);
   } catch (err) {
     console.error('List CRM treatments error:', err);
@@ -26,10 +26,10 @@ export const listCrmTreatments = async (event) => {
 export const getCrmTreatmentById = async (event) => {
   requireAdmin(event);
   try {
-    const organisation = await readOrganisationId(event);
+    const organisationId = parseOrganisationIdFromPath(event);
     const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
-    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: idRaw });
+    const item = await getAdminCrmOptionById({ organisationId, category: 'treatment', id: idRaw });
     return success(item);
   } catch (err) {
     console.error('Get CRM treatment error:', err);
@@ -41,13 +41,13 @@ export const createCrmTreatment = async (event) => {
   requireAdmin(event);
   try {
     const payload = await parseRequestPayload(event);
-    const organisation = await readOrganisationId(event);
+    const organisationId = parseOrganisationIdFromPath(event);
     const name = normalizeCrmOptionName(payload?.name);
     const color = payload?.color ? String(payload.color).trim() : null;
     const ordering = payload?.ordering == null || payload.ordering === '' ? null : Number(payload.ordering);
     if (!name) return error(400, 'name is required');
-    await ensureUniqueAdminCrmOptionName({ organisationId: organisation.id, category: 'treatment', name });
-    const created = await CrmOption.create({ organisationId: organisation.id, category: 'treatment', name, color, ordering, active: payload?.active !== false });
+    await ensureUniqueAdminCrmOptionName({ organisationId, category: 'treatment', name });
+    const created = await CrmOption.create({ organisationId, category: 'treatment', name, color, ordering, active: payload?.active !== false });
     return success(created);
   } catch (err) {
     console.error('Create CRM treatment error:', err);
@@ -61,12 +61,12 @@ export const updateCrmTreatment = async (event) => {
     const payload = await parseRequestPayload(event);
     const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
-    const organisation = await readOrganisationId(event);
-    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: idRaw });
+    const organisationId = parseOrganisationIdFromPath(event);
+    const item = await getAdminCrmOptionById({ organisationId, category: 'treatment', id: idRaw });
     if (payload?.name !== undefined) {
       const name = normalizeCrmOptionName(payload.name);
       if (!name) return error(400, 'name cannot be empty');
-      await ensureUniqueAdminCrmOptionName({ organisationId: organisation.id, category: 'treatment', name, excludeId: item.id });
+      await ensureUniqueAdminCrmOptionName({ organisationId, category: 'treatment', name, excludeId: item.id });
       item.name = name;
     }
     if (payload?.color !== undefined) item.color = payload.color ? String(payload.color).trim() : null;
@@ -83,11 +83,10 @@ export const updateCrmTreatment = async (event) => {
 export const deleteCrmTreatment = async (event) => {
   requireAdmin(event);
   try {
-    const payload = await parseRequestPayload(event);
     const idRaw = getRouterParam(event, 'id');
     if (idRaw == null || idRaw === '') return error(400, 'id is required');
-    const organisation = await readOrganisationId(event);
-    const item = await getAdminCrmOptionById({ organisationId: organisation.id, category: 'treatment', id: idRaw });
+    const organisationId = parseOrganisationIdFromPath(event);
+    const item = await getAdminCrmOptionById({ organisationId, category: 'treatment', id: idRaw });
     await item.destroy();
     return success({ deletedId: item.id });
   } catch (err) {

@@ -6,15 +6,7 @@ import { Op } from 'sequelize';
 import { getRouterParam, getQuery, readBody } from 'h3';
 import { sendInvitationEmail } from '../../utils/emailNotifications';
 import { v4 as uuidv4 } from 'uuid';
-
-function organisationIdFromPath(event) {
-  const orgParam = getRouterParam(event, 'orgId') ?? getRouterParam(event, 'organisationId');
-  const organisationId = Number(orgParam);
-  if (!Number.isFinite(organisationId) || organisationId < 1) {
-    return error(400, 'Organisation id is required in the URL path');
-  }
-  return organisationId;
-}
+import { parseOrganisationIdFromPath } from './shared';
 
 export const searchUsers = async (event) => {
   const admin = event.context.admin;
@@ -175,7 +167,7 @@ export const updateUserStatus = async (event) => {
     return error(403, "Admin access required");
   }
 
-  const organisationId = organisationIdFromPath(event);
+  const organisationId = parseOrganisationIdFromPath(event);
 
   const body = await readBody(event);
   const { status } = body;
@@ -462,7 +454,7 @@ export const updateUserLicense = async (event) => {
     return error(403, "Admin access required");
   }
 
-  const organisationId = organisationIdFromPath(event);
+  const organisationId = parseOrganisationIdFromPath(event);
 
   const body = await readBody(event) || {};
   const userId = getRouterParam(event, 'id');
@@ -548,7 +540,7 @@ export const resendInvite = async (event) => {
     return error(403, "Admin access required");
   }
 
-  const organisationId = organisationIdFromPath(event);
+  const organisationId = parseOrganisationIdFromPath(event);
 
   const userId = getRouterParam(event, 'id');
 
