@@ -976,35 +976,53 @@
       @close="handleLeadDialogClose"
     />
 
-    <v-dialog v-model="showCompose" max-width="900px">
-      <v-card class="rounded-lg">
-        <div class="d-flex justify-space-between align-center px-4 py-3">
-          <div>
-            <h5 class="mb-1 modal-title">Compose mail</h5>
-            <div class="text-caption text-medium-emphasis">{{ compose.recipients.length }} recipient(s)</div>
+    <v-dialog v-model="showCompose" max-width="860px">
+      <v-card class="rounded-lg compose-dialog-card">
+        <!-- Header -->
+        <div class="d-flex justify-space-between align-center px-5 py-3" style="background:#fafafa;border-bottom:1px solid #f0f0f0">
+          <div class="d-flex align-center" style="gap:10px">
+            <v-icon color="primary" size="20">mdi-email-fast-outline</v-icon>
+            <div>
+              <div class="font-weight-semibold" style="font-size:14px;line-height:1.2">Compose Email</div>
+              <div class="text-caption text-medium-emphasis">{{ compose.recipients.length }} recipient(s)</div>
+            </div>
           </div>
-          <v-btn icon @click="showCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
+          <v-btn icon variant="text" size="small" @click="showCompose = false"><v-icon size="18">mdi-close</v-icon></v-btn>
         </div>
-        <v-divider />
 
-        <div class="px-4 pt-4">
-          <div class="text-subtitle-2 text-grey-darken-1 mb-1">To</div>
-          <div class="d-flex align-center flex-wrap" style="gap: 6px">
-            <v-chip size="small" v-for="(e,i) in compose.recipients" :key="i" color="primary" variant="tonal">{{ e }}</v-chip>
+        <div class="compose-dialog-body">
+          <!-- Recipients -->
+          <div class="px-5 pt-3 pb-2 d-flex align-center flex-wrap" style="gap:6px;border-bottom:1px solid #f5f5f5">
+            <span class="text-caption text-grey-darken-1 mr-1" style="min-width:20px">To:</span>
+            <v-chip v-for="(e,i) in compose.recipients" :key="i" size="x-small" color="primary" variant="tonal">{{ e }}</v-chip>
+          </div>
+
+          <!-- Subject -->
+          <div class="px-5 pt-3 pb-3" style="border-bottom:1px solid #f5f5f5">
+            <label class="fld-lbl d-inline-block mb-1">Subject</label>
+            <v-text-field
+              v-model="compose.subject"
+              placeholder="Subject"
+              density="compact"
+              variant="solo"
+              class="input-bordered mb-0"
+              bg-color="white"
+              hide-details
+              flat
+            />
+          </div>
+
+          <!-- Body -->
+          <div class="px-5 pt-3 pb-4">
+            <CrmEmailTemplateEditor v-model="compose.html" />
           </div>
         </div>
 
-        <div class="px-4 pt-4">
-          <v-text-field v-model="compose.subject" single-line label="Subject" density="compact" variant="outlined" hide-details />
-        </div>
-
-        <div class="px-4 pt-2 pb-4">
-          <div class="text-subtitle-2 text-grey-darken-1 mb-2">Content</div>
-          <div ref="composeHolder" class="editor"></div>
-        </div>
-
-        <div class="px-4 pb-4 d-flex justify-end">
-          <v-btn :loading="composeLoading" flat color="primary" @click="sendCompose">Send</v-btn>
+        <!-- Footer -->
+        <div class="px-5 pb-4 d-flex justify-end compose-dialog-footer" style="border-top:1px solid #f0f0f0;padding-top:12px">
+          <v-btn :loading="composeLoading" flat color="primary" style="border-radius:8px;min-width:90px" @click="sendCompose">
+            <v-icon size="16" class="mr-1">mdi-send-outline</v-icon>Send
+          </v-btn>
         </div>
       </v-card>
     </v-dialog>
@@ -1294,6 +1312,7 @@ const emit = defineEmits([
   'refresh',
   'update:activePage',
   'update:archivedPage',
+  'update:convertedPage',
   'update:itemsPerPage',
   'alert-options-saved',
   'options-refreshed',
@@ -1302,10 +1321,13 @@ const props = defineProps({
   leads: { type: Array, default: () => [] },
   activeLeads: { type: Array, default: null },
   archivedLeads: { type: Array, default: null },
+  convertedLeads: { type: Array, default: () => [] },
   activeTotal: { type: Number, default: 0 },
   archivedTotal: { type: Number, default: 0 },
+  convertedTotal: { type: Number, default: 0 },
   activePage: { type: Number, default: 1 },
   archivedPage: { type: Number, default: 1 },
+  convertedPage: { type: Number, default: 1 },
   itemsPerPage: { type: Number, default: 25 },
   loading: { type: Boolean, default: false },
   headers: { type: Array, required: true },
@@ -1388,6 +1410,8 @@ const selectedLeads = ref([]);
 const isAllSelected = ref(false);
 const selectedArchivedLeads = ref([]);
 const isAllArchived = ref(false);
+const selectedConvertedLeads = ref([]);
+const isAllConverted = ref(false);
 const showLeadDetailDialog = ref(false);
 const selectedLead = ref({});
 const dialogInitialTab = ref(null);
@@ -1424,9 +1448,13 @@ const activeLeads = computed(() =>
 const archivedLeads = computed(() =>
   archivedLeadSource.value.filter((l) => isArchivedLead(l))
 );
+const convertedLeadsData = computed(() =>
+  Array.isArray(props.convertedLeads) ? props.convertedLeads : []
+);
 const allVisibleLeads = computed(() => [
   ...(activeLeads.value || []),
   ...(archivedLeads.value || []),
+  ...(convertedLeadsData.value || []),
 ]);
 const canDelete = computed(() => [1, 8].includes(user.value?.roleId));
 
@@ -2057,6 +2085,12 @@ const onActionClick = (key) => {
   else if (['mail','shareLocation'].includes(key)) openCompose(key)
 };
 
+const onConvertedActionClick = (key) => {
+  if (!selectedConvertedLeads.value.length) return;
+  selectedLeads.value = [...selectedConvertedLeads.value];
+  onActionClick(key);
+};
+
 const formatDate = (d) => {
   return formatDateDDMMYYYY(d);
 };
@@ -2187,11 +2221,34 @@ const onArchivedSelectionChange = () => {
       selectedArchivedLeads.value.some((selected) => selected.id === lead.id)
     );
 };
+const toggleAllConverted = () => {
+  const allCurrentlySelected =
+    convertedLeadsData.value.length > 0 &&
+    convertedLeadsData.value.every((lead) =>
+      selectedConvertedLeads.value.some((selected) => selected.id === lead.id)
+    );
+  if (allCurrentlySelected) {
+    isAllConverted.value = false;
+    selectedConvertedLeads.value = [];
+  } else {
+    selectedConvertedLeads.value = [...convertedLeadsData.value];
+    isAllConverted.value = true;
+  }
+};
+const onConvertedSelectionChange = () => {
+  isAllConverted.value =
+    !!convertedLeadsData.value.length &&
+    convertedLeadsData.value.every((lead) =>
+      selectedConvertedLeads.value.some((selected) => selected.id === lead.id)
+    );
+};
 const closeTray = () => {
   isAllSelected.value = false;
   selectedLeads.value = [];
   isAllArchived.value = false;
   selectedArchivedLeads.value = [];
+  isAllConverted.value = false;
+  selectedConvertedLeads.value = [];
   confirmArchive.value = false;
   confirmRestore.value = false;
   confirmArchivedDelete.value = false;
@@ -2277,11 +2334,9 @@ watch(
   { immediate: true }
 );
 
-// Compose mail dialog using Editor.js (client-only)
+// Compose mail dialog
 const showCompose = ref(false)
 const composeLoading = ref(false)
-const composeHolder = ref(null)
-let composeEditor = null
 let EditorCtor = null
 let Header = null
 let List = null
@@ -2350,7 +2405,6 @@ async function openCompose(actionKey) {
   compose.key = actionKey
   compose.recipients = getSelectedEmails()
   const def = defaultTemplates[actionKey] || defaultTemplates.mail
-  // Personalize subject/body for preview based on selection
   const many = (selectedLeads.value || []).length !== 1
   const lead = many ? null : (selectedLeads.value || [])[0]
   const ctx = buildRecipientContext({
@@ -2364,21 +2418,7 @@ async function openCompose(actionKey) {
   compose.subject = renderTemplateWithContext(def.subject, ctx, lead)
   compose.html = renderTemplateWithContext(def.html, ctx, lead)
   showCompose.value = true
-  await nextTick()
-  if (!(await ensureEditorModules())) return
-  if (composeEditor) { composeEditor.destroy(); composeEditor = null }
-  composeEditor = new EditorCtor({
-    holder: composeHolder.value,
-    tools: { header: Header, list: List },
-    data: htmlToBlocks(compose.html),
-    async onChange(api) {
-      const saved = await api.saver.save()
-      compose.html = blocksToHtml(saved)
-    }
-  })
 }
-
-watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
 
 const openSendPriceCompose = async () => {
   sendPrice.recipients = getSelectedEmails()
@@ -2518,7 +2558,12 @@ async function sendCompose() {
     })
     const resolvedSubject = renderTemplateWithContext(compose.subject, ctx, lead)
     const resolvedHtml = renderTemplateWithContext(compose.html, ctx, lead)
-    const res = await crmStore.sendLeadMail({ leadIds, subject: resolvedSubject, html: resolvedHtml, key: `manual_${compose.key}` })
+    const res = await crmStore.sendLeadMail({
+      leadIds,
+      subject: resolvedSubject,
+      html: resolvedHtml,
+      key: `manual_${compose.key}`,
+    })
     if (res && res.code === 0) {
       if (mainStore && mainStore.setSnackbar) mainStore.setSnackbar({ title: `Mail sent to ${res.data?.sent || compose.recipients.length} recipient(s)`, type: 'success' })
       showCompose.value = false
@@ -2874,7 +2919,7 @@ defineExpose({
   background: rgb(var(--v-theme-primary));
 }
 .action-bar {
-  position: relative;
+  position: fixed;
   bottom: 30px;
   left: 50%;
   transform: translateX(-50%);
@@ -3058,6 +3103,25 @@ defineExpose({
   padding: 10px;
   background: #fff;
 }
+.compose-dialog-card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88vh, 820px);
+  overflow: hidden;
+}
+
+.compose-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.compose-dialog-footer {
+  flex-shrink: 0;
+  background: #fff;
+}
+
 .send-price-card {
   border-radius: 18px;
   overflow: hidden;
@@ -3107,6 +3171,20 @@ defineExpose({
 .send-price-editor {
   min-height: 140px;
 }
+.fld-lbl {
+  font-weight: 400;
+  font-size: 14px;
+  color: #737373;
+}
+
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+}
+
 .action-item:hover { background-color: #f5f5f5; }
 
 .lead-name-cell-container {

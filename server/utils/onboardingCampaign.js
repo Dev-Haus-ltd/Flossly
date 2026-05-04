@@ -1,5 +1,5 @@
 import { template } from "./emailTemplate";
-import { transporter } from "./nodeMailer";
+import { getOrgTransporter, getFromAddress } from "./nodeMailer";
 import { formatDateDDMMYYYY } from "~/lib/dateFormatter.js";
 import { ONBOARDING_EMAIL_TEMPLATES, ONBOARDING_INAPP_MESSAGES } from '@shared/defaults/onboardingCampaign.js';
 import { renderOnboardingTokens } from "./templateTokens.js";
@@ -38,11 +38,13 @@ export const buildOnboardingEmail = ({ key, ctx }) => {
   return { subject, html };
 };
 
-export const sendOnboardingEmail = async ({ key, to, ctx, from }) => {
+export const sendOnboardingEmail = async ({ key, to, ctx, from, orgId }) => {
   const built = buildOnboardingEmail({ key, ctx });
   if (!built) return false;
-  await transporter.sendMail({
-    from: from || DEFAULT_FROM,
+  const orgTransporter = await getOrgTransporter(orgId);
+  const orgFrom = from || getFromAddress(orgId);
+  await orgTransporter.sendMail({
+    from: orgFrom,
     to,
     subject: built.subject,
     html: built.html,
