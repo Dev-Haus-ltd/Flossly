@@ -471,13 +471,39 @@ const confirmDelete = async () => {
     deleteDialog.value.loading = false;
   }
 };
+const getNextValidDate = (zone) => {
+  if (!zone.startDate || !zone.selectedDays?.length) {
+    return zone.startDate;
+  }
 
+  const start = new Date(zone.startDate);
+  const selectedDays = zone.selectedDays; // [0..6] (Mon-Sun based on your mapping)
+
+  // Convert JS day (0=Sunday) → your format (Monday=0)
+  const normalizeDay = (jsDay) => (jsDay === 0 ? 6 : jsDay - 1);
+
+  let current = new Date(start);
+
+  // Loop max 7 days to find nearest match
+  for (let i = 0; i < 7; i++) {
+    const day = normalizeDay(current.getDay());
+
+    if (selectedDays.includes(day)) {
+      return current.toISOString().split("T")[0];
+    }
+
+    current.setDate(current.getDate() + 1);
+  }
+
+  return zone.startDate; // fallback
+};
 const navigateToCalendar = (zone) => {
- router.push({
+  const validDate = getNextValidDate(zone);
+
+  router.push({
     path: "/diary/calendar",
     query: {
-      date: zone.startDate, 
-      
+      date: validDate,
     },
   });
 };
@@ -485,6 +511,7 @@ const navigateToCalendar = (zone) => {
 const clearSearch = () => {
   search.value = "";
 };
+
 
 const loadDentists = async () => {
   try {

@@ -427,8 +427,8 @@
     </v-dialog>
 
     <!-- Edit Modal -->
-    <v-dialog v-model="show" max-width="1100px" scrollable>
-      <v-card class="rounded-lg elevation-8">
+    <v-dialog v-model="show" max-width="1100px">
+      <v-card class="rounded-lg elevation-8 automation-edit-card">
         <div class="modal-header">
           <div>
             <h5 class="modal-title">{{ active?.name }}</h5>
@@ -455,37 +455,29 @@
         <div class="modal-body">
           <!-- Editor Section -->
           <div class="editor-section">
-            <div
-              v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'"
-              class="d-flex align-center justify-space-between mb-3"
-            >
-              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2">
-                <v-icon size="18" class="mr-2">mdi-email-edit-outline</v-icon>
-                Email Content
-              </div>
-              <v-chip size="x-small" variant="tonal" color="info">
-                Use [First Name] for personalization
-              </v-chip>
-            </div>
-            <div
-              class="mb-4"
-              v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp' && !isPatientJourney"
-            >
-              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2 mb-2">
-                <v-icon size="18" class="mr-2">mdi-email-outline</v-icon>
-                Email Subject
+            <template v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'">
+              <div
+                v-if="!isPatientJourney"
+                class="d-flex align-center justify-space-between mb-3"
+              >
+                <label class="fld-lbl">Subject</label>
+                <v-chip size="x-small" variant="tonal" color="primary">Use [First Name] to personalise</v-chip>
               </div>
               <v-text-field
+                v-if="!isPatientJourney"
                 v-model="active.subject"
                 variant="solo"
                 density="compact"
                 hide-details
-                bg-color="#FFFFFF"
+                class="input-bordered mb-4"
+                bg-color="white"
                 flat
                 placeholder="Subject line for this email"
               />
-            </div>
-            <div ref="editorEl" class="editor"></div>
+              <div class="text-caption font-weight-medium text-uppercase text-grey-darken-1 mb-2" style="letter-spacing:.06em">Body</div>
+              <CrmEmailTemplateEditor v-model="active.template" />
+            </template>
+            <div v-else ref="editorEl" class="editor"></div>
           </div>
         </div>
 
@@ -515,6 +507,7 @@
         </div>
       </v-card>
     </v-dialog>
+
   </div>
 </template>
 
@@ -1202,33 +1195,32 @@ const openEdit = async (row) => {
   }
   active.value = row
   show.value = true
-  await nextTick()
-  if (typeof window === 'undefined') return
-  if (!EditorCtor || !Header || !List) {
-    const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
-      import('@editorjs/editorjs'),
-      import('@editorjs/header'),
-      import('@editorjs/list'),
-    ])
-    EditorCtor = E; Header = H; List = L
-  }
-  if (ej) {
-    if (typeof ej.destroy === 'function') ej.destroy()
-    ej = null
-  }
-  if (!editorEl.value) {
+
+  // WhatsApp type still uses the EditorJS ref for plain text editing
+  if (String(row?.type || 'Email').toLowerCase() === 'whatsapp') {
     await nextTick()
-  }
-  if (!editorEl.value) return
-  ej = new EditorCtor({
-    holder: editorEl.value,
-    tools: { header: Header, list: List },
-    data: htmlToBlocks(row.template || ''),
-    onChange: async (api) => {
-      const saved = await api.saver.save()
-      active.value.template = blocksToHtml(saved)
+    if (typeof window === 'undefined') return
+    if (!EditorCtor || !Header || !List) {
+      const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
+        import('@editorjs/editorjs'),
+        import('@editorjs/header'),
+        import('@editorjs/list'),
+      ])
+      EditorCtor = E; Header = H; List = L
     }
-  })
+    if (ej) { if (typeof ej.destroy === 'function') ej.destroy(); ej = null }
+    if (!editorEl.value) await nextTick()
+    if (!editorEl.value) return
+    ej = new EditorCtor({
+      holder: editorEl.value,
+      tools: { header: Header, list: List },
+      data: htmlToBlocks(row.template || ''),
+      onChange: async (api) => {
+        const saved = await api.saver.save()
+        active.value.template = blocksToHtml(saved)
+      }
+    })
+  }
 }
 
 const confirmDeleteAutomation = (row) => {
@@ -1451,7 +1443,8 @@ const emailPreviewHtml = computed(() => {
 const saveContent = async () => {
   saving.value = true
   try {
-    if (ej && active.value) {
+    // WhatsApp still uses the standalone EditorJS ref
+    if (ej && active.value && String(active.value?.type || 'Email').toLowerCase() === 'whatsapp') {
       const saved = await ej.save()
       active.value.template = blocksToHtml(saved)
     }
@@ -1928,10 +1921,10 @@ watch(showGroupDialog, (v) => {
 }
 
 .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 28px;
   background: #fafafa;
-  min-height: 450px;
-  max-height: 70vh;
   overflow-y: auto;
 }
 
@@ -1940,6 +1933,20 @@ watch(showGroupDialog, (v) => {
   padding: 0;
   border-radius: 0;
   border: 0;
+}
+
+.fld-lbl {
+  font-weight: 400;
+  font-size: 14px;
+  color: #737373;
+}
+
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
 }
 
 .editor {
@@ -1984,11 +1991,19 @@ watch(showGroupDialog, (v) => {
   gap: 12px;
   padding: 18px 28px;
   background: white;
+  flex-shrink: 0;
 }
 
 .modal-footer--edit {
   justify-content: flex-end;
   padding: 12px 16px;
+}
+
+.automation-edit-card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88vh, 860px);
+  overflow: hidden;
 }
 
 </style>

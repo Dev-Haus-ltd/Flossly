@@ -138,6 +138,57 @@
               "
               @update:filters="onLeadsFilterUpdate"
             />
+
+            <v-menu :close-on-content-click="false">
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  variant="flat"
+                  density="compact"
+                  class="tbl-top-btn ml-2"
+                  style="width: 180px"
+                >
+                  <span>Manage Columns</span>
+                  <v-icon class="ml-2" size="18">mdi-table-column</v-icon>
+                </v-btn>
+              </template>
+              <v-card class="pa-2" max-width="500" v-if="listViewRef">
+                <p class="mb-2 text-subtitle-2">Selected Columns</p>
+                <div class="d-flex flex-wrap">
+                  <div
+                    v-for="(item, index) in listViewRef.selectedHeaders"
+                    :key="index"
+                    class="crm-col-box ma-1 pa-2 d-flex align-center justify-space-between"
+                    :style="{ backgroundColor: listViewRef.getColColor(item.title) }"
+                  >
+                    <span>{{ item.title }}</span>
+                    <v-icon
+                      v-if="item.key !== 'name'"
+                      color="white"
+                      size="16"
+                      class="ml-1"
+                      style="cursor:pointer"
+                      @click="listViewRef.removeHeaderFromSelected(item)"
+                    >mdi-close-circle</v-icon>
+                  </div>
+                </div>
+                <p class="mb-2 mt-3 text-subtitle-2">Available Columns</p>
+                <div class="d-flex flex-wrap">
+                  <div
+                    v-for="(item, index) in listViewRef.filteredAvailableHeaders"
+                    :key="index"
+                    class="crm-col-box ma-1 pa-2 d-flex align-center justify-center"
+                    :style="{ backgroundColor: listViewRef.getColColor(item.title) }"
+                    @click="listViewRef.addHeaderInSelected(item)"
+                  >
+                    {{ item.title }}
+                  </div>
+                </div>
+              </v-card>
+              <v-card class="pa-4" v-else>
+                <p class="text-caption text-medium-emphasis mb-0">Load leads first to manage columns.</p>
+              </v-card>
+            </v-menu>
           </div>
 
           <!-- Right: Connection Controls -->
@@ -203,6 +254,7 @@
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
+        ref="listViewRef"
         v-if="hasFetched && (activeLeads.length || archivedLeads.length || convertedLeads.length || route.query.leadId)"
         :active-leads="activeLeads"
         :archived-leads="archivedLeads"
@@ -226,6 +278,7 @@
         @book="onBookLeads"
         @refresh="handleLeadsRefresh"
         @alert-options-saved="onAlertOptionsSaved"
+        @options-refreshed="onOptionsRefreshed"
         @update:activePage="onActivePageChange"
         @update:archivedPage="onArchivedPageChange"
         @update:convertedPage="onConvertedPageChange"
@@ -249,6 +302,7 @@
             :staff-list="userList"
             @close="addLeadDrawer = false"
             @success="handleSuccess"
+            @options-refreshed="onOptionsRefreshed"
           />
           <AddAppointment
             v-model="showBookingDrawer"
@@ -810,8 +864,8 @@ const leadStats = computed(() => {
     {
       icon: "https://cdn.lordicon.com/asyunleq.json",
       label: "Total Lead",
-      value: Number(leadStatsData.value.total || 0),
-      valueColor: "on-surface",
+      value: (activeTotal.value || 0) + (convertedTotal.value || 0),
+      valueColor: 'on-surface'
     },
     {
       icon: "https://cdn.lordicon.com/kphwxuxr.json",
@@ -837,9 +891,16 @@ const leadStats = computed(() => {
       value: byStatus("Lost"),
       valueColor: "error",
     },
+    {
+      icon: "https://cdn.lordicon.com/zpxybbhl.json",
+      label: "Uploaded",
+      value: byStatus("Uploaded"),
+      valueColor: 'purple'
+    },
   ];
 });
 
+const listViewRef = ref(null);
 const searchInput = ref("");
 const search = ref("");
 let searchTimeout = null;
@@ -1373,6 +1434,11 @@ const onAlertOptionsSaved = (options) => {
   alertOptions.value = options;
 };
 
+const onOptionsRefreshed = ({ category, options }) => {
+  if (category === 'lead_source') leadSources.value = options
+  else if (category === 'treatment') treatmentSources.value = options
+}
+
 const normalizeDateInput = (value) => {
   if (!value) return bookingDateInput.value;
   if (typeof value === "string") {
@@ -1692,7 +1758,7 @@ const resolveLeadSource = (source) => {
     if (match) return match;
     return { id: null, name: source.trim() };
   }
-  return { id: 99, name: "Meta Leadgen" };
+  return { id: null, name: "" };
 };
 
 const handleSuccess = async () => {
@@ -1714,9 +1780,7 @@ const mapLeadRow = (l) => ({
   dob: l.dob || null,
   occupation: l.occupation || "",
   location: l.location || "",
-  leadSource: l.leadSource?.name
-    ? l.leadSource
-    : { id: 99, name: l.leadSource || "Meta Leadgen" },
+  leadSource: l.leadSource?.name ? l.leadSource : { id: null, name: l.leadSource || "" },
   metaPage: l.pageName || l.pageId || "",
   leadStatus: l.leadStatus || "New",
   treatment: l.treatment || { id: null, name: "" },
@@ -2132,4 +2196,15 @@ watch(isConnected, (val) => {
   color: #737373;
   opacity: 1;
 }
+
+.crm-col-box {
+  min-width: calc(33.33% - 8px);
+  color: white;
+  border-radius: 6px;
+  font-weight: 400;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 36px;
+}
+
 </style>

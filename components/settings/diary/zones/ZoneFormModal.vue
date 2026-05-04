@@ -359,7 +359,7 @@ const repeatPatterns = [
 const displayTypes = [
   { title: "Background", value: "background" },
   { title: "Border", value: "border" },
-  { title: "Both", value: "both" },
+  { title: "Background & Border", value: "both" },
 ];
 
 const isOpen = computed({
