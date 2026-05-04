@@ -343,6 +343,12 @@ export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today, org }) => {
     const d = daysSince(today, anchorDate);
     return { due: d !== null && d === trigger.days, sentKey: tpl.key };
   }
+  if (trigger.type === "activation_days") {
+    const anchorDate = getLeadActivationAnchor(lead, tpl);
+    if (!anchorDate) return { due: false, sentKey: tpl.key };
+    const d = daysSince(today, anchorDate);
+    return { due: d !== null && d === trigger.days, sentKey: tpl.key };
+  }
   if (trigger.type === "birthday_offset") {
     if (!lead?.dob) return { due: false, sentKey: `${tpl.key}_${today.getFullYear()}` };
     const year = today.getFullYear();
@@ -597,6 +603,7 @@ export const sendImmediateCrmAutomationsForLead = async (lead, options = {}) => 
     if (!trigger) continue;
     const isImmediate =
       (trigger.type === "inquiry_days" && trigger.days === 0) ||
+      (trigger.type === "activation_days" && trigger.days === 0) ||
       (includeSendNow && trigger.type === "send_now");
     if (!isImmediate) continue;
     const sentKey = tpl.key;

@@ -197,6 +197,7 @@ const normalizeAutomationTrigger = (trigger) => {
     case 'send_now':
       return { type }
     case 'inquiry_days':
+    case 'activation_days':
     case 'birthday_offset':
       return { type, days: safeNumber(trigger.days, 0) }
     case 'birthday_month_start':

@@ -184,10 +184,12 @@
 
             <v-row dense>
 
-              <!-- inquiry_days: days number + date picker -->
-              <template v-if="triggerForm.triggerType === 'inquiry_days'">
+              <!-- inquiry_days / activation_days: days number + date picker -->
+              <template v-if="['inquiry_days', 'activation_days'].includes(triggerForm.triggerType)">
                 <v-col cols="12" sm="6">
-                  <div class="trig-field-label">Days after {{ resolvedLeadId ? 'activation' : 'enquiry' }}</div>
+                  <div class="trig-field-label">
+                    Days after {{ triggerForm.triggerType === 'activation_days' ? 'activation' : (resolvedLeadId ? 'activation' : 'enquiry') }}
+                  </div>
                   <v-text-field
                     v-model="triggerForm.triggerDays"
                     type="number"
@@ -202,7 +204,12 @@
                   />
                 </v-col>
                 <v-col cols="12" sm="6">
-                  <div class="trig-field-label">Or pick a target date <span class="trig-field-hint">(calculates days from today)</span></div>
+                  <div class="trig-field-label">
+                    Or pick a target date
+                    <span class="trig-field-hint">
+                      (calculates days from {{ triggerForm.triggerType === 'activation_days' ? 'activation day' : 'today' }})
+                    </span>
+                  </div>
                   <v-text-field
                     :model-value="triggerInquiryDatePickerValue"
                     type="date"
@@ -570,6 +577,7 @@ const tableHeaders = computed(() => {
 const triggerTypes = [
   { label: 'Send Now', value: 'send_now', icon: 'mdi-send-circle-outline' },
   { label: 'After Enquiry', value: 'inquiry_days', icon: 'mdi-calendar-clock' },
+  { label: 'After Activation', value: 'activation_days', icon: 'mdi-timer-outline' },
   { label: 'Birthday', value: 'birthday_offset', icon: 'mdi-cake-variant-outline' },
   { label: 'Birthday Month', value: 'birthday_month_start', icon: 'mdi-cake-layered' },
   { label: 'Black Friday', value: 'black_friday', icon: 'mdi-tag-outline' },
@@ -915,6 +923,11 @@ const buildBulkRowsFromSelectedLeads = () => {
 }
 
 const formatLeadAwareTriggerPreview = (trigger = {}) => {
+  if (trigger?.type === 'activation_days') {
+    const days = Number(trigger?.days || 0)
+    if (days === 0) return 'Immediately when automation is activated'
+    return `${days} day${days === 1 ? '' : 's'} after activation`
+  }
   if (resolvedLeadId.value && trigger?.type === 'inquiry_days') {
     const days = Number(trigger?.days || 0)
     if (days === 0) return 'Immediately when automation is activated'
@@ -1806,9 +1819,15 @@ watch(showGroupDialog, (v) => {
 
 /* Config fields */
 .trig-field-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  min-height: 32px;
   font-size: 12px;
   font-weight: 500;
   color: #6b7280;
+  line-height: 1.35;
   margin-bottom: 5px;
 }
 
