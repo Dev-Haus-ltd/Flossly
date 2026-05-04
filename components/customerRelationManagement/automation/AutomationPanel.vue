@@ -636,6 +636,14 @@ const clearFilters = () => {
   filterType.value = 'all'
 }
 
+const selectedLeadIdsNormalized = computed(() =>
+  [...new Set((Array.isArray(props.selectedLeadIds) ? props.selectedLeadIds : [])
+    .map((id) => Number(id || 0))
+    .filter(Boolean))]
+)
+
+const isBulkLeadMode = computed(() => selectedLeadIdsNormalized.value.length > 0)
+
 const resolvedGroups = computed(() => {
   if (Array.isArray(props.groups) && props.groups.length) {
     return props.groups
@@ -662,14 +670,14 @@ const resolveGroupAuthor = (group) =>
   })
 
 const bulkGroupState = computed(() => {
-  if (!props.selectedLeadIds?.length) return null
-  const total = props.selectedLeadIds.length
+  if (!selectedLeadIdsNormalized.value.length) return null
+  const total = selectedLeadIdsNormalized.value.length
   const result = {}
   for (const group of visibleGroups.value) {
     const keys = group.templateKeys || []
     let enabledCount = 0
-    for (const leadId of props.selectedLeadIds) {
-      const leadRows = crmStore.automationRowsCache[Number(leadId)] || []
+    for (const leadId of selectedLeadIdsNormalized.value) {
+      const leadRows = crmStore.automationRowsCache[leadId] || []
       const groupRows = keys.length
         ? leadRows.filter(r => new Set(keys).has(r.key))
         : leadRows.filter(r => r.groupKey === group.key)
@@ -848,6 +856,64 @@ const resolvedLeadId = computed(() => {
   return id ? Number(id) : null
 })
 
+const stableTriggerKey = (trigger) => {
+  if (!trigger || typeof trigger !== 'object') return ''
+  const normalized = Object.keys(trigger).sort().reduce((acc, key) => {
+    acc[key] = trigger[key]
+    return acc
+  }, {})
+  return JSON.stringify(normalized)
+}
+
+const buildBulkRowsFromSelectedLeads = () => {
+  const leadIds = selectedLeadIdsNormalized.value
+  if (!leadIds.length) return []
+
+  const rowMap = new Map()
+  leadIds.forEach((leadId) => {
+    const leadRows = Array.isArray(crmStore.automationRowsCache[leadId])
+      ? crmStore.automationRowsCache[leadId]
+      : []
+    leadRows.forEach((row) => {
+      if (!row?.key) return
+      if (!rowMap.has(row.key)) rowMap.set(row.key, [])
+      rowMap.get(row.key).push(row)
+    })
+  })
+
+  if (props.includeDefaults) {
+    crmAutomationDefaults.forEach((row) => {
+      if (!row?.key || rowMap.has(row.key)) return
+      rowMap.set(row.key, [])
+    })
+  }
+
+  return Array.from(rowMap.entries()).map(([key, leadRows]) => {
+    const fallback = crmAutomationDefaults.find((item) => item.key === key) || {}
+    const baseRow = leadRows[0] || fallback
+    const triggerKeys = [...new Set(leadRows.map((row) => stableTriggerKey(row?.trigger)).filter(Boolean))]
+    const hasMixedTrigger = triggerKeys.length > 1
+    const resolvedTrigger = hasMixedTrigger
+      ? null
+      : (leadRows.find((row) => row?.trigger)?.trigger || baseRow?.trigger)
+    const enabledCount = leadRows.filter((row) => !!row?.enabled).length
+
+    return {
+      ...fallback,
+      ...baseRow,
+      key,
+      trigger: resolvedTrigger,
+      sending: hasMixedTrigger
+        ? 'Mixed across selected leads'
+        : (resolvedTrigger ? formatLeadAwareTriggerPreview(resolvedTrigger) : (baseRow?.sending || fallback?.sending || '')),
+      enabled: leadRows.length ? enabledCount === leadIds.length : !!baseRow?.enabled,
+      bulkEnabledCount: enabledCount,
+      bulkTotalCount: leadIds.length,
+      bulkHasMixedTrigger: hasMixedTrigger,
+    }
+  })
+}
+
 const formatLeadAwareTriggerPreview = (trigger = {}) => {
   if (resolvedLeadId.value && trigger?.type === 'inquiry_days') {
     const days = Number(trigger?.days || 0)
@@ -988,7 +1054,14 @@ const toggleAutomationGroup = async (card, val) => {
 const loadRows = async ({ force = false } = {}) => {
   try {
     let apiItems = []
-    if (resolvedLeadId.value) {
+    if (isBulkLeadMode.value) {
+      await Promise.all(
+        selectedLeadIdsNormalized.value.map((leadId) =>
+          crmStore.fetchLeadAutomations(leadId, { force })
+        )
+      )
+      apiItems = buildBulkRowsFromSelectedLeads()
+    } else if (resolvedLeadId.value) {
       await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force })
       apiItems = crmStore.automationRowsCache[Number(resolvedLeadId.value)] || []
     } else {
@@ -1040,6 +1113,11 @@ watch(resolvedLeadId, () => {
   refresh({ forceRows: true })
 })
 
+watch(selectedLeadIdsNormalized, () => {
+  clearAutomationSelection()
+  refresh({ forceRows: true })
+})
+
 // Keep local rows in sync with the store cache so any external write
 // (table column toggle, bulk dialog, invalidation) is reflected immediately
 // without needing to close and reopen the panel.
@@ -1052,6 +1130,19 @@ watch(
       : cacheRows.filter(item => !defaultAutomationKeySet.has(item.key))
     rows.splice(0, rows.length, ...(filtered.length ? filtered : (props.includeDefaults ? crmAutomationDefaults : [])))
   }
+)
+
+watch(
+  () => selectedLeadIdsNormalized.value.map((leadId) => crmStore.automationRowsCache[leadId] || []),
+  () => {
+    if (!isBulkLeadMode.value) return
+    const nextRows = buildBulkRowsFromSelectedLeads()
+    const filtered = props.includeDefaults
+      ? nextRows
+      : nextRows.filter(item => !defaultAutomationKeySet.has(item.key))
+    rows.splice(0, rows.length, ...(filtered.length ? filtered : (props.includeDefaults ? crmAutomationDefaults : [])))
+  },
+  { deep: true }
 )
 
 // Preview dialog state
