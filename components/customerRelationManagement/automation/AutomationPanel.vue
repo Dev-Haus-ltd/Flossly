@@ -513,6 +513,7 @@ import { isDefaultAutomationGroup, resolveAutomationGroupAuthor } from '@/lib/cr
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { htmlToPlainText } from '@/lib/format/text'
+import { getLeadDisplayName } from '@/lib/normalizers/lead'
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
@@ -533,6 +534,7 @@ const props = defineProps({
   showSentStatusColumn: { type: Boolean, default: false },
   showResendAction: { type: Boolean, default: false },
   selectedLeadIds: { type: Array, default: null },
+  selectedLeads: { type: Array, default: null },
 })
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -637,6 +639,19 @@ const selectedLeadIdsNormalized = computed(() =>
     .map((id) => Number(id || 0))
     .filter(Boolean))]
 )
+
+const selectedLeadNameMap = computed(() => {
+  const entries = Array.isArray(props.selectedLeads) ? props.selectedLeads : []
+  return new Map(
+    entries
+      .map((lead) => {
+        const id = Number(lead?.id || 0)
+        if (!id) return null
+        return [id, getLeadDisplayName(lead || {}) || `Lead #${id}`]
+      })
+      .filter(Boolean)
+  )
+})
 
 const isBulkLeadMode = computed(() => selectedLeadIdsNormalized.value.length > 0)
 
@@ -894,7 +909,7 @@ const buildBulkRowsFromSelectedLeads = () => {
     leadRows.forEach((row) => {
       if (!row?.key) return
       if (!rowMap.has(row.key)) rowMap.set(row.key, [])
-      rowMap.get(row.key).push(row)
+      rowMap.get(row.key).push({ ...row, __sourceLeadId: leadId })
     })
   })
 
@@ -914,6 +929,16 @@ const buildBulkRowsFromSelectedLeads = () => {
       ? null
       : (leadRows.find((row) => row?.trigger)?.trigger || baseRow?.trigger)
     const enabledCount = leadRows.filter((row) => !!row?.enabled).length
+    const bulkTriggerDetails = leadIds.map((leadId) => {
+      const matchingRow = leadRows.find((row) => Number(row?.__sourceLeadId || 0) === leadId)
+      const leadName = selectedLeadNameMap.value.get(leadId) || `Lead #${leadId}`
+      const detailTrigger = matchingRow?.trigger || null
+      return {
+        leadId,
+        leadName,
+        triggerLabel: detailTrigger ? formatLeadAwareTriggerPreview(detailTrigger) : 'No lead-specific trigger',
+      }
+    })
 
     return {
       ...fallback,
@@ -927,6 +952,7 @@ const buildBulkRowsFromSelectedLeads = () => {
       bulkEnabledCount: enabledCount,
       bulkTotalCount: leadIds.length,
       bulkHasMixedTrigger: hasMixedTrigger,
+      bulkTriggerDetails,
     }
   })
 }
