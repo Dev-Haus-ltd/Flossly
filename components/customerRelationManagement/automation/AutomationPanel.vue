@@ -574,18 +574,6 @@ const tableHeaders = computed(() => {
   return headers
 })
 
-const triggerTypes = [
-  { label: 'Send Now', value: 'send_now', icon: 'mdi-send-circle-outline' },
-  { label: 'After Enquiry', value: 'inquiry_days', icon: 'mdi-calendar-clock' },
-  { label: 'After Activation', value: 'activation_days', icon: 'mdi-timer-outline' },
-  { label: 'Birthday', value: 'birthday_offset', icon: 'mdi-cake-variant-outline' },
-  { label: 'Birthday Month', value: 'birthday_month_start', icon: 'mdi-cake-layered' },
-  { label: 'Black Friday', value: 'black_friday', icon: 'mdi-tag-outline' },
-  { label: 'Fixed Date', value: 'month_day', icon: 'mdi-calendar-star' },
-  { label: 'Nth Weekday', value: 'weekday_of_month', icon: 'mdi-calendar-week' },
-  { label: 'Anniversary', value: 'practice_anniversary', icon: 'mdi-office-building-outline' },
-]
-
 const weekdayOptions = [
   { label: 'Sunday', value: 0 },
   { label: 'Monday', value: 1 },
@@ -862,6 +850,27 @@ const closeTriggerDialog = () => {
 const resolvedLeadId = computed(() => {
   const id = props.leadId
   return id ? Number(id) : null
+})
+
+const canUseSendNowTrigger = computed(() => !!resolvedLeadId.value)
+
+const triggerTypes = computed(() => {
+  const items = [
+    { label: 'After Enquiry', value: 'inquiry_days', icon: 'mdi-calendar-clock' },
+    { label: 'After Activation', value: 'activation_days', icon: 'mdi-timer-outline' },
+    { label: 'Birthday', value: 'birthday_offset', icon: 'mdi-cake-variant-outline' },
+    { label: 'Birthday Month', value: 'birthday_month_start', icon: 'mdi-cake-layered' },
+    { label: 'Black Friday', value: 'black_friday', icon: 'mdi-tag-outline' },
+    { label: 'Fixed Date', value: 'month_day', icon: 'mdi-calendar-star' },
+    { label: 'Nth Weekday', value: 'weekday_of_month', icon: 'mdi-calendar-week' },
+    { label: 'Anniversary', value: 'practice_anniversary', icon: 'mdi-office-building-outline' },
+  ]
+
+  if (canUseSendNowTrigger.value) {
+    items.unshift({ label: 'Send Now', value: 'send_now', icon: 'mdi-send-circle-outline' })
+  }
+
+  return items
 })
 
 const stableTriggerKey = (trigger) => {
