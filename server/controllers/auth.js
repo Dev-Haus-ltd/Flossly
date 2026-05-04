@@ -550,6 +550,7 @@ export const profile = async (event) => {
               key: "onboarding_email_day0",
               to: userObj.email,
               ctx,
+              orgId: loggedUser.orgId,
             });
             await recordOnboardingEventInternal({
               userId: loggedUser.userId,
@@ -1231,6 +1232,7 @@ const inviteNewUsers = async (
         orgTitle: currentOrganisation.name,
         link: el.inviteToken,
         manager: currentUser.fullName,
+        orgId: currentOrganisation.id,
       });
     })
   );
@@ -1651,6 +1653,7 @@ export const resendOrganisationInvitation = async (event) => {
           orgTitle: organisation.name,
           link: invitationLink,
           manager: currentUser.fullName,
+          orgId: organisation.id,
         });
       } else {
         // User belongs to other organizations - use existing user invitation email

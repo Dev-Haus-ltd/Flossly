@@ -2,7 +2,7 @@ import { crmAutomationDefaults } from "@shared/defaults/crmAutomationDefaults.js
 import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
 import { htmlToPlainText } from "~/lib/format/text.js";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
-import { transporter } from "./nodeMailer.js";
+import { getOrgTransporter, getFromAddress } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
 import { CrmAutomationTemplate, CrmLead, Organisation, CrmLeadAssignee, User } from "../models/index.js";
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
@@ -147,9 +147,12 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
     "{content}",
     html
   );
-  await transporter.sendMail({
+  const orgId = Number(lead?.organisationId);
+  const orgTransporter = await getOrgTransporter(orgId);
+  const orgFrom = getFromAddress(orgId);
+  await orgTransporter.sendMail({
     to: lead.email,
-    from: process.env.MAIL_FROM || "helloflossly@gmail.com",
+    from: orgFrom,
     subject,
     html: wrapped,
   });
