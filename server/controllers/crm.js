@@ -1648,8 +1648,14 @@ export const listAutomation = async (event) => {
 
     crmAutomationDefaults.forEach((def) => {
       const saved = dbMap.get(def.key) || {}
+      const hasLeadOverride = leadId && !!overrides[def.key]
       const override = overrides[def.key] || {}
-      const combined = { ...def, ...saved, ...override, key: def.key }
+      // When viewing for a specific lead with no per-lead override, the global
+      // template enabled state must not bleed through — new leads start disabled.
+      const effectiveOverride = leadId && !hasLeadOverride
+        ? { ...override, enabled: false }
+        : override
+      const combined = { ...def, ...saved, ...effectiveOverride, key: def.key }
       if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(def.key)
       if (!saved?.type) combined.type = def.type
       if (!saved?.sending) combined.sending = def.sending
@@ -1662,8 +1668,15 @@ export const listAutomation = async (event) => {
 
     dbRows.forEach((row) => {
       if (seen.has(row.key)) return
+      const hasLeadOverride = leadId && !!overrides[row.key]
       const override = overrides[row.key]
-      const combined = override ? { ...row, ...override, key: row.key } : row
+      // When viewing for a specific lead with no per-lead override, default to
+      // disabled — global template enabled must not auto-enrol new leads.
+      const combined = hasLeadOverride
+        ? { ...row, ...override, key: row.key }
+        : leadId
+          ? { ...row, enabled: false }
+          : row
       if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(row.key)
       merged.push(combined)
       seen.add(row.key)

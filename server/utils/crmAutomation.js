@@ -67,7 +67,12 @@ export const buildEffectiveCrmTemplates = (lead, templatesByOrg) => {
   const seen = new Set();
   baseTemplates.forEach((tpl) => {
     const override = overrides[tpl.key];
-    const combined = override ? { ...tpl, ...override, key: tpl.key } : tpl;
+    // Automations require explicit per-lead opt-in. Global template enabled
+    // state is irrelevant for sending — if no override exists for this lead,
+    // treat the automation as disabled regardless of the global flag.
+    const combined = override
+      ? { ...tpl, ...override, key: tpl.key }
+      : { ...tpl, enabled: false };
     effectiveTemplates.push(combined);
     seen.add(tpl.key);
   });
