@@ -218,7 +218,25 @@
               <v-icon size="16" :color="item.sending ? 'grey-darken-1' : 'warning'" class="mr-2">
                 {{ item.sending ? 'mdi-clock-outline' : 'mdi-alert-circle-outline' }}
               </v-icon>
-              <span v-if="item.sending" class="text-body-2 text-medium-emphasis trigger-text">{{ item.sending }}</span>
+              <v-tooltip v-if="item.bulkHasMixedTrigger && item.bulkTriggerDetails?.length" location="top" max-width="360">
+                <template #activator="{ props }">
+                  <span v-bind="props" class="text-body-2 text-medium-emphasis trigger-text trigger-text--interactive">
+                    {{ item.sending }}
+                  </span>
+                </template>
+                <div class="mixed-trigger-tooltip">
+                  <div class="mixed-trigger-tooltip__title">Selected leads currently have different trigger settings</div>
+                  <div
+                    v-for="detail in item.bulkTriggerDetails"
+                    :key="detail.leadId"
+                    class="mixed-trigger-tooltip__row"
+                  >
+                    <span class="mixed-trigger-tooltip__lead">{{ detail.leadName }}</span>
+                    <span class="mixed-trigger-tooltip__value">{{ detail.triggerLabel }}</span>
+                  </div>
+                </div>
+              </v-tooltip>
+              <span v-else-if="item.sending" class="text-body-2 text-medium-emphasis trigger-text">{{ item.sending }}</span>
               <span v-else class="text-body-2 trigger-text trigger-text--unset">Set trigger</span>
             </div>
             <v-tooltip location="top">
@@ -663,10 +681,46 @@ const formatRelativeTime = (dateStr) => {
   display: inline-block;
 }
 
+.trigger-text--interactive {
+  cursor: help;
+  border-bottom: 1px dashed rgba(107, 114, 128, 0.5);
+}
+
 .trigger-text--unset {
   color: #f59e0b;
   font-style: italic;
   font-weight: 500;
+}
+
+.mixed-trigger-tooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 340px;
+}
+
+.mixed-trigger-tooltip__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mixed-trigger-tooltip__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mixed-trigger-tooltip__lead {
+  color: #111827;
+  font-weight: 500;
+}
+
+.mixed-trigger-tooltip__value {
+  color: #6b7280;
+  text-align: right;
 }
 
 .switch-active :deep(.v-selection-control__input) {
