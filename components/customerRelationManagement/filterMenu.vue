@@ -271,6 +271,7 @@
     { key: "converted", name: "Converted", color: "#0155B9" },
     { key: "contacted", name: "Contacted", color: "#ffc107" },
     { key: "lost", name: "Lost", color: "#dc3545" },
+    { key: "uploaded", name: "Uploaded", color: "#8B5CF6" },
   ]);
 
   // Derived names for chips

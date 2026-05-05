@@ -21,7 +21,7 @@
         />
       </div>
 
-      <!-- Uploaded File Preview -->
+      <!-- Uploaded File Preview (before processing) -->
       <div v-if="uploadedFiles.length && !isProcessing && !parsedLeads.length" class="pa-5">
         <div class="file-preview-card">
           <div class="d-flex align-center justify-space-between pa-4">
@@ -30,12 +30,8 @@
                 {{ getFileIcon(uploadedFiles[0].name) }}
               </v-icon>
               <div>
-                <div style="font-weight: 600; font-size: 14px">
-                  {{ uploadedFiles[0].name }}
-                </div>
-                <div style="font-size: 12px; color: #737373">
-                  {{ formatFileSize(uploadedFiles[0].size) }}
-                </div>
+                <div style="font-weight: 600; font-size: 14px">{{ uploadedFiles[0].name }}</div>
+                <div style="font-size: 12px; color: #737373">{{ formatFileSize(uploadedFiles[0].size) }}</div>
               </div>
             </div>
             <v-btn icon variant="text" size="small" color="error" @click="removeUploadedFile">
@@ -45,40 +41,71 @@
         </div>
       </div>
 
-      <!-- Loading State -->
-      <div v-if="isProcessing" class="pa-10 text-center">
-        <v-progress-circular indeterminate color="primary" size="64" />
-        <div class="mt-4" style="font-size: 14px; color: #737373">
-          Processing file...
+      <!-- Processing Progress Bar (replaces old spinner) -->
+      <div v-if="isProcessing" class="pa-5 pb-3">
+        <div class="d-flex align-center justify-space-between mb-2">
+          <div style="font-size: 13px; color: #737373">
+            Processing {{ processedCount.toLocaleString() }} / {{ totalRows.toLocaleString() }} leads...
+          </div>
+          <div style="font-size: 13px; font-weight: 600; color: #0061FB">{{ progress }}%</div>
         </div>
+        <v-progress-linear :model-value="progress" color="primary" rounded height="6" />
       </div>
 
-      <!-- Table Preview -->
-      <div v-if="parsedLeads.length && !isProcessing" class="pa-5">
+      <!-- Table Preview - visible during and after processing for real-time streaming -->
+      <div v-if="parsedLeads.length" class="pa-5" :class="{ 'pt-2': isProcessing }">
         <div class="d-flex align-center justify-space-between mb-3">
           <div style="font-weight: 600; font-size: 14px">
-            Preview: {{ parsedLeads.length }} leads found
+            {{ isProcessing ? 'Loading:' : 'Preview:' }}
+            {{ parsedLeads.length.toLocaleString() }}
+            <span v-if="isProcessing && totalRows > parsedLeads.length"> / {{ totalRows.toLocaleString() }}</span>
+            leads
+            <span v-if="errorCount" style="font-size: 12px; font-weight: 400; color: #d32f2f; margin-left: 8px">
+              - {{ errorCount }} error{{ errorCount !== 1 ? 's' : '' }}
+            </span>
+            <span v-else-if="warningCount" style="font-size: 12px; font-weight: 400; color: #f57c00; margin-left: 8px">
+              - {{ warningCount }} warning{{ warningCount !== 1 ? 's' : '' }}
+            </span>
           </div>
-          <v-btn size="small" variant="text" color="error" @click="clearParsedData">
+          <v-btn size="small" variant="text" color="error" @click="clearParsedData" :disabled="isProcessing">
             <img src="@/assets/tasks/delete.svg" alt="Delete" width="18" height="18" class="mr-1" style="vertical-align: middle;" />
             Clear
           </v-btn>
         </div>
 
-        <div v-if="validationErrors.length" class="mb-3">
-          <v-alert type="warning" variant="tonal" density="compact">
+        <!-- Validation summary (only after processing finishes) -->
+        <div v-if="validationErrors.length && !isProcessing" class="mb-3">
+          <v-alert
+            :type="validationErrors.some(e => !e.isWarning) ? 'error' : 'warning'"
+            variant="tonal"
+            density="compact"
+          >
             <div style="font-size: 13px">
               <strong>{{ validationErrors.length }} issues found:</strong>
               <ul class="ml-4 mt-1">
-                <li v-for="(error, idx) in validationErrors.slice(0, 5)" :key="idx">
-                  {{ error }}
-                </li>
-                <li v-if="validationErrors.length > 5">
-                  ...and {{ validationErrors.length - 5 }} more
-                </li>
+                <li v-for="(issue, idx) in validationErrors.slice(0, 5)" :key="idx">{{ issue.text }}</li>
+                <li v-if="validationErrors.length > 5">...and {{ validationErrors.length - 5 }} more</li>
               </ul>
             </div>
           </v-alert>
+        </div>
+
+        <!-- Pagination header -->
+        <div v-if="totalPages > 1" class="d-flex align-center justify-space-between mb-2">
+          <div style="font-size: 12px; color: #737373">
+            Rows {{ pageStart + 1 }}-{{ pageEnd }} of {{ parsedLeads.length.toLocaleString() }}
+          </div>
+          <div class="d-flex align-center" style="gap: 4px">
+            <v-btn icon variant="text" size="x-small" :disabled="currentPage === 1" @click="currentPage--">
+              <v-icon>mdi-chevron-left</v-icon>
+            </v-btn>
+            <span style="font-size: 13px; min-width: 64px; text-align: center">
+              {{ currentPage }} / {{ totalPages }}
+            </span>
+            <v-btn icon variant="text" size="x-small" :disabled="currentPage >= totalPages" @click="currentPage++">
+              <v-icon>mdi-chevron-right</v-icon>
+            </v-btn>
+          </div>
         </div>
 
         <div style="overflow-x: auto; max-height: 420px; overflow-y: auto">
@@ -102,86 +129,87 @@
             </thead>
             <tbody>
               <tr
-                v-for="(lead, index) in parsedLeads"
-                :key="index"
+                v-for="(lead, pageIdx) in paginatedLeads"
+                :key="pageStart + pageIdx"
                 :class="{ 'row-error': lead.hasErrors }"
               >
-                <td>{{ index + 1 }}</td>
-                <td :class="{ 'cell-error': lead.errors?.name }">
-                  <div class="relative">
+                <td>{{ pageStart + pageIdx + 1 }}</td>
+
+                <td :class="{ 'cell-error': lead.errors?.name, 'cell-warning': lead.warnings?.name }">
+                  <div class="cell-wrap">
                     <v-text-field
                       v-model="lead.name"
                       density="compact"
                       variant="outlined"
                       hide-details
-                      @input="validateLead(index)"
+                      @input="validateLead(pageStart + pageIdx)"
                     />
-                    <v-tooltip v-show="lead.errors?.name" location="top">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
+                    <v-tooltip v-if="lead.errors?.name || lead.warnings?.name" location="top">
+                      <template #activator="{ props: tp }">
+                        <div v-bind="tp" class="cell-overlay"></div>
                       </template>
-                      <span>{{ lead.errors.name }}</span>
+                      <span>{{ lead.errors?.name || lead.warnings?.name }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.email }">
-                  <div class="relative">
+                <td :class="{ 'cell-error': lead.errors?.email, 'cell-warning': lead.warnings?.email }">
+                  <div class="cell-wrap">
                     <v-text-field
                       v-model="lead.email"
                       density="compact"
                       variant="outlined"
                       hide-details
-                      @input="validateLead(index)"
+                      @input="validateLead(pageStart + pageIdx)"
                     />
-                    <v-tooltip v-show="lead.errors?.email" location="top">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
+                    <v-tooltip v-if="lead.errors?.email || lead.warnings?.email" location="top">
+                      <template #activator="{ props: tp }">
+                        <div v-bind="tp" class="cell-overlay"></div>
                       </template>
-                      <span>{{ lead.errors.email }}</span>
+                      <span>{{ lead.errors?.email || lead.warnings?.email }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.telephone }">
-                  <div class="relative">
+                <td :class="{ 'cell-error': lead.errors?.telephone, 'cell-warning': lead.warnings?.telephone }">
+                  <div class="cell-wrap">
                     <v-text-field
                       v-model="lead.telephone"
                       density="compact"
                       variant="outlined"
                       hide-details
-                      @input="validateLead(index)"
+                      @input="validateLead(pageStart + pageIdx)"
                     />
-                    <v-tooltip v-show="lead.errors?.telephone" location="top">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
+                    <v-tooltip v-if="lead.errors?.telephone || lead.warnings?.telephone" location="top">
+                      <template #activator="{ props: tp }">
+                        <div v-bind="tp" class="cell-overlay"></div>
                       </template>
-                      <span>{{ lead.errors.telephone }}</span>
+                      <span>{{ lead.errors?.telephone || lead.warnings?.telephone }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.inquiryDate }">
-                  <div class="relative">
+                <td :class="{ 'cell-error': lead.errors?.inquiryDate, 'cell-warning': lead.warnings?.inquiryDate }">
+                  <div class="cell-wrap">
                     <v-text-field
                       v-model="lead.inquiryDate"
                       type="date"
                       density="compact"
                       variant="outlined"
                       hide-details
-                      @change="validateLead(index)"
+                      @change="validateLead(pageStart + pageIdx)"
                     />
-                    <v-tooltip v-show="lead.errors?.inquiryDate" location="top">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
+                    <v-tooltip v-if="lead.errors?.inquiryDate || lead.warnings?.inquiryDate" location="top">
+                      <template #activator="{ props: tp }">
+                        <div v-bind="tp" class="cell-overlay"></div>
                       </template>
-                      <span>{{ lead.errors.inquiryDate }}</span>
+                      <span>{{ lead.errors?.inquiryDate || lead.warnings?.inquiryDate }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.leadSource }">
-                  <div class="relative">
+                <td :class="{ 'cell-error': lead.errors?.leadSource, 'cell-warning': lead.warnings?.leadSource }">
+                  <div class="cell-wrap">
                     <v-select
                       v-model="lead.leadSourceId"
                       :items="leadSources"
@@ -192,19 +220,19 @@
                       hide-details
                       clearable
                       placeholder="Select"
-                      @update:modelValue="(val) => onSourceChange(index, val)"
+                      @update:modelValue="(val) => onSourceChange(pageStart + pageIdx, val)"
                     />
-                    <v-tooltip v-show="lead.errors?.leadSource" location="top">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
+                    <v-tooltip v-if="lead.errors?.leadSource || lead.warnings?.leadSource" location="top">
+                      <template #activator="{ props: tp }">
+                        <div v-bind="tp" class="cell-overlay"></div>
                       </template>
-                      <span>{{ lead.errors.leadSource }}</span>
+                      <span>{{ lead.errors?.leadSource || lead.warnings?.leadSource }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.leadStatus }">
-                  <div class="relative">
+                <td :class="{ 'cell-error': lead.errors?.leadStatus, 'cell-warning': lead.warnings?.leadStatus }">
+                  <div class="cell-wrap">
                     <v-select
                       v-model="lead.leadStatus"
                       :items="leadStatusOptions"
@@ -213,19 +241,19 @@
                       density="compact"
                       variant="outlined"
                       hide-details
-                      @update:modelValue="() => validateLead(index)"
+                      @update:modelValue="() => validateLead(pageStart + pageIdx)"
                     />
-                    <v-tooltip v-show="lead.errors?.leadStatus" location="top">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
+                    <v-tooltip v-if="lead.errors?.leadStatus || lead.warnings?.leadStatus" location="top">
+                      <template #activator="{ props: tp }">
+                        <div v-bind="tp" class="cell-overlay"></div>
                       </template>
-                      <span>{{ lead.errors.leadStatus }}</span>
+                      <span>{{ lead.errors?.leadStatus || lead.warnings?.leadStatus }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.treatment }">
-                  <div class="relative">
+                <td :class="{ 'cell-error': lead.errors?.treatment, 'cell-warning': lead.warnings?.treatment }">
+                  <div class="cell-wrap">
                     <v-select
                       v-model="lead.treatmentId"
                       :items="treatmentSources"
@@ -236,19 +264,19 @@
                       hide-details
                       clearable
                       placeholder="Select"
-                      @update:modelValue="(val) => onTreatmentChange(index, val)"
+                      @update:modelValue="(val) => onTreatmentChange(pageStart + pageIdx, val)"
                     />
-                    <v-tooltip v-show="lead.errors?.treatment" location="top">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
+                    <v-tooltip v-if="lead.errors?.treatment || lead.warnings?.treatment" location="top">
+                      <template #activator="{ props: tp }">
+                        <div v-bind="tp" class="cell-overlay"></div>
                       </template>
-                      <span>{{ lead.errors.treatment }}</span>
+                      <span>{{ lead.errors?.treatment || lead.warnings?.treatment }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.user }">
-                  <div class="relative">
+                <td :class="{ 'cell-error': lead.errors?.user, 'cell-warning': lead.warnings?.user }">
+                  <div class="cell-wrap">
                     <v-select
                       v-model="lead.userId"
                       :items="activeUsers"
@@ -259,32 +287,32 @@
                       hide-details
                       clearable
                       placeholder="Select"
-                      @update:modelValue="() => validateLead(index)"
+                      @update:modelValue="() => validateLead(pageStart + pageIdx)"
                     />
-                    <v-tooltip v-show="lead.errors?.user" location="top">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
+                    <v-tooltip v-if="lead.errors?.user || lead.warnings?.user" location="top">
+                      <template #activator="{ props: tp }">
+                        <div v-bind="tp" class="cell-overlay"></div>
                       </template>
-                      <span>{{ lead.errors.user }}</span>
+                      <span>{{ lead.errors?.user || lead.warnings?.user }}</span>
                     </v-tooltip>
                   </div>
                 </td>
 
-                <td :class="{ 'cell-error': lead.errors?.followUpDate }">
-                  <div class="relative">
+                <td :class="{ 'cell-error': lead.errors?.followUpDate, 'cell-warning': lead.warnings?.followUpDate }">
+                  <div class="cell-wrap">
                     <v-text-field
                       v-model="lead.followUpDate"
                       type="date"
                       density="compact"
                       variant="outlined"
                       hide-details
-                      @change="validateLead(index)"
+                      @change="validateLead(pageStart + pageIdx)"
                     />
-                    <v-tooltip v-show="lead.errors?.followUpDate" location="top">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="absolute inset-0"></div>
+                    <v-tooltip v-if="lead.errors?.followUpDate || lead.warnings?.followUpDate" location="top">
+                      <template #activator="{ props: tp }">
+                        <div v-bind="tp" class="cell-overlay"></div>
                       </template>
-                      <span>{{ lead.errors.followUpDate }}</span>
+                      <span>{{ lead.errors?.followUpDate || lead.warnings?.followUpDate }}</span>
                     </v-tooltip>
                   </div>
                 </td>
@@ -295,24 +323,28 @@
                     density="compact"
                     variant="outlined"
                     hide-details
-                    @input="validateLead(index)"
                   />
                 </td>
 
                 <td>
-                  <v-chip :color="lead.hasErrors ? 'error' : 'success'" size="small" variant="flat">
-                    {{ lead.hasErrors ? "Invalid" : "Valid" }}
+                  <v-chip
+                    :color="lead.hasErrors ? 'error' : lead.hasWarnings ? 'warning' : 'success'"
+                    size="small"
+                    variant="flat"
+                  >
+                    {{ lead.hasErrors ? 'Invalid' : lead.hasWarnings ? 'Warning' : 'Valid' }}
                   </v-chip>
                 </td>
+
                 <td>
                   <v-btn
-                    v-if="lead.hasErrors"
+                    v-if="lead.hasErrors || lead.hasWarnings"
                     icon
                     variant="text"
-                    color="error"
+                    :color="lead.hasErrors ? 'error' : 'warning'"
                     size="small"
-                    @click="removeInvalidLead(index)"
-                    aria-label="Delete invalid lead"
+                    @click="removeInvalidLead(pageStart + pageIdx)"
+                    aria-label="Remove lead"
                   >
                     <v-icon>mdi-delete</v-icon>
                   </v-btn>
@@ -321,6 +353,11 @@
             </tbody>
           </table>
         </div>
+
+        <!-- Bottom pagination (only after processing so it doesn't jump around) -->
+        <div v-if="totalPages > 1 && !isProcessing" class="d-flex justify-center mt-3">
+          <v-pagination v-model="currentPage" :length="totalPages" :total-visible="7" density="compact" />
+        </div>
       </div>
 
       <div v-if="excelError" class="text-red ml-6 mb-3" style="font-size: 14px">
@@ -328,9 +365,7 @@
       </div>
 
       <v-card-actions class="justify-end">
-        <v-btn text @click="close" style="font-weight: 500; text-transform: none">
-          Cancel
-        </v-btn>
+        <v-btn text @click="close" style="font-weight: 500; text-transform: none">Cancel</v-btn>
         <v-btn
           color="secondary"
           style="font-weight: 500; text-transform: none"
@@ -354,12 +389,12 @@
           v-if="parsedLeads.length"
           color="primary"
           @click="uploadLeads"
-          :disabled="hasValidationErrors || isUploading"
+          :disabled="hasValidationErrors || isUploading || isProcessing"
           class="mr-3"
           style="font-weight: 500; text-transform: none"
           variant="flat"
         >
-          Upload {{ parsedLeads.length }} Leads
+          Upload {{ parsedLeads.length.toLocaleString() }} Leads
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -396,6 +431,14 @@ const fileUploader = ref(null);
 const parsedLeads = ref([]);
 const isProcessing = ref(false);
 const isUploading = ref(false);
+const progress = ref(0);
+const totalRows = ref(0);
+const processedCount = ref(0);
+const currentPage = ref(1);
+let processingAborted = false;
+
+const PAGE_SIZE = 50;
+const CHUNK_SIZE = 50;
 
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
@@ -410,34 +453,58 @@ const leadStatusOptions = [
   { key: "contacted", label: "Contacted" },
   { key: "lost", label: "Lost" },
   { key: "archived", label: "Archived" },
+  { key: "uploaded", label: "Uploaded" },
 ];
+
 const statusLookup = computed(() => {
   const map = new Map();
   leadStatusOptions.forEach((s) => map.set(s.label.toLowerCase(), s.label));
   return map;
 });
+
 const activeUsers = computed(() =>
-  (props.users || []).filter((u) => {
-    // Only show active users (not invited, disabled, or expired)
-    return u?.orgStatus === "Active" && !u?.isAccountDeactivated;
-  })
+  (props.users || []).filter(
+    (u) => u?.orgStatus === "Active" && !u?.isAccountDeactivated
+  )
 );
-watch(
-  () => props.modelValue,
-  (val) => (isOpen.value = val)
+
+// Pagination computeds
+const pageStart = computed(() => (currentPage.value - 1) * PAGE_SIZE);
+const pageEnd = computed(() =>
+  Math.min(pageStart.value + PAGE_SIZE, parsedLeads.value.length)
 );
+const paginatedLeads = computed(() =>
+  parsedLeads.value.slice(pageStart.value, pageEnd.value)
+);
+const totalPages = computed(() =>
+  Math.ceil(parsedLeads.value.length / PAGE_SIZE)
+);
+
+const errorCount = computed(() =>
+  parsedLeads.value.filter((l) => l.hasErrors).length
+);
+const warningCount = computed(() =>
+  parsedLeads.value.filter((l) => l.hasWarnings).length
+);
+
+watch(() => props.modelValue, (val) => (isOpen.value = val));
 watch(isOpen, (val) => emit("update:modelValue", val));
 
 const validationErrors = computed(() => {
-  const errors = [];
+  const issues = [];
   parsedLeads.value.forEach((lead, index) => {
     if (lead.errors) {
-      Object.entries(lead.errors).forEach(([field, message]) => {
-        errors.push(`Row ${index + 1}: ${message}`);
+      Object.entries(lead.errors).forEach(([, message]) => {
+        issues.push({ text: `Row ${index + 1}: ${message}`, isWarning: false });
+      });
+    }
+    if (lead.warnings) {
+      Object.entries(lead.warnings).forEach(([, message]) => {
+        issues.push({ text: `Row ${index + 1}: ${message}`, isWarning: true });
       });
     }
   });
-  return errors;
+  return issues;
 });
 
 const hasValidationErrors = computed(() =>
@@ -454,23 +521,37 @@ const getFiles = (files) => {
 };
 
 const removeUploadedFile = () => {
+  processingAborted = true;
   uploadedFiles.value = [];
   fileUploader.value?.clearFiles?.();
   excelError.value = null;
+  parsedLeads.value = [];
+  isProcessing.value = false;
+  progress.value = 0;
+  totalRows.value = 0;
+  processedCount.value = 0;
+  currentPage.value = 1;
 };
 
 const processUploadedFile = () => {
-  if (uploadedFiles.value.length) {
-    processFile(uploadedFiles.value[0]);
-  }
+  if (uploadedFiles.value.length) processFile(uploadedFiles.value[0]);
 };
 
 const getFileIcon = (filename) => getFileIconUtil(filename);
 const formatFileSize = (bytes) => formatFileSizeUtil(bytes);
 
+// Yield execution back to the browser between chunks
+const yield_ = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const processFile = async (file) => {
   excelError.value = null;
   isProcessing.value = true;
+  progress.value = 0;
+  totalRows.value = 0;
+  processedCount.value = 0;
+  parsedLeads.value = [];
+  currentPage.value = 1;
+  processingAborted = false;
 
   const validationError = validateFileBasics(file, MAX_FILE_SIZE);
   if (validationError) {
@@ -480,11 +561,12 @@ const processFile = async (file) => {
   }
 
   const fileExtension = extractExtension(file.name);
-
   const reader = new FileReader();
-  reader.onload = (e) => {
+
+  reader.onload = async (e) => {
     try {
       let json;
+
       if (fileExtension === "csv") {
         json = parseCSVUtil(e.target.result);
       } else {
@@ -501,58 +583,73 @@ const processFile = async (file) => {
           defval: "",
           raw: false,
         });
-
         if (!sheetRows.length) {
           excelError.value = "No rows found in the file.";
           isProcessing.value = false;
           return;
         }
-
-        const headers = (sheetRows[0] || []).map((h) =>
-          String(h || "").trim()
-        );
+        const headers = (sheetRows[0] || []).map((h) => String(h || "").trim());
         if (!headers.some((h) => h)) {
           excelError.value = "Invalid file - header row is empty.";
           isProcessing.value = false;
           return;
         }
-
         json = sheetRows.slice(1).map((row) => {
           const obj = {};
-          headers.forEach((header, index) => {
+          headers.forEach((header, i) => {
             if (!header) return;
-            obj[header] = row?.[index] ?? "";
+            obj[header] = row?.[i] ?? "";
           });
           return obj;
         });
       }
 
-      if (!json.length) {
-        excelError.value = "No rows found in the file.";
-        isProcessing.value = false;
-        return;
-      }
-
-      const requiredColumns = ["name", "email", "telephone"];
-      const normalizedKeys = Object.keys(json[0] || {}).map((k) =>
-        normalizeLeadColumnHeader(k)
+      // Strip phantom rows - Excel stores formatting for empty rows below real data
+      json = json.filter((row) =>
+        Object.values(row).some((v) => String(v ?? "").trim() !== "")
       );
-      const hasName = normalizedKeys.includes("name");
-      const hasEmail = normalizedKeys.includes("email");
-      const hasPhone = normalizedKeys.includes("telephone");
-      const hasRequiredColumns = hasName && hasEmail && hasPhone;
 
-      if (!hasRequiredColumns) {
-        excelError.value =
-          "Invalid file structure - missing required columns: " +
-          requiredColumns.join(", ");
+      if (!json.length) {
+        excelError.value = "No data rows found in the file.";
         isProcessing.value = false;
         return;
       }
 
-      const formatted = json.map((row) => normalizeRow(row));
-      parsedLeads.value = formatted;
-      parsedLeads.value.forEach((lead, index) => validateLead(index, lead));
+      // Missing name/email/telephone columns are allowed.
+      // Rows will still be imported and row-level warnings will flag missing values.
+
+      totalRows.value = json.length;
+
+      // Pre-build email frequency map in one O(n) pass so duplicate detection is O(1) per row
+      const emailMap = new Map();
+      json.forEach((row) => {
+        const norm = {};
+        Object.entries(row).forEach(([k, v]) => {
+          norm[normalizeLeadColumnHeader(k)] = v ?? "";
+        });
+        const email = cleanQuotedValue(norm["email"] || "").trim().toLowerCase();
+        if (email) emailMap.set(email, (emailMap.get(email) || 0) + 1);
+      });
+
+      // Process in CHUNK_SIZE chunks, yielding between each so the browser stays responsive.
+      // Leads are pushed to parsedLeads per chunk - the table streams in real time.
+      for (let i = 0; i < json.length; i += CHUNK_SIZE) {
+        if (processingAborted) break;
+
+        const chunk = json.slice(i, i + CHUNK_SIZE);
+        const normalized = chunk.map((row) => normalizeRow(row));
+        // index arg is unused when emailMap is provided, so 0 is fine
+        normalized.forEach((lead) => validateLead(0, lead, emailMap));
+        parsedLeads.value.push(...normalized);
+
+        processedCount.value = parsedLeads.value.length;
+        progress.value = Math.round(
+          (parsedLeads.value.length / totalRows.value) * 100
+        );
+
+        await yield_();
+      }
+
       isProcessing.value = false;
     } catch (err) {
       console.error("Error reading file:", err);
@@ -574,30 +671,33 @@ const normalizeRow = (row) => {
     normalized[normalizeLeadColumnHeader(key)] = value ?? "";
   });
 
-  const cleanQuoted = (val) => cleanQuotedValue(val);
+  // Combine "first name" / "last name" columns into name if no explicit "name" column
+  const firstName = normalized["first name"] || normalized["firstname"] || "";
+  const lastName = normalized["last name"] || normalized["lastname"] || "";
+  const combinedName = [firstName, lastName].filter(Boolean).join(" ").trim();
+  const resolvedName = normalized["name"] || combinedName || "";
 
   const leadSourceName = normalized["leadsource"] || "";
   const treatmentName = normalized["treatment"] || "";
   const assignedUser = normalized["assigned"] || "";
-  const cleanedEmail = cleanQuoted(normalized["email"]);
+  const cleanedEmail = cleanQuotedValue(normalized["email"]);
+
   let cleanedTelephone = normalizePhoneValue(normalized["telephone"]);
   if (!cleanedTelephone) {
     const fallbackKey = Object.keys(row || {}).find((key) => {
-      const normalizedKey = normalizeLeadColumnHeader(key);
+      const nk = normalizeLeadColumnHeader(key);
       return (
-        normalizedKey === "telephone" ||
-        ["phone", "mobile", "telephone", "tel", "whatsapp", "cell"].some((k) =>
-          normalizedKey.includes(k)
+        nk === "telephone" ||
+        ["phone", "mobile", "tel", "whatsapp", "cell"].some((k) =>
+          nk.includes(k)
         )
       );
     });
-    if (fallbackKey) {
-      cleanedTelephone = normalizePhoneValue(row[fallbackKey]);
-    }
+    if (fallbackKey) cleanedTelephone = normalizePhoneValue(row[fallbackKey]);
   }
 
   return {
-    name: normalized["name"] || "",
+    name: resolvedName,
     email: cleanedEmail,
     telephone: cleanedTelephone,
     leadSourceId:
@@ -612,9 +712,10 @@ const normalizeRow = (row) => {
           t.name?.trim()?.toLowerCase() === treatmentName?.trim()?.toLowerCase()
       )?.id || null,
     treatmentName,
-    leadStatus: statusLookup.value.get(
-      (normalized["leadstatus"] || "").trim().toLowerCase()
-    ) || "New",
+    leadStatus:
+      statusLookup.value.get(
+        (normalized["leadstatus"] || "").trim().toLowerCase()
+      ) || "Uploaded",
     userId:
       activeUsers.value.find((u) => {
         const fullName = u.fullName?.trim()?.toLowerCase();
@@ -630,6 +731,8 @@ const normalizeRow = (row) => {
     comments: normalized["comments"] || "",
     errors: {},
     hasErrors: false,
+    warnings: {},
+    hasWarnings: false,
     originalLeadSource: leadSourceName,
     originalTreatment: treatmentName,
   };
@@ -643,96 +746,98 @@ const normalizeDate = (value) => {
   if (typeof value === "number") {
     const d = XLSX.SSF ? XLSX.SSF.parse_date_code(value) : null;
     if (d) {
-      const date = new Date(Date.UTC(d.y, d.m - 1, d.d));
-      return date.toISOString().slice(0, 10);
+      return new Date(Date.UTC(d.y, d.m - 1, d.d)).toISOString().slice(0, 10);
     }
   }
   const parsed = new Date(value);
-  if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
-  }
-  return null;
+  return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 };
 
-const validateLead = (index, existingLead) => {
+const validateLead = (index, existingLead, emailMap = null) => {
   const lead = existingLead || parsedLeads.value[index];
   if (!lead) return;
-  if (!lead.errors) lead.errors = {};
-  Object.keys(lead.errors).forEach((k) => delete lead.errors[k]);
+
+  lead.errors = {};
   lead.hasErrors = false;
+  lead.warnings = {};
+  lead.hasWarnings = false;
 
   const cleanedEmail =
     typeof lead.email === "string"
       ? lead.email.trim().replace(/^['"]+|['"]+$/g, "")
       : "";
-    lead.email = cleanedEmail;
-  const cleanedTelephone = normalizePhoneValue(lead.telephone);
-  lead.telephone = cleanedTelephone;
+  lead.email = cleanedEmail;
+  lead.telephone = normalizePhoneValue(lead.telephone);
 
   if (!lead.name?.trim()) {
-    lead.errors.name = "Name is required";
-    lead.hasErrors = true;
+    lead.warnings.name = "Name is missing";
+    lead.hasWarnings = true;
   }
-  const email = cleanedEmail;
-  if (!email) {
-    lead.errors.email = "Email is required";
-    lead.hasErrors = true;
+
+  if (!cleanedEmail) {
+    lead.warnings.email = "Email is missing";
+    lead.hasWarnings = true;
   } else {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      lead.errors.email = "Invalid email format";
-      lead.hasErrors = true;
-    }
-    const duplicate = parsedLeads.value.find(
-      (l, i) =>
-        i !== index && (l.email || "").trim().toLowerCase() === email.toLowerCase()
-    );
-    if (duplicate) {
-      lead.errors.email = "Duplicate email in upload";
-      lead.hasErrors = true;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedEmail)) {
+      lead.warnings.email = "Invalid email format";
+      lead.hasWarnings = true;
+    } else {
+      const emailKey = cleanedEmail.toLowerCase();
+      const isDuplicate = emailMap
+        ? (emailMap.get(emailKey) || 0) > 1
+        : parsedLeads.value.some(
+            (l, i) =>
+              i !== index && (l.email || "").trim().toLowerCase() === emailKey
+          );
+      if (isDuplicate) {
+        lead.warnings.email = "Duplicate email in upload";
+        lead.hasWarnings = true;
+      }
     }
   }
 
   if (!lead.telephone?.trim()) {
-    lead.errors.telephone = "Telephone is required";
-    lead.hasErrors = true;
+    lead.warnings.telephone = "Telephone is missing";
+    lead.hasWarnings = true;
   }
 
-  // if (lead.originalLeadSource?.trim() && !lead.leadSourceId) {
-  //   lead.errors.leadSource = `Lead source "${lead.originalLeadSource}" is invalid. Select from dropdown.`;
-  //   lead.hasErrors = true;
-  // }
+  if (lead.originalLeadSource?.trim() && !lead.leadSourceId) {
+    lead.warnings.leadSource = `Lead source "${lead.originalLeadSource}" not matched - select from dropdown.`;
+    lead.hasWarnings = true;
+  }
 
-  // if (lead.originalTreatment?.trim() && !lead.treatmentId) {
-  //   lead.errors.treatment = `Treatment "${lead.originalTreatment}" is invalid. Select from dropdown.`;
-  //   lead.hasErrors = true;
-  // }
+  if (lead.originalTreatment?.trim() && !lead.treatmentId) {
+    lead.warnings.treatment = `Treatment "${lead.originalTreatment}" not matched - select from dropdown.`;
+    lead.hasWarnings = true;
+  }
 
-  // if (lead.leadStatus) {
-  //   const status = statusLookup.value.get(lead.leadStatus.trim().toLowerCase());
-  //   if (!status) {
-  //     lead.errors.leadStatus = "Invalid lead status";
-  //     lead.hasErrors = true;
-  //   } else {
-  //     lead.leadStatus = status;
-  //   }
-  // } else {
-  //   lead.leadStatus = "New";
-  // }
+  if (lead.leadStatus) {
+    const status = statusLookup.value.get(lead.leadStatus.trim().toLowerCase());
+    if (!status) {
+      lead.warnings.leadStatus = "Unrecognised lead status - will default to Uploaded.";
+      lead.hasWarnings = true;
+      lead.leadStatus = "Uploaded";
+    } else {
+      lead.leadStatus = status;
+    }
+  } else {
+    lead.leadStatus = "Uploaded";
+  }
 
-  // if (lead.assignedUser?.trim() && !lead.userId) {
-  //   lead.errors.user = `User "${lead.assignedUser}" not found. Select from dropdown.`;
-  //   lead.hasErrors = true;
-  // }
+  if (lead.assignedUser?.trim() && !lead.userId) {
+    lead.warnings.user = `User "${lead.assignedUser}" not found - select from dropdown.`;
+    lead.hasWarnings = true;
+  }
 
-  // if (lead.inquiryDate === null && lead.originalInquiryDate) {
-  //   lead.errors.inquiryDate = "Invalid inquiry date";
-  //   lead.hasErrors = true;
-  // }
-  // if (lead.followUpDate === null && lead.originalFollowUpDate) {
-  //   lead.errors.followUpDate = "Invalid follow-up date";
-  //   lead.hasErrors = true;
-  // }
+  if (lead.inquiryDate === null && lead.originalInquiryDate) {
+    lead.warnings.inquiryDate = "Could not parse inquiry date - clear or correct it.";
+    lead.hasWarnings = true;
+  }
+
+  if (lead.followUpDate === null && lead.originalFollowUpDate) {
+    lead.warnings.followUpDate = "Could not parse follow-up date - clear or correct it.";
+    lead.hasWarnings = true;
+  }
 };
 
 const onSourceChange = (index, val) => {
@@ -752,16 +857,26 @@ const onTreatmentChange = (index, val) => {
 };
 
 const clearParsedData = () => {
+  processingAborted = true;
   parsedLeads.value = [];
   uploadedFiles.value = [];
   fileUploader.value?.clearFiles?.();
   excelError.value = null;
+  isProcessing.value = false;
+  progress.value = 0;
+  totalRows.value = 0;
+  processedCount.value = 0;
+  currentPage.value = 1;
 };
 
 const removeInvalidLead = (index) => {
   const lead = parsedLeads.value[index];
-  if (!lead || !lead.hasErrors) return;
+  if (!lead || (!lead.hasErrors && !lead.hasWarnings)) return;
   parsedLeads.value.splice(index, 1);
+  // Clamp page if the last item on the current page was removed
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = Math.max(1, totalPages.value);
+  }
   parsedLeads.value.forEach((_, i) => validateLead(i));
 };
 
@@ -780,19 +895,17 @@ const uploadLeads = async () => {
       name: lead.name?.trim(),
       email: lead.email?.trim(),
       telephone: lead.telephone?.trim(),
-      leadSource:
-        lead.leadSourceId && props.leadSources.length
-          ? props.leadSources.find((s) => s.id === lead.leadSourceId)?.name ||
-            lead.originalLeadSource ||
-            null
-          : lead.originalLeadSource || null,
-      leadStatus: lead.leadStatus || "New",
-      treatment:
-        lead.treatmentId && props.treatmentSources.length
-          ? props.treatmentSources.find((t) => t.id === lead.treatmentId)?.name ||
-            lead.originalTreatment ||
-            null
-          : lead.originalTreatment || null,
+      leadSource: lead.leadSourceId
+        ? props.leadSources.find((s) => s.id === lead.leadSourceId)?.name ||
+          lead.originalLeadSource ||
+          null
+        : lead.originalLeadSource || null,
+      leadStatus: lead.leadStatus || "Uploaded",
+      treatment: lead.treatmentId
+        ? props.treatmentSources.find((t) => t.id === lead.treatmentId)?.name ||
+          lead.originalTreatment ||
+          null
+        : lead.originalTreatment || null,
       assignedUserId: lead.userId || null,
       inquiryDate: lead.inquiryDate || null,
       followUpDate: lead.followUpDate || null,
@@ -825,12 +938,17 @@ const uploadLeads = async () => {
 };
 
 const close = () => {
+  processingAborted = true;
   fileUploader.value?.clearFiles?.();
   uploadedFiles.value = [];
   parsedLeads.value = [];
   excelError.value = null;
   isProcessing.value = false;
   isUploading.value = false;
+  progress.value = 0;
+  totalRows.value = 0;
+  processedCount.value = 0;
+  currentPage.value = 1;
   isOpen.value = false;
   emit("close");
 };
@@ -879,6 +997,10 @@ const downloadSample = () => {
   background-color: #ffebee !important;
 }
 
+.cell-warning {
+  background-color: #fff8e1 !important;
+}
+
 .row-error {
   background-color: #fff3f3;
 }
@@ -898,13 +1020,15 @@ const downloadSample = () => {
   background-color: #f5f5f5;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-.alert-select :deep(.v-field__input) {
-  padding-left: 10px;
+
+.cell-wrap {
+  position: relative;
 }
-.emoji-small {
-  font-size: 16px;
-  width: 18px;
-  display: inline-flex;
-  justify-content: center;
+
+.cell-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
 }
 </style>
+

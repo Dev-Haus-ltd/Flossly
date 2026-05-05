@@ -25,7 +25,7 @@
         <v-expansion-panel-text class="pt-0">
           <v-data-table-server
             v-model="selectedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="activeLeads"
             item-value="id"
             show-select
@@ -58,10 +58,18 @@
               />
             </template>
 
-            <!-- Editable / resizable headers -->
+            <!-- Draggable / resizable headers -->
             <template v-slot:headers="{ columns, allSelected, someSelected }">
-              <tr>
-                <template v-for="(column, i) in columns" :key="column.key">
+              <draggable
+                tag="tr"
+                :model-value="columns"
+                item-key="key"
+                direction="horizontal"
+                :disabled="isResizing"
+                handle=".th-content"
+                @update:model-value="updateHeaderOrder"
+              >
+                <template #item="{ element: column, index: i }">
                   <th
                     :style="{
                       width: column.width + 'px',
@@ -72,9 +80,15 @@
                       position: 'relative',
                     }"
                   >
-                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                    <div v-if="i !== 0" class="d-flex align-center th-content" style="cursor: grab;">
                       <p class="px-1 w-100 mb-0">{{ column.title }}</p>
-
+                      <v-icon
+                        v-if="column.key !== 'name'"
+                        size="14"
+                        color="black"
+                        style="cursor: pointer; flex-shrink: 0;"
+                        @click.stop="removeHeaderFromSelected(column)"
+                      >mdi-minus</v-icon>
                       <span
                         class="resize-handle"
                         @pointerdown="startResize($event, column, i)"
@@ -94,12 +108,12 @@
                     </div>
                   </th>
                 </template>
-              </tr>
+              </draggable>
             </template>
 
             <!-- Dynamic cell templates -->
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -302,6 +316,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'leadSource')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'treatment'">
@@ -310,6 +325,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'treatment')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'assigned'">
@@ -410,7 +426,7 @@
           <v-data-table-server
             v-else
             v-model="selectedConvertedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="convertedLeadsData"
             item-value="id"
             hover
@@ -443,8 +459,16 @@
               />
             </template>
             <template v-slot:headers="{ columns, allSelected, someSelected }">
-              <tr>
-                <template v-for="(column, i) in columns" :key="column.key">
+              <draggable
+                tag="tr"
+                :model-value="columns"
+                item-key="key"
+                direction="horizontal"
+                :disabled="isResizing"
+                handle=".th-content"
+                @update:model-value="updateHeaderOrder"
+              >
+                <template #item="{ element: column, index: i }">
                   <th
                     :style="{
                       width: column.width + 'px',
@@ -455,8 +479,15 @@
                       position: 'relative',
                     }"
                   >
-                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                    <div v-if="i !== 0" class="d-flex align-center th-content" style="cursor: grab;">
                       <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                      <v-icon
+                        v-if="column.key !== 'name'"
+                        size="14"
+                        color="black"
+                        style="cursor: pointer; flex-shrink: 0;"
+                        @click.stop="removeHeaderFromSelected(column)"
+                      >mdi-minus</v-icon>
                       <span
                         class="resize-handle"
                         @pointerdown="startResize($event, column, i)"
@@ -473,10 +504,10 @@
                     </div>
                   </th>
                 </template>
-              </tr>
+              </draggable>
             </template>
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -656,6 +687,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'leadSource')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'treatment'">
@@ -664,6 +696,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'treatment')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'assigned'">
@@ -762,7 +795,7 @@
           <v-data-table-server
             v-else
             v-model="selectedArchivedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="archivedLeads"
             item-value="id"
             hover
@@ -828,7 +861,7 @@
               </tr>
             </template>
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -943,35 +976,53 @@
       @close="handleLeadDialogClose"
     />
 
-    <v-dialog v-model="showCompose" max-width="900px">
-      <v-card class="rounded-lg">
-        <div class="d-flex justify-space-between align-center px-4 py-3">
-          <div>
-            <h5 class="mb-1 modal-title">Compose mail</h5>
-            <div class="text-caption text-medium-emphasis">{{ compose.recipients.length }} recipient(s)</div>
+    <v-dialog v-model="showCompose" max-width="860px">
+      <v-card class="rounded-lg compose-dialog-card">
+        <!-- Header -->
+        <div class="d-flex justify-space-between align-center px-5 py-3" style="background:#fafafa;border-bottom:1px solid #f0f0f0">
+          <div class="d-flex align-center" style="gap:10px">
+            <v-icon color="primary" size="20">mdi-email-fast-outline</v-icon>
+            <div>
+              <div class="font-weight-semibold" style="font-size:14px;line-height:1.2">Compose Email</div>
+              <div class="text-caption text-medium-emphasis">{{ compose.recipients.length }} recipient(s)</div>
+            </div>
           </div>
-          <v-btn icon @click="showCompose = false" flat><v-icon>mdi-close</v-icon></v-btn>
+          <v-btn icon variant="text" size="small" @click="showCompose = false"><v-icon size="18">mdi-close</v-icon></v-btn>
         </div>
-        <v-divider />
 
-        <div class="px-4 pt-4">
-          <div class="text-subtitle-2 text-grey-darken-1 mb-1">To</div>
-          <div class="d-flex align-center flex-wrap" style="gap: 6px">
-            <v-chip size="small" v-for="(e,i) in compose.recipients" :key="i" color="primary" variant="tonal">{{ e }}</v-chip>
+        <div class="compose-dialog-body">
+          <!-- Recipients -->
+          <div class="px-5 pt-3 pb-2 d-flex align-center flex-wrap" style="gap:6px;border-bottom:1px solid #f5f5f5">
+            <span class="text-caption text-grey-darken-1 mr-1" style="min-width:20px">To:</span>
+            <v-chip v-for="(e,i) in compose.recipients" :key="i" size="x-small" color="primary" variant="tonal">{{ e }}</v-chip>
+          </div>
+
+          <!-- Subject -->
+          <div class="px-5 pt-3 pb-3" style="border-bottom:1px solid #f5f5f5">
+            <label class="fld-lbl d-inline-block mb-1">Subject</label>
+            <v-text-field
+              v-model="compose.subject"
+              placeholder="Subject"
+              density="compact"
+              variant="solo"
+              class="input-bordered mb-0"
+              bg-color="white"
+              hide-details
+              flat
+            />
+          </div>
+
+          <!-- Body -->
+          <div class="px-5 pt-3 pb-4">
+            <CrmEmailTemplateEditor v-model="compose.html" />
           </div>
         </div>
 
-        <div class="px-4 pt-4">
-          <v-text-field v-model="compose.subject" single-line label="Subject" density="compact" variant="outlined" hide-details />
-        </div>
-
-        <div class="px-4 pt-2 pb-4">
-          <div class="text-subtitle-2 text-grey-darken-1 mb-2">Content</div>
-          <div ref="composeHolder" class="editor"></div>
-        </div>
-
-        <div class="px-4 pb-4 d-flex justify-end">
-          <v-btn :loading="composeLoading" flat color="primary" @click="sendCompose">Send</v-btn>
+        <!-- Footer -->
+        <div class="px-5 pb-4 d-flex justify-end compose-dialog-footer" style="border-top:1px solid #f0f0f0;padding-top:12px">
+          <v-btn :loading="composeLoading" flat color="primary" style="border-radius:8px;min-width:90px" @click="sendCompose">
+            <v-icon size="16" class="mr-1">mdi-send-outline</v-icon>Send
+          </v-btn>
         </div>
       </v-card>
     </v-dialog>
@@ -1309,6 +1360,7 @@
 </template>
 
 <script setup>
+import draggable from "vuedraggable"
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
@@ -1347,6 +1399,7 @@ const emit = defineEmits([
   'update:convertedPage',
   'update:itemsPerPage',
   'alert-options-saved',
+  'options-refreshed',
 ]);
 const props = defineProps({
   leads: { type: Array, default: () => [] },
@@ -1370,6 +1423,73 @@ const props = defineProps({
   whatsappConnected: { type: Boolean, default: false },
 });
 const openedPanels = ref([0]);
+
+// Column visibility + order management
+const selectedHeaders = ref([])
+
+const filteredAvailableHeaders = computed(() => {
+  const selectedKeys = new Set(selectedHeaders.value.map((h) => h.key))
+  return (props.headers || []).filter((h) => !selectedKeys.has(h.key))
+})
+
+const saveColumnPreferences = () => {
+  try {
+    localStorage.setItem('crmLeadTableColumns', JSON.stringify(selectedHeaders.value))
+  } catch {}
+}
+
+const addHeaderInSelected = (column) => {
+  if (!selectedHeaders.value.find((h) => h.key === column.key)) {
+    selectedHeaders.value.push(column)
+    saveColumnPreferences()
+  }
+}
+
+const removeHeaderFromSelected = (column) => {
+  if (column.key === 'name') return
+  selectedHeaders.value = selectedHeaders.value.filter((h) => h.key !== column.key)
+  saveColumnPreferences()
+}
+
+const updateHeaderOrder = (newOrder) => {
+  const selectable = newOrder.findIndex((x) => !x.title)
+  if (selectable !== -1) newOrder.splice(selectable, 1)
+  selectedHeaders.value = newOrder
+  saveColumnPreferences()
+}
+
+const getColColor = (name) => {
+  if (!name) return '#999999'
+  const colors = ['#FF6B6B','#FF8E72','#FFD93D','#6BCB77','#4D96FF','#8358E8','#FF6EC7','#00B8A9','#F15BB5','#FF7F11','#FF9F1C','#2EC4B6','#6A4C93','#8338EC','#3A86FF','#FF006E','#FB5607','#FFBE0B','#06D6A0','#118AB2','#073B4C','#EF476F','#06AED5','#4CC9F0','#8AC926','#FF595E']
+  const index = name.trim().toUpperCase().charCodeAt(0) - 65
+  return index >= 0 && index < 26 ? colors[index] : '#999999'
+}
+
+onMounted(() => {
+  try {
+    const stored = localStorage.getItem('crmLeadTableColumns')
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed) && parsed.length) {
+        const validKeys = new Set((props.headers || []).map((h) => h.key))
+        const filtered = parsed.filter((h) => validKeys.has(h.key))
+        if (filtered.length) {
+          const storedKeys = new Set(filtered.map((h) => h.key))
+          const newCols = (props.headers || []).filter((h) => !storedKeys.has(h.key))
+          selectedHeaders.value = [...filtered, ...newCols]
+          return
+        }
+      }
+    }
+  } catch {}
+  selectedHeaders.value = [...(props.headers || [])]
+})
+
+watch(() => props.headers, (v) => {
+  if (!v?.length || selectedHeaders.value.length) return
+  selectedHeaders.value = [...v]
+})
+
 const selectedLeads = ref([]);
 const isAllSelected = ref(false);
 const selectedArchivedLeads = ref([]);
@@ -1388,6 +1508,7 @@ const leadStatusOptions = [
   { name: 'Converted', color: '#0061fb' },
   { name: 'Lost', color: '#e15b64' },
   { name: 'Archived', color: '#9E9E9E' },
+  { name: 'Uploaded', color: '#8B5CF6' },
 ];
 
 const getLeadStatusColor = (status) => {
@@ -1843,15 +1964,35 @@ const resolvedAutomationGroups = computed(() =>
 
 const loadLeadAutomations = (leadId, { force = false } = {}) => crmStore.fetchLeadAutomations(leadId, { force });
 
+const AUTOMATION_PREFETCH_CONCURRENCY = 6;
+let automationPrefetchToken = 0;
+
+const runWithConcurrency = async (items, limit, worker) => {
+  const queue = Array.isArray(items) ? items : [];
+  const concurrency = Math.max(1, Math.min(limit, queue.length || 1));
+  let cursor = 0;
+
+  const runners = Array.from({ length: concurrency }, async () => {
+    while (cursor < queue.length) {
+      const currentIndex = cursor;
+      cursor += 1;
+      await worker(queue[currentIndex], currentIndex);
+    }
+  });
+
+  await Promise.all(runners);
+};
+
 const onAutomationMenuOpen = async (lead) => {
   if (!lead?.id) return;
   await Promise.all([
-    crmStore.fetchAutomationGroups({ force: true }),
-    crmStore.fetchLeadAutomations(lead.id, { force: true }),
+    crmStore.fetchAutomationGroups({ force: true, silent: true }),
+    crmStore.fetchLeadAutomations(lead.id, { force: true, silent: true }),
   ]);
 };
 
-const _onAutomationGroupsUpdated = () => crmStore.fetchAutomationGroups({ force: true });
+const _onAutomationGroupsUpdated = () =>
+  crmStore.fetchAutomationGroups({ force: true, silent: true });
 const _onAutomationsUpdated = (event) => prefetchVisibleLeadAutomations({
   force: true,
   groupsChanged: event?.detail?.groupsChanged === true,
@@ -1860,7 +2001,7 @@ const _onAutomationsUpdated = (event) => prefetchVisibleLeadAutomations({
 
 onMounted(() => {
   if (typeof window === 'undefined') return;
-  crmStore.fetchAutomationGroups();
+  crmStore.fetchAutomationGroups({ silent: true });
   window.addEventListener('crm-automation-groups-updated', _onAutomationGroupsUpdated);
   window.addEventListener('crm-automations-updated', _onAutomationsUpdated);
 });
@@ -1871,8 +2012,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('crm-automations-updated', _onAutomationsUpdated);
 });
 
-const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = false, leadIds = [] } = {}) => {
-  const visibleIds = [...new Set(allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean))];
+const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = false, leadIds = [], sourceLeads = null } = {}) => {
+  const requestToken = ++automationPrefetchToken;
+  const visibleIds = [...new Set((sourceLeads || activeLeads.value).map((lead) => Number(lead?.id || 0)).filter(Boolean))];
   if (!visibleIds.length) return;
   const normalizedLeadIds = [...new Set((Array.isArray(leadIds) ? leadIds : [])
     .map((id) => Number(id || 0))
@@ -1881,16 +2023,40 @@ const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = f
     ? visibleIds
     : visibleIds.filter((id) => normalizedLeadIds.includes(id));
   if (!ids.length) return;
-  await crmStore.fetchAutomationGroups({ force: force || groupsChanged });
-  await Promise.all(ids.map((leadId) => crmStore.fetchLeadAutomations(leadId, { force })));
+  await crmStore.fetchAutomationGroups({
+    force: force || groupsChanged,
+    silent: true,
+  });
+
+  await runWithConcurrency(ids, AUTOMATION_PREFETCH_CONCURRENCY, async (leadId) => {
+    if (requestToken !== automationPrefetchToken) return;
+    await crmStore.fetchLeadAutomations(leadId, { force, silent: true });
+  });
 };
 
 watch(
-  () => allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
+  () => activeLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
   () => {
     prefetchVisibleLeadAutomations();
   },
   { immediate: true }
+);
+
+// Prefetch automations for converted leads when the converted panel is opened
+watch(openedPanels, (panels) => {
+  if (panels.includes(1) && convertedLeadsData.value.length) {
+    prefetchVisibleLeadAutomations({ sourceLeads: convertedLeadsData.value });
+  }
+});
+
+// Also handles the case where converted leads finish loading while the panel is already open
+watch(
+  () => convertedLeadsData.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
+  () => {
+    if (openedPanels.value.includes(1)) {
+      prefetchVisibleLeadAutomations({ sourceLeads: convertedLeadsData.value });
+    }
+  }
 );
 
 const getLeadGroupRows = (lead, group) => {
@@ -2218,7 +2384,7 @@ const buildCsvValue = (value, key = '') => {
 
 const exportSelectedLeads = () => {
   if (typeof window === 'undefined') return;
-  const columns = (props.headers || [])
+  const columns = (selectedHeaders.value.length ? selectedHeaders.value : props.headers || [])
     .filter((h) => h?.key && h.key !== 'data-table-select' && h.key !== 'actions')
     .map((h) => ({ key: h.key, title: h.title || h.key }));
   if (!columns.length) return;
@@ -2412,11 +2578,9 @@ watch(
   { immediate: true }
 );
 
-// Compose mail dialog using Editor.js (client-only)
+// Compose mail dialog
 const showCompose = ref(false)
 const composeLoading = ref(false)
-const composeHolder = ref(null)
-let composeEditor = null
 let EditorCtor = null
 let Header = null
 let List = null
@@ -2485,7 +2649,6 @@ async function openCompose(actionKey) {
   compose.key = actionKey
   compose.recipients = getSelectedEmails()
   const def = defaultTemplates[actionKey] || defaultTemplates.mail
-  // Personalize subject/body for preview based on selection
   const many = (selectedLeads.value || []).length !== 1
   const lead = many ? null : (selectedLeads.value || [])[0]
   const ctx = buildRecipientContext({
@@ -2499,21 +2662,7 @@ async function openCompose(actionKey) {
   compose.subject = renderTemplateWithContext(def.subject, ctx, lead)
   compose.html = renderTemplateWithContext(def.html, ctx, lead)
   showCompose.value = true
-  await nextTick()
-  if (!(await ensureEditorModules())) return
-  if (composeEditor) { composeEditor.destroy(); composeEditor = null }
-  composeEditor = new EditorCtor({
-    holder: composeHolder.value,
-    tools: { header: Header, list: List },
-    data: htmlToBlocks(compose.html),
-    async onChange(api) {
-      const saved = await api.saver.save()
-      compose.html = blocksToHtml(saved)
-    }
-  })
 }
-
-watch(() => showCompose.value, (v) => { if (!v && composeEditor) { composeEditor.destroy(); composeEditor = null } })
 
 const openSendPriceCompose = async () => {
   sendPrice.recipients = getSelectedEmails()
@@ -2653,7 +2802,12 @@ async function sendCompose() {
     })
     const resolvedSubject = renderTemplateWithContext(compose.subject, ctx, lead)
     const resolvedHtml = renderTemplateWithContext(compose.html, ctx, lead)
-    const res = await crmStore.sendLeadMail({ leadIds, subject: resolvedSubject, html: resolvedHtml, key: `manual_${compose.key}` })
+    const res = await crmStore.sendLeadMail({
+      leadIds,
+      subject: resolvedSubject,
+      html: resolvedHtml,
+      key: `manual_${compose.key}`,
+    })
     if (res && res.code === 0) {
       if (mainStore && mainStore.setSnackbar) mainStore.setSnackbar({ title: `Mail sent to ${res.data?.sent || compose.recipients.length} recipient(s)`, type: 'success' })
       showCompose.value = false
@@ -2881,6 +3035,14 @@ const convertSelected = async () => {
     converting.value = false
   }
 }
+
+defineExpose({
+  selectedHeaders,
+  filteredAvailableHeaders,
+  addHeaderInSelected,
+  removeHeaderFromSelected,
+  getColColor,
+})
 </script>
 
 <style scoped>
@@ -3076,10 +3238,16 @@ const convertSelected = async () => {
 }
 
 .break-email {
-  white-space: nowrap;           /* prevents wrapping */
-  overflow: hidden;              /* hides overflow text */
-  text-overflow: ellipsis;       /* shows ... at end */
-  max-width: 250px;              /* adjust as needed */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+.comment-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
 }
 
 .editable-field:hover {
@@ -3180,6 +3348,25 @@ const convertSelected = async () => {
   padding: 10px;
   background: #fff;
 }
+.compose-dialog-card {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88vh, 820px);
+  overflow: hidden;
+}
+
+.compose-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.compose-dialog-footer {
+  flex-shrink: 0;
+  background: #fff;
+}
+
 .send-price-card {
   border-radius: 18px;
   overflow: hidden;
@@ -3229,6 +3416,20 @@ const convertSelected = async () => {
 .send-price-editor {
   min-height: 140px;
 }
+.fld-lbl {
+  font-weight: 400;
+  font-size: 14px;
+  color: #737373;
+}
+
+.input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
+}
+
 .action-item:hover { background-color: #f5f5f5; }
 
 .lead-name-cell-container {
@@ -3362,6 +3563,17 @@ const convertSelected = async () => {
 .bulk-automation-tabs :deep(.v-slide-group__prev),
 .bulk-automation-tabs :deep(.v-slide-group__next) {
   display: none !important;
+}
+
+.crm-col-box {
+  min-width: calc(33.33% - 8px);
+  color: white;
+  border-radius: 6px;
+  text-align: center;
+  font-weight: 400;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 36px;
 }
 </style>
 
