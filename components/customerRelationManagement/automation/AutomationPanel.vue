@@ -200,10 +200,12 @@
 
             <v-row dense>
 
-              <!-- inquiry_days: days number + date picker -->
-              <template v-if="triggerForm.triggerType === 'inquiry_days'">
+              <!-- inquiry_days / activation_days: days number + date picker -->
+              <template v-if="['inquiry_days', 'activation_days'].includes(triggerForm.triggerType)">
                 <v-col cols="12" sm="6">
-                  <div class="trig-field-label">Days after {{ resolvedLeadId ? 'activation' : 'enquiry' }}</div>
+                  <div class="trig-field-label">
+                    Days after {{ triggerForm.triggerType === 'activation_days' ? 'activation' : (resolvedLeadId ? 'activation' : 'enquiry') }}
+                  </div>
                   <v-text-field
                     v-model="triggerForm.triggerDays"
                     type="number"
@@ -218,7 +220,12 @@
                   />
                 </v-col>
                 <v-col cols="12" sm="6">
-                  <div class="trig-field-label">Or pick a target date <span class="trig-field-hint">(calculates days from today)</span></div>
+                  <div class="trig-field-label">
+                    Or pick a target date
+                    <span class="trig-field-hint">
+                      (calculates days from {{ triggerForm.triggerType === 'activation_days' ? 'activation day' : 'today' }})
+                    </span>
+                  </div>
                   <v-text-field
                     :model-value="triggerInquiryDatePickerValue"
                     type="date"
@@ -527,10 +534,13 @@ import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { htmlToPlainText } from '@/lib/format/text'
 import patientJourneyService from '@/services/patientJourneyService'
+import { getLeadDisplayName } from '@/lib/normalizers/lead'
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
   lead: { type: Object, default: null },
+  patientId: { type: [Number, String], default: null },
+  patient: { type: Object, default: null },
   displayMode: { type: String, default: 'inline' },
   groups: { type: Array, default: null },
   useGroupsApi: { type: Boolean, default: true },
@@ -546,6 +556,9 @@ const props = defineProps({
   showLastSentColumn: { type: Boolean, default: false },
   showSentStatusColumn: { type: Boolean, default: false },
   showResendAction: { type: Boolean, default: false },
+  readOnlyTrigger: { type: Boolean, default: false },
+  selectedLeadIds: { type: Array, default: null },
+  selectedLeads: { type: Array, default: null },
 })
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -623,16 +636,24 @@ const tableHeaders = computed(() => {
   return headers
 })
 
-const triggerTypes = [
-  { label: 'Send Now', value: 'send_now', icon: 'mdi-send-circle-outline' },
-  { label: 'After Enquiry', value: 'inquiry_days', icon: 'mdi-calendar-clock' },
-  { label: 'Birthday', value: 'birthday_offset', icon: 'mdi-cake-variant-outline' },
-  { label: 'Birthday Month', value: 'birthday_month_start', icon: 'mdi-cake-layered' },
-  { label: 'Black Friday', value: 'black_friday', icon: 'mdi-tag-outline' },
-  { label: 'Fixed Date', value: 'month_day', icon: 'mdi-calendar-star' },
-  { label: 'Nth Weekday', value: 'weekday_of_month', icon: 'mdi-calendar-week' },
-  { label: 'Anniversary', value: 'practice_anniversary', icon: 'mdi-office-building-outline' },
-]
+const canUseSendNowTrigger = computed(() => !!resolvedLeadId.value)
+
+const triggerTypes = computed(() => {
+  const items = [
+    { label: 'After Enquiry', value: 'inquiry_days', icon: 'mdi-calendar-clock' },
+    { label: 'After Activation', value: 'activation_days', icon: 'mdi-timer-outline' },
+    { label: 'Birthday', value: 'birthday_offset', icon: 'mdi-cake-variant-outline' },
+    { label: 'Birthday Month', value: 'birthday_month_start', icon: 'mdi-cake-layered' },
+    { label: 'Black Friday', value: 'black_friday', icon: 'mdi-tag-outline' },
+    { label: 'Fixed Date', value: 'month_day', icon: 'mdi-calendar-star' },
+    { label: 'Nth Weekday', value: 'weekday_of_month', icon: 'mdi-calendar-week' },
+    { label: 'Anniversary', value: 'practice_anniversary', icon: 'mdi-office-building-outline' },
+  ]
+  if (canUseSendNowTrigger.value) {
+    items.unshift({ label: 'Send Now', value: 'send_now', icon: 'mdi-send-circle-outline' })
+  }
+  return items
+})
 
 const weekdayOptions = [
   { label: 'Sunday', value: 0 },
@@ -723,15 +744,36 @@ const resolveGroupAuthor = (group) =>
     fallbackName: getCurrentUserName(),
   })
 
+const selectedLeadIdsNormalized = computed(() =>
+  [...new Set((Array.isArray(props.selectedLeadIds) ? props.selectedLeadIds : [])
+    .map((id) => Number(id || 0))
+    .filter(Boolean))]
+)
+
+const selectedLeadNameMap = computed(() => {
+  const entries = Array.isArray(props.selectedLeads) ? props.selectedLeads : []
+  return new Map(
+    entries
+      .map((lead) => {
+        const id = Number(lead?.id || 0)
+        if (!id) return null
+        return [id, getLeadDisplayName(lead || {}) || `Lead #${id}`]
+      })
+      .filter(Boolean)
+  )
+})
+
+const isBulkLeadMode = computed(() => selectedLeadIdsNormalized.value.length > 0)
+
 const bulkGroupState = computed(() => {
-  if (!props.selectedLeadIds?.length) return null
-  const total = props.selectedLeadIds.length
+  if (!selectedLeadIdsNormalized.value.length) return null
+  const total = selectedLeadIdsNormalized.value.length
   const result = {}
   for (const group of visibleGroups.value) {
     const keys = group.templateKeys || []
     let enabledCount = 0
-    for (const leadId of props.selectedLeadIds) {
-      const leadRows = crmStore.automationRowsCache[Number(leadId)] || []
+    for (const leadId of selectedLeadIdsNormalized.value) {
+      const leadRows = crmStore.automationRowsCache[leadId] || []
       const groupRows = keys.length
         ? leadRows.filter(r => new Set(keys).has(r.key))
         : leadRows.filter(r => r.groupKey === group.key)
@@ -941,7 +983,81 @@ const resolvedLeadId = computed(() => {
   return id ? Number(id) : null
 })
 
+const stableTriggerKey = (trigger) => {
+  if (!trigger || typeof trigger !== 'object') return ''
+  const normalized = Object.keys(trigger).sort().reduce((acc, key) => {
+    acc[key] = trigger[key]
+    return acc
+  }, {})
+  return JSON.stringify(normalized)
+}
+
+const buildBulkRowsFromSelectedLeads = () => {
+  const leadIds = selectedLeadIdsNormalized.value
+  if (!leadIds.length) return []
+
+  const rowMap = new Map()
+  leadIds.forEach((leadId) => {
+    const leadRows = Array.isArray(crmStore.automationRowsCache[leadId])
+      ? crmStore.automationRowsCache[leadId]
+      : []
+    leadRows.forEach((row) => {
+      if (!row?.key) return
+      if (!rowMap.has(row.key)) rowMap.set(row.key, [])
+      rowMap.get(row.key).push({ ...row, __sourceLeadId: leadId })
+    })
+  })
+
+  if (props.includeDefaults) {
+    crmAutomationDefaults.forEach((row) => {
+      if (!row?.key || rowMap.has(row.key)) return
+      rowMap.set(row.key, [])
+    })
+  }
+
+  return Array.from(rowMap.entries()).map(([key, leadRows]) => {
+    const fallback = crmAutomationDefaults.find((item) => item.key === key) || {}
+    const baseRow = leadRows[0] || fallback
+    const triggerKeys = [...new Set(leadRows.map((row) => stableTriggerKey(row?.trigger)).filter(Boolean))]
+    const hasMixedTrigger = triggerKeys.length > 1
+    const resolvedTrigger = hasMixedTrigger
+      ? null
+      : (leadRows.find((row) => row?.trigger)?.trigger || baseRow?.trigger)
+    const enabledCount = leadRows.filter((row) => !!row?.enabled).length
+    const bulkTriggerDetails = leadIds.map((leadId) => {
+      const matchingRow = leadRows.find((row) => Number(row?.__sourceLeadId || 0) === leadId)
+      const leadName = selectedLeadNameMap.value.get(leadId) || `Lead #${leadId}`
+      const detailTrigger = matchingRow?.trigger || null
+      return {
+        leadId,
+        leadName,
+        triggerLabel: detailTrigger ? formatLeadAwareTriggerPreview(detailTrigger) : 'No lead-specific trigger',
+      }
+    })
+
+    return {
+      ...fallback,
+      ...baseRow,
+      key,
+      trigger: resolvedTrigger,
+      sending: hasMixedTrigger
+        ? 'Mixed across selected leads'
+        : (resolvedTrigger ? formatLeadAwareTriggerPreview(resolvedTrigger) : (baseRow?.sending || fallback?.sending || '')),
+      enabled: leadRows.length ? enabledCount === leadIds.length : !!baseRow?.enabled,
+      bulkEnabledCount: enabledCount,
+      bulkTotalCount: leadIds.length,
+      bulkHasMixedTrigger: hasMixedTrigger,
+      bulkTriggerDetails,
+    }
+  })
+}
+
 const formatLeadAwareTriggerPreview = (trigger = {}) => {
+  if (trigger?.type === 'activation_days') {
+    const days = Number(trigger?.days || 0)
+    if (days === 0) return 'Immediately when automation is activated'
+    return `${days} day${days === 1 ? '' : 's'} after activation`
+  }
   if (resolvedLeadId.value && trigger?.type === 'inquiry_days') {
     const days = Number(trigger?.days || 0)
     if (days === 0) return 'Immediately when automation is activated'
@@ -1089,7 +1205,14 @@ const toggleAutomationGroup = async (card, val) => {
 const loadRows = async ({ force = false } = {}) => {
   try {
     let apiItems = []
-    if (resolvedLeadId.value) {
+    if (isBulkLeadMode.value) {
+      await Promise.all(
+        selectedLeadIdsNormalized.value.map((leadId) =>
+          crmStore.fetchLeadAutomations(leadId, { force })
+        )
+      )
+      apiItems = buildBulkRowsFromSelectedLeads()
+    } else if (resolvedLeadId.value) {
       await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force })
       apiItems = crmStore.automationRowsCache[Number(resolvedLeadId.value)] || []
     } else {
@@ -1147,6 +1270,11 @@ watch(resolvedPatientId, () => {
   refresh({ forceRows: true })
 })
 
+watch(selectedLeadIdsNormalized, () => {
+  clearAutomationSelection()
+  refresh({ forceRows: true })
+})
+
 // Keep local rows in sync with the store cache so any external write
 // (table column toggle, bulk dialog, invalidation) is reflected immediately
 // without needing to close and reopen the panel.
@@ -1159,6 +1287,19 @@ watch(
       : cacheRows.filter(item => !defaultAutomationKeySet.has(item.key))
     rows.splice(0, rows.length, ...(filtered.length ? filtered : (props.includeDefaults ? crmAutomationDefaults : [])))
   }
+)
+
+watch(
+  () => selectedLeadIdsNormalized.value.map((leadId) => crmStore.automationRowsCache[leadId] || []),
+  () => {
+    if (!isBulkLeadMode.value) return
+    const nextRows = buildBulkRowsFromSelectedLeads()
+    const filtered = props.includeDefaults
+      ? nextRows
+      : nextRows.filter(item => !defaultAutomationKeySet.has(item.key))
+    rows.splice(0, rows.length, ...(filtered.length ? filtered : (props.includeDefaults ? crmAutomationDefaults : [])))
+  },
+  { deep: true }
 )
 
 // Preview dialog state

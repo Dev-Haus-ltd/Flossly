@@ -67,7 +67,12 @@ export const buildEffectiveCrmTemplates = (lead, templatesByOrg) => {
   const seen = new Set();
   baseTemplates.forEach((tpl) => {
     const override = overrides[tpl.key];
-    const combined = override ? { ...tpl, ...override, key: tpl.key } : tpl;
+    // Automations require explicit per-lead opt-in. Global template enabled
+    // state is irrelevant for sending — if no override exists for this lead,
+    // treat the automation as disabled regardless of the global flag.
+    const combined = override
+      ? { ...tpl, ...override, key: tpl.key }
+      : { ...tpl, enabled: false };
     effectiveTemplates.push(combined);
     seen.add(tpl.key);
   });
@@ -338,6 +343,12 @@ export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today, org }) => {
     const d = daysSince(today, anchorDate);
     return { due: d !== null && d === trigger.days, sentKey: tpl.key };
   }
+  if (trigger.type === "activation_days") {
+    const anchorDate = getLeadActivationAnchor(lead, tpl);
+    if (!anchorDate) return { due: false, sentKey: tpl.key };
+    const d = daysSince(today, anchorDate);
+    return { due: d !== null && d === trigger.days, sentKey: tpl.key };
+  }
   if (trigger.type === "birthday_offset") {
     if (!lead?.dob) return { due: false, sentKey: `${tpl.key}_${today.getFullYear()}` };
     const year = today.getFullYear();
@@ -592,6 +603,7 @@ export const sendImmediateCrmAutomationsForLead = async (lead, options = {}) => 
     if (!trigger) continue;
     const isImmediate =
       (trigger.type === "inquiry_days" && trigger.days === 0) ||
+      (trigger.type === "activation_days" && trigger.days === 0) ||
       (includeSendNow && trigger.type === "send_now");
     if (!isImmediate) continue;
     const sentKey = tpl.key;
