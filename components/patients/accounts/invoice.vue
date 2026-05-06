@@ -1,12 +1,12 @@
 <template>
-  <div class="payments-container">
+  <div class="invoices-container">
     <!-- Table Controls -->
     <div class="table-controls">
       <div class="controls-left">
         <div style="width: 180px">
           <v-text-field
             v-model="search"
-            placeholder="Search payments..."
+            placeholder="Search invoices..."
             clearable
             @click:clear="clearSearch"
             variant="solo"
@@ -24,11 +24,11 @@
         </div>
         <div style="width: 180px">
           <v-select
-            v-model="methodFilter"
-            :items="methodOptions"
+            v-model="statusFilter"
+            :items="statusOptions"
             item-title="title"
             item-value="value"
-            placeholder="All Methods"
+            placeholder="All Status"
             variant="solo"
             density="compact"
             bg-color="#F3F4F6"
@@ -51,17 +51,17 @@
       </div>
     </div>
 
-    <!-- Payments Table -->
+    <!-- Invoices Table -->
     <div class="table-container">
       <v-data-table
-        :headers="paymentHeaders"
-        :items="filteredPayments"
+        :headers="invoiceHeaders"
+        :items="filteredInvoices"
         :search="search"
         item-key="id"
         class="full-width-table"
         :items-per-page="10"
-        :loading="false"
-        loading-text="Loading payments..."
+        :loading="loading"
+        loading-text="Loading invoices..."
       >
         <template v-slot:headers="{ columns }">
           <tr>
@@ -90,51 +90,43 @@
         <template v-slot:item="{ item }">
           <tr class="table-row">
             <td class="text-left">
-              <div class="payment-number">{{ item.paymentNumber }}</div>
+              <div class="invoice-link">
+                <button
+                  type="button"
+                  class="inv-number"
+                  @click="toggleExpand(item.id)"
+                >
+                  {{ item.invoiceNumber }}
+                </button>
+                <img :src="expandDetailIcon" alt="" width="13" height="13" />
+              </div>
             </td>
-            <td class="text-left">{{ formatDate(item.paymentDate) }}</td>
+            <td class="text-left">
+              <span
+                class="status-badge"
+                :class="statusClass(item.status)"
+              >
+                {{ statusLabel(item.status) }}
+              </span>
+            </td>
+            <td class="text-left">{{ formatDate(item.invoiceDate) }}</td>
+            <td class="text-left">{{ invoiceSummary(item) }}</td>
             <td class="text-left">
               <div v-if="item.practitionerName" class="practitioner-cell">
-                <CommonAvatar
-                  :user="{ name: item.practitionerName }"
-                  size="32px"
-                />
+                <div class="avatar">
+                  {{ initials(item.practitionerName) }}
+                </div>
                 <span>{{ item.practitionerName }}</span>
               </div>
               <span v-else class="text-grey-darken-1">—</span>
             </td>
             <td class="text-left">
-              <v-chip size="x-small" variant="flat" class="method-chip">
-                {{ methodLabel(item.method) }}
-              </v-chip>
-            </td>
-            <td class="text-left">{{ item.reference || "—" }}</td>
-            <td class="text-left">
-              <div v-if="item.allocations?.length" class="allocation-list">
-                <span
-                  v-for="alloc in item.allocations.slice(0, 3)"
-                  :key="alloc.id"
-                  class="alloc-chip"
-                >
-                  {{ alloc.invoiceNumber }}
-                </span>
-                <span
-                  v-if="item.allocations.length > 3"
-                  class="alloc-chip more-chip"
-                  @click="toggleExpand(item.id)"
-                >
-                  +{{ item.allocations.length - 3 }}
-                </span>
-              </div>
-              <span v-else class="text-grey-darken-1">—</span>
-            </td>
-            <td class="text-left">
-              <span :class="{ 'balance-due': Number(item.unallocated) > 0 }">
-                {{ fmtGbp(item.unallocated) }}
+              <span :class="{ 'balance-due': Number(item.balance) > 0 }">
+                {{ fmtGbp(item.balance) }}
               </span>
             </td>
             <td class="text-left font-weight-medium">
-              {{ fmtGbp(item.amount) }}
+              {{ fmtGbp(item.total) }}
             </td>
             <td class="text-left">
               <v-menu>
@@ -147,52 +139,79 @@
                     <v-icon size="18" color="#6B7280">mdi-dots-vertical</v-icon>
                   </button>
                 </template>
-                <v-list density="compact" min-width="140">
+                <v-list density="compact" min-width="160">
                   <v-list-item
-                    prepend-icon="mdi-delete"
-                    title="Delete Payment"
-                    class="text-error"
-                    @click="$emit('delete-payment', item.id)"
+                    title="Mark as Written Off"
+                    @click="$emit('update-status', item, 'written_off')"
                   />
                   <v-list-item
-                    prepend-icon="mdi-link-off"
-                    title="Unallocate Payment"
-                    @click="$emit('unallocate-payment', item)"
-                    :disabled="!item.allocations?.length"
+                    title="Delete Invoice"
+                    class="text-error"
+                    @click="$emit('delete-invoice', item.id)"
                   />
                 </v-list>
               </v-menu>
             </td>
           </tr>
 
-          <!-- Expanded row for allocations -->
-          <tr
-            v-if="
-              expandedPayments.includes(item.id) && item.allocations?.length
-            "
-          >
-            <td colspan="9" class="expanded-row-cell">
+          <!-- Expanded row for line items -->
+          <tr v-if="expandedInvoices.includes(item.id) && item.items?.length">
+            <td colspan="8" class="expanded-row-cell">
               <div class="expanded-card">
                 <div class="expanded-header">
-                  <span class="font-weight-medium">Payment Allocations</span>
+                  <span class="font-weight-medium">Invoice Items</span>
                 </div>
                 <v-table density="compact" class="expanded-table">
                   <thead>
                     <tr>
-                      <th>Invoice Number</th>
-                      <th>Allocated Amount</th>
+                      <th>Description</th>
+                      <th>Tooth</th>
+                      <th>Qty</th>
+                      <th>Unit Price</th>
+                      <th>Total</th>
+                      <th>Practitioner</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="alloc in item.allocations" :key="alloc.id">
-                      <td>{{ alloc.invoiceNumber }}</td>
-                      <td>{{ fmtGbp(alloc.amount) }}</td>
+                    <tr v-for="lineItem in item.items" :key="lineItem.id">
+                      <td>{{ lineItem.description }}</td>
+                      <td>
+                        {{
+                          lineItem.fdi
+                            ? `${lineItem.fdi}${lineItem.surface ? "/" + lineItem.surface : ""}`
+                            : "—"
+                        }}
+                      </td>
+                      <td>{{ lineItem.quantity }}</td>
+                      <td>{{ fmtGbp(lineItem.unitPrice) }}</td>
+                      <td>{{ fmtGbp(lineItem.total) }}</td>
+                      <td>{{ lineItem.practitionerName || "—" }}</td>
                     </tr>
                   </tbody>
                 </v-table>
               </div>
             </td>
           </tr>
+        </template>
+
+        <template v-slot:bottom>
+          <div v-if="filteredInvoices.length" class="table-footer">
+            <div class="footer-totals">
+              <span class="totals-label">Totals:</span>
+              <span class="totals-value">{{ invoiceTotals.balance }}</span>
+              <span class="totals-value">{{ invoiceTotals.total }}</span>
+            </div>
+          </div>
+        </template>
+
+        <template v-slot:no-data>
+          <div class="empty-state">
+            {{
+              invoices.length
+                ? "No invoices match your search."
+                : 'No invoices yet. Use "Generate Invoice" to create one from completed treatments.'
+            }}
+          </div>
         </template>
       </v-data-table>
     </div>
@@ -203,37 +222,49 @@
 import { ref, computed } from "vue";
 import searchIcon from "@/assets/icons/listView/serach-icon.svg";
 import filterIcon from "@/assets/icons/listView/filter-icon.svg";
+import expandDetailIcon from "@/assets/diary/expand_detail_icon.svg";
 
 const props = defineProps({
-  payments: { type: Array, default: () => [] },
+  invoices: { type: Array, default: () => [] },
+  loading: { type: Boolean, default: false },
+  invoiceTotals: { type: Object, default: () => ({ balance: "£0.00", total: "£0.00" }) },
 });
 
-defineEmits([
-  "delete-payment",
-  "new-payment",
-  "download-statement",
-  "unallocate-payment",
-]);
+const emit = defineEmits(["update-status", "delete-invoice"]);
 
 // State
 const search = ref("");
-const methodFilter = ref(null);
-const expandedPayments = ref([]);
+const statusFilter = ref(null);
+const expandedInvoices = ref([]);
 
 // Table headers
-const paymentHeaders = ref([
+const invoiceHeaders = ref([
   {
-    title: "Payment",
-    key: "paymentNumber",
+    title: "Invoice",
+    key: "invoiceNumber",
     align: "start",
     width: 130,
     resizable: true,
   },
   {
-    title: "Date",
-    key: "paymentDate",
+    title: "Status",
+    key: "status",
     align: "start",
     width: 110,
+    resizable: true,
+  },
+  {
+    title: "Date",
+    key: "invoiceDate",
+    align: "start",
+    width: 110,
+    resizable: true,
+  },
+  {
+    title: "Summary",
+    key: "summary",
+    align: "start",
+    width: 200,
     resizable: true,
   },
   {
@@ -244,36 +275,15 @@ const paymentHeaders = ref([
     resizable: true,
   },
   {
-    title: "Method",
-    key: "method",
-    align: "start",
-    width: 70,
-    resizable: true,
-  },
-  {
-    title: "Reference",
-    key: "reference",
-    align: "start",
-    width: 70,
-    resizable: true,
-  },
-  {
-    title: "Allocated to",
-    key: "allocations",
-    align: "start",
-    width: 120,
-    resizable: true,
-  },
-  {
-    title: "Unallocated",
-    key: "unallocated",
+    title: "Balance",
+    key: "balance",
     align: "start",
     width: 100,
     resizable: true,
   },
   {
     title: "Total",
-    key: "amount",
+    key: "total",
     align: "start",
     width: 100,
     resizable: true,
@@ -287,43 +297,52 @@ const paymentHeaders = ref([
   },
 ]);
 
-const METHOD_LABELS = {
-  cash: "Cash",
-  card: "Card",
-  bank_transfer: "Bank Transfer",
-  cheque: "Cheque",
-  finance: "Finance",
-  other: "Other",
-};
-
-const methodOptions = [
-  { title: "Cash", value: "cash" },
-  { title: "Card", value: "card" },
-  { title: "Bank Transfer", value: "bank_transfer" },
-  { title: "Cheque", value: "cheque" },
-  { title: "Finance", value: "finance" },
-  { title: "Other", value: "other" },
+// Status filter options
+const statusOptions = [
+  { title: "Unpaid", value: "unpaid" },
+  { title: "Part Paid", value: "part_paid" },
+  { title: "Paid", value: "paid" },
+  { title: "Written Off", value: "written_off" },
+  { title: "Credited", value: "credited" },
+  { title: "Draft", value: "draft" },
 ];
 
-const methodLabel = (m) => METHOD_LABELS[m] || m;
+const STATUS_LABELS = {
+  unpaid: "Unpaid",
+  part_paid: "Part Paid",
+  paid: "Paid",
+  written_off: "Written Off",
+  credited: "Credited",
+  draft: "Draft",
+};
 
-// Filtered payments
-const filteredPayments = computed(() => {
-  let filtered = [...props.payments];
+const statusLabel = (s) => STATUS_LABELS[s] || s;
+
+const statusClass = (s) => ({
+  "status-badge--paid": s === "paid",
+  "status-badge--unpaid": s === "unpaid",
+  "status-badge--part": s === "part_paid",
+  "status-badge--written": s === "written_off",
+  "status-badge--draft": s === "draft",
+});
+
+// Filtered invoices
+const filteredInvoices = computed(() => {
+  let filtered = [...props.invoices];
 
   if (search.value) {
     const searchTerm = search.value.toLowerCase();
     filtered = filtered.filter(
-      (payment) =>
-        payment.paymentNumber?.toLowerCase().includes(searchTerm) ||
-        payment.practitionerName?.toLowerCase().includes(searchTerm) ||
-        payment.reference?.toLowerCase().includes(searchTerm),
+      (invoice) =>
+        invoice.invoiceNumber?.toLowerCase().includes(searchTerm) ||
+        invoice.practitionerName?.toLowerCase().includes(searchTerm) ||
+        invoiceSummary(invoice).toLowerCase().includes(searchTerm),
     );
   }
 
-  if (methodFilter.value) {
+  if (statusFilter.value) {
     filtered = filtered.filter(
-      (payment) => payment.method === methodFilter.value,
+      (invoice) => invoice.status === statusFilter.value,
     );
   }
 
@@ -342,11 +361,27 @@ const formatDate = (d) => {
   });
 };
 
+const initials = (name) =>
+  String(name || "")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+
+const invoiceSummary = (invoice) => {
+  if (!invoice.items?.length) return invoice.planName || "—";
+  return invoice.items
+    .map((i) => i.description)
+    .join(", ")
+    .slice(0, 60);
+};
+
 const toggleExpand = (id) => {
-  if (expandedPayments.value.includes(id)) {
-    expandedPayments.value = expandedPayments.value.filter((x) => x !== id);
+  if (expandedInvoices.value.includes(id)) {
+    expandedInvoices.value = expandedInvoices.value.filter((x) => x !== id);
   } else {
-    expandedPayments.value = [...expandedPayments.value, id];
+    expandedInvoices.value = [...expandedInvoices.value, id];
   }
 };
 
@@ -373,7 +408,7 @@ const startResize = (event, column) => {
 </script>
 
 <style scoped lang="scss">
-.payments-container {
+.invoices-container {
   width: 100%;
 }
 
@@ -391,12 +426,6 @@ const startResize = (event, column) => {
   align-items: center;
   gap: 12px;
   flex: 1;
-}
-
-.controls-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
 .custom-search {
@@ -425,33 +454,23 @@ const startResize = (event, column) => {
 
 .full-width-table {
   border-top: 1px solid rgb(var(--v-theme-outline));
+  border-radius: unset;
 
-  :deep(table) {
-    border-collapse: separate;
-    border-spacing: 0;
+  :deep(.v-table__wrapper) {
+    overflow-x: auto;
   }
 
-  /* HEADER vertical borders */
-  :deep(thead tr th) {
-    border-right: 1px solid #e5e7eb;
+  :deep(.v-table .v-table__wrapper > table > thead > tr > th:not(:last-child)) {
+    border-right: 1px solid rgb(var(--v-theme-outline));
   }
 
-  :deep(thead tr th:last-child) {
-    border-right: none;
+  :deep(.v-table .v-table__wrapper > table > tbody > tr > td:not(:last-child)) {
+    border-right: 1px solid rgb(var(--v-theme-outline));
   }
 
-  /* BODY vertical borders */
-  :deep(tbody tr td) {
-    border-right: 1px solid #e5e7eb;
-  }
-
-  :deep(tbody tr td:last-child) {
-    border-right: none;
-  }
-
-  /* HORIZONTAL borders (already have but keep consistent) */
-  :deep(tbody tr) {
-    border-bottom: 1px solid #f3f4f6;
+  :deep(.v-data-table .v-table__wrapper tbody tr:hover) {
+    background-color: #f9fafb;
+    transition: background-color 0.2s ease;
   }
 }
 
@@ -473,63 +492,77 @@ const startResize = (event, column) => {
   margin-left: auto;
 }
 
-.payment-number {
-  margin-left: 6px;
-  font-weight: 500;
+.invoice-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inv-number {
+  border: 0;
+  background: transparent;
+  color: #0061fb;
+  font-weight: 600;
   font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+  height: 22px;
+  border-radius: 6px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-badge--paid {
+  background: #eaf8e6;
+  color: #5daf4d;
+}
+.status-badge--unpaid {
+  background: #ffe8ea;
+  color: #ff6b76;
+}
+.status-badge--part {
+  background: #fff4d6;
+  color: #f59e0b;
+}
+.status-badge--written {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+.status-badge--draft {
+  background: #f0f4ff;
   color: #0061fb;
 }
 
 .practitioner-cell {
-  margin-left: 6px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-.method-chip {
-  margin-left: 6px;
-  border-radius: 100px !important;
-  font-weight: 500;
-  font-size: 11px;
-  padding: 4px 10px;
-  height: auto;
-  background: #e0e7ff !important;
-  color: #4f46e5 !important;
-}
-
-.allocation-list {
-  margin-left: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.alloc-chip {
-  margin-left: 6px;
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f2c6aa, #b97a56);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.more-chip {
-  background: #e5e7eb;
-  cursor: pointer;
-  transition: background 0.2s;
-
-  &:hover {
-    background: #d1d5db;
-  }
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .balance-due {
-  color: #dc2626 !important;
+  color: #ff6b76 !important;
   font-weight: 600;
 }
 
@@ -544,6 +577,13 @@ const startResize = (event, column) => {
   &:hover {
     background: #f3f4f6;
   }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #8b96a7;
+  font-size: 13px;
 }
 
 .expanded-row-cell {
@@ -583,6 +623,32 @@ const startResize = (event, column) => {
   }
 }
 
+.table-footer {
+  padding: 12px 16px;
+  background: #fff;
+  border-top: 1px solid #edf1f5;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.footer-totals {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.totals-label {
+  font-weight: 600;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.totals-value {
+  font-weight: 700;
+  color: #303846;
+  font-size: 14px;
+}
+
 @media (max-width: 768px) {
   .table-controls {
     flex-direction: column;
@@ -591,10 +657,6 @@ const startResize = (event, column) => {
 
   .controls-left {
     flex-direction: column;
-    width: 100%;
-  }
-
-  .controls-right {
     width: 100%;
   }
 

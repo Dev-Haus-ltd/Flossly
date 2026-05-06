@@ -1,194 +1,312 @@
 <template>
-  <v-dialog v-model="open" max-width="520" persistent>
-    <v-card class="payment-dialog" rounded="xl">
-      <div class="payment-dialog__header">
-        <span>Record Payment</span>
-        <button type="button" class="close-btn" @click="cancel">
+  <v-dialog v-model="open" max-width="560" scrollable :persistent="isSaving">
+    <v-card rounded="xl" elevation="4" style="overflow: hidden">
+      <!-- Header -->
+      <v-toolbar flat color="white" height="56">
+        <v-toolbar-title class="title-text pl-2">
+          Record Payment
+        </v-toolbar-title>
+        <v-spacer />
+        <v-btn icon variant="text" size="small" @click="cancel" class="mr-2">
           <v-icon size="18">mdi-close</v-icon>
-        </button>
-      </div>
+        </v-btn>
+      </v-toolbar>
 
-      <div class="payment-dialog__body">
-        <div class="field-row">
-          <div class="field-group">
-            <label>Amount (£) <span class="req">*</span></label>
-            <input
-              v-model="form.amount"
-              type="number"
-              min="0.01"
-              step="0.01"
-              placeholder="0.00"
-              class="field-input"
-              :class="{ 'field-input--error': errors.amount }"
-            />
-            <span v-if="errors.amount" class="field-error">{{ errors.amount }}</span>
-          </div>
+      <v-divider />
 
-          <div class="field-group">
-            <label>Date <span class="req">*</span></label>
-            <input
-              v-model="form.paymentDate"
-              type="date"
-              class="field-input"
-            />
-          </div>
-        </div>
+      <!-- Body -->
+      <v-card-text
+        class="pa-5"
+        style="background: #f9fafb; max-height: 70vh; overflow-y: auto"
+      >
+        <v-card elevation="0" rounded="lg" class="pa-4" color="white">
+          <v-row dense>
+            <!-- Amount -->
+            <v-col cols="6">
+              <label class="fld-lbl">
+                Amount (£) <span class="req-star">*</span>
+              </label>
+              <v-text-field
+                v-model="form.amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="0.00"
+                variant="outlined"
+                density="compact"
+                class="mt-1"
+                :error="!!errors.amount"
+                :error-messages="errors.amount ? [errors.amount] : []"
+                hide-details="auto"
+              />
+            </v-col>
 
-        <div class="field-group">
-          <label>Payment Method <span class="req">*</span></label>
-          <select v-model="form.method" class="field-select">
-            <option v-for="m in methods" :key="m.value" :value="m.value">{{ m.label }}</option>
-          </select>
-        </div>
+            <!-- Date -->
+            <v-col cols="6">
+              <label class="fld-lbl">
+                Date <span class="req-star">*</span>
+              </label>
+              <v-menu v-model="dateMenu" :close-on-content-click="false">
+                <template #activator="{ props: dp }">
+                  <v-text-field
+                    v-bind="dp"
+                    :model-value="form.paymentDate"
+                    variant="outlined"
+                    density="compact"
+                    class="mt-1"
+                    readonly
+                    hide-details
+                  >
+                    <template #append-inner>
+                      <v-icon size="16" @click.stop="dateMenu = true">
+                        mdi-calendar
+                      </v-icon>
+                    </template>
+                  </v-text-field>
+                </template>
 
-        <div class="field-group">
-          <label>Reference / Transaction No.</label>
-          <input
-            v-model="form.reference"
-            type="text"
-            placeholder="e.g. card transaction ID, cheque number"
-            class="field-input"
-          />
-        </div>
+                <v-date-picker
+                  v-model="form.paymentDate"
+                  @update:model-value="dateMenu = false"
+                  color="primary"
+                />
+              </v-menu>
+            </v-col>
 
-        <div class="field-group">
-          <label>Practitioner</label>
-          <input
-            v-model="form.practitionerName"
-            type="text"
-            placeholder="Who the payment is for"
-            class="field-input"
-          />
-        </div>
+            <!-- Payment Method -->
+            <v-col cols="12">
+              <label class="fld-lbl">
+                Payment Method <span class="req-star">*</span>
+              </label>
+              <v-select
+                v-model="form.method"
+                :items="methods"
+                item-title="label"
+                item-value="value"
+                variant="outlined"
+                density="compact"
+                class="mt-1"
+                hide-details="auto"
+              />
+            </v-col>
 
-        <div v-if="outstandingInvoices.length" class="field-group">
-          <label>Allocate to Invoice</label>
-          <select v-model="form.allocateToInvoiceId" class="field-select">
-            <option value="">— None (unallocated) —</option>
-            <option
-              v-for="inv in outstandingInvoices"
-              :key="inv.id"
-              :value="inv.id"
-            >
-              {{ inv.invoiceNumber }} — {{ fmtBalance(inv) }} outstanding
-            </option>
-          </select>
-        </div>
+            <!-- Reference -->
+            <v-col cols="12">
+              <label class="fld-lbl">Reference / Transaction No.</label>
+              <v-text-field
+                v-model="form.reference"
+                type="number"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                placeholder="e.g. 123456"
+                variant="outlined"
+                density="compact"
+                class="mt-1"
+                hide-details
+              />
+            </v-col>
 
-        <div class="field-group">
-          <label>Notes</label>
-          <textarea
-            v-model="form.notes"
-            rows="2"
-            placeholder="Optional notes"
-            class="field-textarea"
-          />
-        </div>
-      </div>
+            <!-- Practitioner -->
+            <v-col cols="12">
+              <label class="fld-lbl">Practitioner</label>
+              <v-select
+                v-model="form.practitionerId"
+                :items="practitioners"
+                item-title="name"
+                item-value="id"
+                variant="outlined"
+                density="compact"
+                class="mt-1"
+                hide-details="auto"
+                placeholder="Select practitioner"
+              />
+            </v-col>
 
-      <div class="payment-dialog__footer">
-        <button type="button" class="btn-cancel" @click="cancel">Cancel</button>
-        <button
-          type="button"
-          class="btn-submit"
+            <!-- Allocate Invoice -->
+            <v-col cols="12" v-if="outstandingInvoices.length">
+              <label class="fld-lbl">Allocate to Invoice</label>
+              <v-select
+                v-model="form.allocateToInvoiceId"
+                :items="outstandingInvoices"
+                item-title="invoiceNumber"
+                item-value="id"
+                variant="outlined"
+                density="compact"
+                class="mt-1"
+                hide-details="auto"
+              >
+                <template #prepend-item>
+                  <v-list-item title="— None (unallocated) —" value="" />
+                </template>
+
+                <template #item="{ props, item }">
+                  <v-list-item v-bind="props">
+                    <v-list-item-title>
+                      {{ item.raw.invoiceNumber }} —
+                      {{ fmtBalance(item.raw) }} outstanding
+                    </v-list-item-title>
+                  </v-list-item>
+                </template>
+              </v-select>
+            </v-col>
+
+            <!-- Notes -->
+            <v-col cols="12">
+              <label class="fld-lbl">Notes</label>
+              <v-textarea
+                v-model="form.notes"
+                rows="2"
+                variant="outlined"
+                density="compact"
+                class="mt-1"
+                auto-grow
+                hide-details
+              />
+            </v-col>
+          </v-row>
+        </v-card>
+      </v-card-text>
+
+      <v-divider />
+
+      <!-- Footer -->
+      <v-card-actions class="pa-4" style="gap: 12px">
+        <v-btn
+          variant="outlined"
+          color="#6b7280"
+          style="flex: 1; border-radius: 10px"
+          @click="cancel"
+        >
+          Cancel
+        </v-btn>
+
+        <v-btn
+          color="primary"
+          variant="flat"
+          style="flex: 1; border-radius: 10px"
+          :loading="isSaving"
           :disabled="isSaving"
           @click="submit"
         >
-          <v-progress-circular v-if="isSaving" size="14" width="2" indeterminate />
-          <span v-else>Record Payment</span>
-        </button>
-      </div>
+          Record Payment
+        </v-btn>
+      </v-card-actions>
     </v-card>
   </v-dialog>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
-import { useAccountsStore } from '@/stores/accounts'
-import { useMainStore } from '@/stores/index'
+import { ref, computed, watch, onMounted } from "vue";
+import { useAccountsStore } from "@/stores/accounts";
+import { useMainStore } from "@/stores/index";
+import { usePatientChartingStore } from "@/stores/patientCharting";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-})
-const emit = defineEmits(['update:modelValue'])
+});
+const emit = defineEmits(["update:modelValue"]);
 
-const store = useAccountsStore()
-const mainStore = useMainStore()
+const store = useAccountsStore();
+const mainStore = useMainStore();
+const diaryStore = useDiaryStore();
 
 const open = computed({
   get: () => props.modelValue,
-  set: (v) => emit('update:modelValue', v),
-})
+  set: (v) => emit("update:modelValue", v),
+});
 
-const today = new Date().toISOString().slice(0, 10)
+const today = new Date().toISOString().slice(0, 10);
 
 const blankForm = () => ({
-  amount: '',
+  amount: "",
   paymentDate: today,
-  method: 'cash',
-  reference: '',
-  practitionerName: '',
-  notes: '',
-  allocateToInvoiceId: '',
-})
+  method: "cash",
+  reference: "",
+  practitionerId: "",
+  notes: "",
+  allocateToInvoiceId: "",
+});
 
-const form = ref(blankForm())
-const errors = ref({})
-const isSaving = computed(() => store.isSaving)
-
+const form = ref(blankForm());
+const errors = ref({});
+const isSaving = computed(() => store.isSaving);
+const dateMenu = ref(false);
 const methods = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'card', label: 'Card' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'cheque', label: 'Cheque' },
-  { value: 'finance', label: 'Finance' },
-  { value: 'other', label: 'Other' },
-]
+  { value: "cash", label: "Cash" },
+  { value: "card", label: "Card" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "cheque", label: "Cheque" },
+  { value: "finance", label: "Finance" },
+  { value: "other", label: "Other" },
+];
 
-const outstandingInvoices = computed(() => store.outstandingInvoices)
-
-const fmtBalance = (inv) => `£${Number(inv.balance ?? 0).toFixed(2)}`
+const outstandingInvoices = computed(() => store.outstandingInvoices);
+const dentists = ref([]);
+const practitioners = computed(() => dentists.value);
+const fmtBalance = (inv) => `£${Number(inv.balance ?? 0).toFixed(2)}`;
 
 watch(open, (v) => {
   if (v) {
-    form.value = blankForm()
-    errors.value = {}
+    form.value = blankForm();
+    errors.value = {};
+    loadDentists();
   }
-})
+});
 
 const validate = () => {
-  errors.value = {}
+  errors.value = {};
   if (!form.value.amount || Number(form.value.amount) <= 0) {
-    errors.value.amount = 'Enter a valid amount'
+    errors.value.amount = "Enter a valid amount";
   }
-  return !Object.keys(errors.value).length
-}
+  return !Object.keys(errors.value).length;
+};
 
 const cancel = () => {
-  open.value = false
-}
+  open.value = false;
+};
 
+const loadDentists = async () => {
+  try {
+    const res = await diaryStore.listDentists();
+    if (res?.code === 0) {
+      dentists.value = res.data || [];
+    }
+  } catch (error) {
+    console.error("Failed to load Dentists", error);
+  }
+};
 const submit = async () => {
-  if (!validate()) return
-
+  if (!validate()) return;
+  const selected = dentists.value.find(
+    (d) => d.id === form.value.practitionerId,
+  );
   const payload = {
     paymentDate: form.value.paymentDate,
     method: form.value.method,
     amount: Number(form.value.amount),
     reference: form.value.reference,
-    practitionerName: form.value.practitionerName,
+    practitionerId: form.value.practitionerId
+      ? Number(form.value.practitionerId)
+      : null,
+    practitionerName: selected?.name || "",
     notes: form.value.notes,
     allocateToInvoiceId: form.value.allocateToInvoiceId || null,
-  }
+  };
 
-  const res = await store.recordPayment(payload)
+  const res = await store.recordPayment(payload);
   if (res?.code === 0) {
-    mainStore.setSnackbar({ message: 'Payment recorded successfully', color: 'success' })
-    open.value = false
+    mainStore.setSnackbar({
+      message: "Payment recorded successfully",
+      color: "success",
+    });
+    open.value = false;
   } else {
-    mainStore.setSnackbar({ message: res?.message || 'Failed to record payment', color: 'error' })
+    mainStore.setSnackbar({
+      message: res?.message || "Failed to record payment",
+      color: "error",
+    });
   }
-}
+};
 </script>
 
 <style scoped lang="scss">
@@ -314,5 +432,24 @@ const submit = async () => {
     opacity: 0.6;
     cursor: not-allowed;
   }
+}
+.title-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.fld-lbl {
+  font-size: 12px;
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.req-star {
+  color: #ef4444;
+}
+
+:deep(.v-field) {
+  border-radius: 8px !important;
 }
 </style>
