@@ -453,6 +453,7 @@ const leadStatusOptions = [
   { key: "contacted", label: "Contacted" },
   { key: "lost", label: "Lost" },
   { key: "archived", label: "Archived" },
+  { key: "uploaded", label: "Uploaded" },
 ];
 
 const statusLookup = computed(() => {
@@ -714,7 +715,7 @@ const normalizeRow = (row) => {
     leadStatus:
       statusLookup.value.get(
         (normalized["leadstatus"] || "").trim().toLowerCase()
-      ) || "New",
+      ) || "Uploaded",
     userId:
       activeUsers.value.find((u) => {
         const fullName = u.fullName?.trim()?.toLowerCase();
@@ -813,14 +814,14 @@ const validateLead = (index, existingLead, emailMap = null) => {
   if (lead.leadStatus) {
     const status = statusLookup.value.get(lead.leadStatus.trim().toLowerCase());
     if (!status) {
-      lead.warnings.leadStatus = "Unrecognised lead status - will default to New.";
+      lead.warnings.leadStatus = "Unrecognised lead status - will default to Uploaded.";
       lead.hasWarnings = true;
-      lead.leadStatus = "New";
+      lead.leadStatus = "Uploaded";
     } else {
       lead.leadStatus = status;
     }
   } else {
-    lead.leadStatus = "New";
+    lead.leadStatus = "Uploaded";
   }
 
   if (lead.assignedUser?.trim() && !lead.userId) {
@@ -899,7 +900,7 @@ const uploadLeads = async () => {
           lead.originalLeadSource ||
           null
         : lead.originalLeadSource || null,
-      leadStatus: lead.leadStatus || "New",
+      leadStatus: lead.leadStatus || "Uploaded",
       treatment: lead.treatmentId
         ? props.treatmentSources.find((t) => t.id === lead.treatmentId)?.name ||
           lead.originalTreatment ||

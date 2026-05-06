@@ -25,7 +25,7 @@
         <v-expansion-panel-text class="pt-0">
           <v-data-table-server
             v-model="selectedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="activeLeads"
             item-value="id"
             show-select
@@ -58,10 +58,18 @@
               />
             </template>
 
-            <!-- Editable / resizable headers -->
+            <!-- Draggable / resizable headers -->
             <template v-slot:headers="{ columns, allSelected, someSelected }">
-              <tr>
-                <template v-for="(column, i) in columns" :key="column.key">
+              <draggable
+                tag="tr"
+                :model-value="columns"
+                item-key="key"
+                direction="horizontal"
+                :disabled="isResizing"
+                handle=".th-content"
+                @update:model-value="updateHeaderOrder"
+              >
+                <template #item="{ element: column, index: i }">
                   <th
                     :style="{
                       width: column.width + 'px',
@@ -72,9 +80,15 @@
                       position: 'relative',
                     }"
                   >
-                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                    <div v-if="i !== 0" class="d-flex align-center th-content" style="cursor: grab;">
                       <p class="px-1 w-100 mb-0">{{ column.title }}</p>
-
+                      <v-icon
+                        v-if="column.key !== 'name'"
+                        size="14"
+                        color="black"
+                        style="cursor: pointer; flex-shrink: 0;"
+                        @click.stop="removeHeaderFromSelected(column)"
+                      >mdi-minus</v-icon>
                       <span
                         class="resize-handle"
                         @pointerdown="startResize($event, column, i)"
@@ -94,12 +108,12 @@
                     </div>
                   </th>
                 </template>
-              </tr>
+              </draggable>
             </template>
 
             <!-- Dynamic cell templates -->
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -302,6 +316,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'leadSource')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'treatment'">
@@ -310,6 +325,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'treatment')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'assigned'">
@@ -410,7 +426,7 @@
           <v-data-table-server
             v-else
             v-model="selectedConvertedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="convertedLeadsData"
             item-value="id"
             hover
@@ -443,8 +459,16 @@
               />
             </template>
             <template v-slot:headers="{ columns, allSelected, someSelected }">
-              <tr>
-                <template v-for="(column, i) in columns" :key="column.key">
+              <draggable
+                tag="tr"
+                :model-value="columns"
+                item-key="key"
+                direction="horizontal"
+                :disabled="isResizing"
+                handle=".th-content"
+                @update:model-value="updateHeaderOrder"
+              >
+                <template #item="{ element: column, index: i }">
                   <th
                     :style="{
                       width: column.width + 'px',
@@ -455,8 +479,15 @@
                       position: 'relative',
                     }"
                   >
-                    <div v-if="i !== 0" class="d-flex align-center th-content">
+                    <div v-if="i !== 0" class="d-flex align-center th-content" style="cursor: grab;">
                       <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                      <v-icon
+                        v-if="column.key !== 'name'"
+                        size="14"
+                        color="black"
+                        style="cursor: pointer; flex-shrink: 0;"
+                        @click.stop="removeHeaderFromSelected(column)"
+                      >mdi-minus</v-icon>
                       <span
                         class="resize-handle"
                         @pointerdown="startResize($event, column, i)"
@@ -473,10 +504,10 @@
                     </div>
                   </th>
                 </template>
-              </tr>
+              </draggable>
             </template>
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -656,6 +687,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'leadSource')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'treatment'">
@@ -664,6 +696,7 @@
                   :selected="item"
                   :column="col"
                   @update="updateValueRow(item, 'treatment')"
+                  @options-updated="(e) => emit('options-refreshed', e)"
                 />
               </template>
               <template v-else-if="col.key === 'assigned'">
@@ -762,7 +795,7 @@
           <v-data-table-server
             v-else
             v-model="selectedArchivedLeads"
-            :headers="headers"
+            :headers="selectedHeaders"
             :items="archivedLeads"
             item-value="id"
             hover
@@ -828,7 +861,7 @@
               </tr>
             </template>
             <template
-              v-for="col in headers"
+              v-for="col in selectedHeaders"
               :key="col.key"
               v-slot:[`item.${col.key}`]="{ item }"
             >
@@ -1158,20 +1191,46 @@
       @confirm="doDeleteArchived"
       @cancel="confirmArchivedDelete = false"
     />
-    <v-dialog v-model="showBookPlanDialog" max-width="500">
-      <v-card class="pa-4">
-        <v-card-title class="text-subtitle-1 pa-0 mb-2">
-          Soar Plan Required
-        </v-card-title>
-        <v-card-text class="pa-0">
-          This action is available on the Soar plan. Your current plan is
-          <strong>{{ currentOrgLicenseLabel }}</strong>.
-          Upgrade to Soar to unlock diary booking, patient auto-creation, lead form sending, and more.
+    <v-dialog v-model="showBookPlanDialog" max-width="560">
+      <v-card class="plan-upgrade-dialog rounded-xl overflow-hidden">
+        <div class="plan-upgrade-dialog__hero">
+          <div>
+            <div class="plan-upgrade-dialog__eyebrow">Plan Access</div>
+            <div class="plan-upgrade-dialog__title">Upgrade to Soar</div>
+            <div class="plan-upgrade-dialog__subtitle">
+              Unlock deeper CRM and diary workflows for your team.
+            </div>
+          </div>
+          <v-chip size="small" color="white" variant="flat" class="plan-upgrade-dialog__chip">
+            Current: {{ currentOrgLicenseLabel }}
+          </v-chip>
+        </div>
+        <v-card-text class="plan-upgrade-dialog__body">
+          <p class="plan-upgrade-dialog__copy">
+            Your current plan covers the essentials. Soar adds the full premium workflow layer for high-volume CRM operations.
+          </p>
+          <div class="plan-upgrade-dialog__feature-list">
+            <div class="plan-upgrade-dialog__feature">
+              <v-icon size="18" color="primary">mdi-calendar-check-outline</v-icon>
+              <span>Advanced diary and patient workflow tooling</span>
+            </div>
+            <div class="plan-upgrade-dialog__feature">
+              <v-icon size="18" color="primary">mdi-robot-outline</v-icon>
+              <span>Deeper automation and premium CRM capabilities</span>
+            </div>
+            <div class="plan-upgrade-dialog__feature">
+              <v-icon size="18" color="primary">mdi-chart-line</v-icon>
+              <span>Broader growth, conversion, and team coordination features</span>
+            </div>
+          </div>
         </v-card-text>
-        <v-card-actions class="pa-0 mt-4">
+        <v-card-actions class="plan-upgrade-dialog__actions">
           <v-spacer />
+          <v-btn variant="text" @click="showBookPlanDialog = false">
+            Close
+          </v-btn>
           <v-btn color="primary" variant="flat" @click="showBookPlanDialog = false">
-            OK
+            Got it
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -1221,6 +1280,7 @@
                 :include-defaults="true"
                 :whatsapp-enabled="props.whatsappConnected"
                 :selected-lead-ids="selectedLeadIds"
+                :selected-leads="selectedLeads"
                 :disable-toggle="false"
                 :show-sent-status-column="false"
                 :show-resend-action="false"
@@ -1233,6 +1293,7 @@
                 :include-defaults="false"
                 :whatsapp-enabled="props.whatsappConnected"
                 :selected-lead-ids="selectedLeadIds"
+                :selected-leads="selectedLeads"
                 :disable-toggle="false"
                 :show-sent-status-column="false"
                 :show-resend-action="false"
@@ -1242,16 +1303,74 @@
         </div>
       </v-card>
     </v-dialog>
+
+    <!-- Consent form picker -->
+    <v-dialog v-model="showConsentFormSelect" max-width="540">
+      <v-card class="pa-4 rounded-xl">
+        <v-card-title class="text-subtitle-1 pa-0 mb-3 d-flex justify-space-between align-center">
+          <span>Select Consent Form</span>
+          <v-btn icon variant="text" size="small" @click="showConsentFormSelect = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+        <v-card-text class="pa-0">
+          <div v-if="consentFormsLoading" class="d-flex justify-center py-8">
+            <v-progress-circular indeterminate color="primary" />
+          </div>
+          <v-alert v-else-if="!consentForms.length" type="info" variant="tonal" class="mb-2">
+            No consent forms found. Create one in the Forms section first.
+          </v-alert>
+          <v-list v-else density="compact" class="pa-0">
+            <v-list-item
+              v-for="form in consentForms"
+              :key="form.id"
+              :title="form.name || form.title"
+              :subtitle="form.category || 'General'"
+              rounded="lg"
+              class="mb-2"
+              style="border: 1px solid #e2e8f0;"
+              @click="selectConsentForm(form)"
+            >
+              <template #prepend>
+                <v-icon color="primary" class="mr-2">mdi-file-document-outline</v-icon>
+              </template>
+              <template #append>
+                <v-icon size="16" color="grey">mdi-chevron-right</v-icon>
+              </template>
+            </v-list-item>
+          </v-list>
+        </v-card-text>
+        <v-card-actions class="pa-0 mt-3">
+          <v-spacer />
+          <v-btn variant="text" @click="showConsentFormSelect = false">Cancel</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Consent form sender -->
+    <PatientsFormsConsentFormSender
+      v-if="showConsentFormSender && selectedConsentForm && consentSenderPatient"
+      v-model="showConsentFormSender"
+      :form="selectedConsentForm"
+      :patient="consentSenderPatient"
+      :patient-email="resolveLeadEmail(consentFormSenderLead)"
+      :patient-phone="resolveLeadPhone(consentFormSenderLead)"
+      @success="onConsentFormSent"
+      @close="closeConsentFormSender"
+    />
   </div>
 </template>
 
 <script setup>
+import draggable from "vuedraggable"
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { formatDateDDMMYYYY, formatDateTime } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
+import { LICENSE_TYPES, resolveUserLicenseType } from '@/stores/index'
+import { useDiaryStore } from '@/stores/diary'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
 const defaultAutomationMap = new Map(crmAutomationDefaults.map((d) => [d.key, d]))
 import DataTableColumnsAutomationGroups from '@/components/dataTableColumns/automationGroups.vue'
@@ -1267,6 +1386,7 @@ import archiveIcon from '@/assets/crm/archive.svg'
 import deleteIcon from '@/assets/crm/delete.svg'
 import exportIcon from '@/assets/crm/export.svg'
 const crmStore = useCrmStore();
+const diaryStore = useDiaryStore();
 const authStore = useAuthStore();
 const { user, setUser } = useUser();
 const route = useRoute();
@@ -1281,6 +1401,7 @@ const emit = defineEmits([
   'update:convertedPage',
   'update:itemsPerPage',
   'alert-options-saved',
+  'options-refreshed',
 ]);
 const props = defineProps({
   leads: { type: Array, default: () => [] },
@@ -1304,6 +1425,73 @@ const props = defineProps({
   whatsappConnected: { type: Boolean, default: false },
 });
 const openedPanels = ref([0]);
+
+// Column visibility + order management
+const selectedHeaders = ref([])
+
+const filteredAvailableHeaders = computed(() => {
+  const selectedKeys = new Set(selectedHeaders.value.map((h) => h.key))
+  return (props.headers || []).filter((h) => !selectedKeys.has(h.key))
+})
+
+const saveColumnPreferences = () => {
+  try {
+    localStorage.setItem('crmLeadTableColumns', JSON.stringify(selectedHeaders.value))
+  } catch {}
+}
+
+const addHeaderInSelected = (column) => {
+  if (!selectedHeaders.value.find((h) => h.key === column.key)) {
+    selectedHeaders.value.push(column)
+    saveColumnPreferences()
+  }
+}
+
+const removeHeaderFromSelected = (column) => {
+  if (column.key === 'name') return
+  selectedHeaders.value = selectedHeaders.value.filter((h) => h.key !== column.key)
+  saveColumnPreferences()
+}
+
+const updateHeaderOrder = (newOrder) => {
+  const selectable = newOrder.findIndex((x) => !x.title)
+  if (selectable !== -1) newOrder.splice(selectable, 1)
+  selectedHeaders.value = newOrder
+  saveColumnPreferences()
+}
+
+const getColColor = (name) => {
+  if (!name) return '#999999'
+  const colors = ['#FF6B6B','#FF8E72','#FFD93D','#6BCB77','#4D96FF','#8358E8','#FF6EC7','#00B8A9','#F15BB5','#FF7F11','#FF9F1C','#2EC4B6','#6A4C93','#8338EC','#3A86FF','#FF006E','#FB5607','#FFBE0B','#06D6A0','#118AB2','#073B4C','#EF476F','#06AED5','#4CC9F0','#8AC926','#FF595E']
+  const index = name.trim().toUpperCase().charCodeAt(0) - 65
+  return index >= 0 && index < 26 ? colors[index] : '#999999'
+}
+
+onMounted(() => {
+  try {
+    const stored = localStorage.getItem('crmLeadTableColumns')
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed) && parsed.length) {
+        const validKeys = new Set((props.headers || []).map((h) => h.key))
+        const filtered = parsed.filter((h) => validKeys.has(h.key))
+        if (filtered.length) {
+          const storedKeys = new Set(filtered.map((h) => h.key))
+          const newCols = (props.headers || []).filter((h) => !storedKeys.has(h.key))
+          selectedHeaders.value = [...filtered, ...newCols]
+          return
+        }
+      }
+    }
+  } catch {}
+  selectedHeaders.value = [...(props.headers || [])]
+})
+
+watch(() => props.headers, (v) => {
+  if (!v?.length || selectedHeaders.value.length) return
+  selectedHeaders.value = [...v]
+})
+
 const selectedLeads = ref([]);
 const isAllSelected = ref(false);
 const selectedArchivedLeads = ref([]);
@@ -1322,6 +1510,7 @@ const leadStatusOptions = [
   { name: 'Converted', color: '#0061fb' },
   { name: 'Lost', color: '#e15b64' },
   { name: 'Archived', color: '#9E9E9E' },
+  { name: 'Uploaded', color: '#8B5CF6' },
 ];
 
 const getLeadStatusColor = (status) => {
@@ -1515,6 +1704,155 @@ const converting = ref(false);
 const getPermanentDeleteMessage = (count) =>
   `Delete ${count} lead(s) permanently? This cannot be undone.`;
 const addStaffDrawer = ref(false);
+const consentStore = useConsentStore();
+const consentForms = ref([]);
+const consentFormsLoading = ref(false);
+const showConsentFormSelect = ref(false);
+const selectedConsentForm = ref(null);
+const showConsentFormSender = ref(false);
+const consentFormSenderLead = ref(null);
+const consentResolvedPatient = ref(null);
+
+const consentSenderPatient = computed(() => {
+  return consentResolvedPatient.value;
+});
+
+const cacheLeadPatient = (lead, patient) => {
+  const patientId = Number(patient?.id || 0);
+  if (!lead || !patientId) return;
+  lead.patientId = patientId;
+};
+
+const openConsentFormSelect = async () => {
+  if (!selectedLeads.value.length) return;
+  if (selectedLeads.value.length > 1) {
+    mainStore?.setSnackbar?.({ title: 'Select only one lead to send a form', type: 'error' });
+    return;
+  }
+  showConsentFormSelect.value = true;
+  if (consentForms.value.length) return;
+  consentFormsLoading.value = true;
+  try {
+    await consentStore.fetchTemplates();
+    consentForms.value = consentStore.templates || [];
+  } catch (e) {
+    consentForms.value = [];
+  } finally {
+    consentFormsLoading.value = false;
+  }
+};
+
+const splitLeadName = (lead) => {
+  const rawName = String(resolveLeadName(lead) || lead?.name || '').trim();
+  if (!rawName) return { firstName: 'CRM', lastName: 'Lead' };
+  const [firstName, ...rest] = rawName.split(/\s+/);
+  return {
+    firstName: firstName || 'CRM',
+    lastName: rest.join(' ') || '-',
+  };
+};
+
+const findExistingConsentPatient = async (lead) => {
+  const searchTerms = [resolveLeadEmail(lead), resolveLeadPhone(lead), resolveLeadName(lead)]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  for (const term of searchTerms) {
+    try {
+      const res = await diaryStore.listPatients(term);
+      if (res?.code !== 0 || !Array.isArray(res?.data)) continue;
+      const match = res.data.find((patient) => {
+        const fullName = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim().toLowerCase();
+        const leadName = String(resolveLeadName(lead) || lead?.name || '').trim().toLowerCase();
+        const sameEmail = String(patient?.email || '').trim().toLowerCase() &&
+          String(patient?.email || '').trim().toLowerCase() === String(resolveLeadEmail(lead) || '').trim().toLowerCase();
+        const samePhone = String(patient?.mobile || '').trim() &&
+          String(patient?.mobile || '').trim() === String(resolveLeadPhone(lead) || '').trim();
+        const sameName = leadName && fullName === leadName;
+        return sameEmail || samePhone || sameName;
+      });
+      if (match) return match;
+    } catch {}
+  }
+  return null;
+};
+
+const ensureConsentPatient = async (lead) => {
+  const existingId = Number(lead?.patientId || 0);
+  if (existingId) {
+    const existing = await diaryStore.getPatient(existingId);
+    if (existing?.code === 0 && existing?.data?.id) return existing.data;
+  }
+
+  const matched = await findExistingConsentPatient(lead);
+  if (matched?.id) {
+    cacheLeadPatient(lead, matched);
+    return matched;
+  }
+
+  const { firstName, lastName } = splitLeadName(lead);
+  const created = await diaryStore.createPatient({
+    firstName,
+    lastName,
+    email: resolveLeadEmail(lead) || null,
+    mobile: resolveLeadPhone(lead) || null,
+    acquisitionSource: lead?.leadSource?.name || lead?.leadSource || 'CRM Lead',
+    occupation: lead?.occupation || null,
+  });
+  if (created?.code === 0 && created?.data?.id) {
+    cacheLeadPatient(lead, created.data);
+    return created.data;
+  }
+  throw new Error(created?.message || 'Unable to prepare patient for form sending');
+};
+
+const mapConsentPatient = (patient, fallbackLead = null) => {
+  const fullName = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim();
+  const { firstName, lastName } = fullName
+    ? { firstName: patient?.firstName || '', lastName: patient?.lastName || '' }
+    : splitLeadName(fallbackLead || {});
+  return {
+    id: Number(patient?.id || 0) || null,
+    firstName,
+    lastName,
+    name: fullName || resolveLeadName(fallbackLead) || 'Lead',
+    email: patient?.email || resolveLeadEmail(fallbackLead) || undefined,
+    phone: patient?.mobile || patient?.phone || resolveLeadPhone(fallbackLead) || undefined,
+  };
+};
+
+const selectConsentForm = async (form) => {
+  selectedConsentForm.value = form;
+  showConsentFormSelect.value = false;
+  const lead = selectedLeads.value[0];
+  consentFormSenderLead.value = lead || null;
+  consentResolvedPatient.value = null;
+  if (!lead) return;
+  try {
+    const patient = await ensureConsentPatient(lead);
+    consentResolvedPatient.value = mapConsentPatient(patient, lead);
+    showConsentFormSender.value = true;
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Unable to prepare patient for form sending', type: 'error' });
+    selectedConsentForm.value = null;
+    consentFormSenderLead.value = null;
+  }
+};
+
+const onConsentFormSent = () => {
+  showConsentFormSender.value = false;
+  selectedConsentForm.value = null;
+  consentFormSenderLead.value = null;
+  consentResolvedPatient.value = null;
+};
+
+const closeConsentFormSender = () => {
+  showConsentFormSender.value = false;
+  selectedConsentForm.value = null;
+  consentFormSenderLead.value = null;
+  consentResolvedPatient.value = null;
+};
+
 const showWhatsAppCompose = ref(false);
 const whatsappSending = ref(false);
 const whatsappMessage = ref('');
@@ -1566,17 +1904,28 @@ const resolvePracticeName = () => {
   return org?.name || '[Practice Name]'
 }
 
+const normalizeLicenseType = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  const exact = Object.values(LICENSE_TYPES).find(
+    (license) => String(license).toLowerCase() === raw
+  );
+  return exact || LICENSE_TYPES.TRIAL;
+};
+
 const currentOrgLicense = computed(() => {
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
-  return String(match?.licenseType || 'Trial').trim();
+  return normalizeLicenseType(match?.licenseType || resolveUserLicenseType(user.value));
 });
 
-const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || 'Trial');
+const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || LICENSE_TYPES.TRIAL);
 const canBookAppointments = computed(() => {
-  const type = String(currentOrgLicense.value || '').toLowerCase();
-  return ['soar', 'system'].includes(type);
+  return [
+    LICENSE_TYPES.TRIAL,
+    LICENSE_TYPES.SOAR,
+    LICENSE_TYPES.SYSTEM,
+  ].includes(currentOrgLicense.value);
 });
 
 const renderTemplateWithContext = (input, ctx, lead) => {
@@ -1665,9 +2014,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('crm-automations-updated', _onAutomationsUpdated);
 });
 
-const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = false, leadIds = [] } = {}) => {
+const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = false, leadIds = [], sourceLeads = null } = {}) => {
   const requestToken = ++automationPrefetchToken;
-  const visibleIds = [...new Set(allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean))];
+  const visibleIds = [...new Set((sourceLeads || activeLeads.value).map((lead) => Number(lead?.id || 0)).filter(Boolean))];
   if (!visibleIds.length) return;
   const normalizedLeadIds = [...new Set((Array.isArray(leadIds) ? leadIds : [])
     .map((id) => Number(id || 0))
@@ -1688,11 +2037,28 @@ const prefetchVisibleLeadAutomations = async ({ force = false, groupsChanged = f
 };
 
 watch(
-  () => allVisibleLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
+  () => activeLeads.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
   () => {
     prefetchVisibleLeadAutomations();
   },
   { immediate: true }
+);
+
+// Prefetch automations for converted leads when the converted panel is opened
+watch(openedPanels, (panels) => {
+  if (panels.includes(1) && convertedLeadsData.value.length) {
+    prefetchVisibleLeadAutomations({ sourceLeads: convertedLeadsData.value });
+  }
+});
+
+// Also handles the case where converted leads finish loading while the panel is already open
+watch(
+  () => convertedLeadsData.value.map((lead) => Number(lead?.id || 0)).filter(Boolean).join(','),
+  () => {
+    if (openedPanels.value.includes(1)) {
+      prefetchVisibleLeadAutomations({ sourceLeads: convertedLeadsData.value });
+    }
+  }
 );
 
 const getLeadGroupRows = (lead, group) => {
@@ -1960,7 +2326,7 @@ const onActionClick = (key) => {
   else if (key === 'sendPrice') openSendPriceCompose();
   else if (key === 'sendForm') {
     if (!canBookAppointments.value) { showBookPlanDialog.value = true; return; }
-    openCompose(key)
+    openConsentFormSelect()
   }
   else if (['mail','shareLocation'].includes(key)) openCompose(key)
 };
@@ -2020,7 +2386,7 @@ const buildCsvValue = (value, key = '') => {
 
 const exportSelectedLeads = () => {
   if (typeof window === 'undefined') return;
-  const columns = (props.headers || [])
+  const columns = (selectedHeaders.value.length ? selectedHeaders.value : props.headers || [])
     .filter((h) => h?.key && h.key !== 'data-table-select' && h.key !== 'actions')
     .map((h) => ({ key: h.key, title: h.title || h.key }));
   if (!columns.length) return;
@@ -2671,6 +3037,14 @@ const convertSelected = async () => {
     converting.value = false
   }
 }
+
+defineExpose({
+  selectedHeaders,
+  filteredAvailableHeaders,
+  addHeaderInSelected,
+  removeHeaderFromSelected,
+  getColColor,
+})
 </script>
 
 <style scoped>
@@ -2824,8 +3198,9 @@ const convertSelected = async () => {
 }
 
 .action-item--locked {
-  opacity: 0.45;
-  cursor: default;
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: auto;
 }
 
 .action-item--locked:hover {
@@ -2834,11 +3209,11 @@ const convertSelected = async () => {
 }
 
 .action-item--locked .action-icon {
-  filter: grayscale(1);
+  filter: grayscale(1) opacity(0.5);
 }
 
 .action-item--locked .action-label {
-  color: #8a8a8a;
+  color: #aaaaaa;
 }
 
 .action-label {
@@ -2865,10 +3240,16 @@ const convertSelected = async () => {
 }
 
 .break-email {
-  white-space: nowrap;           /* prevents wrapping */
-  overflow: hidden;              /* hides overflow text */
-  text-overflow: ellipsis;       /* shows ... at end */
-  max-width: 250px;              /* adjust as needed */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+.comment-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
 }
 
 .editable-field:hover {
@@ -3087,6 +3468,83 @@ const convertSelected = async () => {
   align-items: center;
 }
 
+.plan-upgrade-dialog {
+  background: #ffffff;
+}
+
+.plan-upgrade-dialog__hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
+  color: #ffffff;
+}
+
+.plan-upgrade-dialog__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.plan-upgrade-dialog__title {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.plan-upgrade-dialog__subtitle {
+  margin-top: 8px;
+  max-width: 360px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.plan-upgrade-dialog__chip {
+  color: #0f172a !important;
+  font-weight: 600;
+}
+
+.plan-upgrade-dialog__body {
+  padding: 22px 24px 10px !important;
+}
+
+.plan-upgrade-dialog__copy {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #334155;
+}
+
+.plan-upgrade-dialog__feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.plan-upgrade-dialog__feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #0f172a;
+}
+
+.plan-upgrade-dialog__actions {
+  padding: 0 24px 20px !important;
+}
+
 .bulk-automation-tabs :deep(.v-tab) {
   border-radius: 28px;
   border: 1px solid #DBDBDB !important;
@@ -3107,6 +3565,17 @@ const convertSelected = async () => {
 .bulk-automation-tabs :deep(.v-slide-group__prev),
 .bulk-automation-tabs :deep(.v-slide-group__next) {
   display: none !important;
+}
+
+.crm-col-box {
+  min-width: calc(33.33% - 8px);
+  color: white;
+  border-radius: 6px;
+  text-align: center;
+  font-weight: 400;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 36px;
 }
 </style>
 

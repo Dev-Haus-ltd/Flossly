@@ -157,6 +157,7 @@
         density="compact"
         hover
         :items-per-page="15"
+        :loading="loading"
       >
         <template #headers="{ columns }">
           <tr>
@@ -204,13 +205,38 @@
           </div>
         </template>
 
-        <template v-if="hasTriggerColumn" #item.sending="{ item }">
+        <template v-if="hasTriggerColumn && readOnlyTrigger" #item.sending="{ item }">
+          <div class="d-flex align-center trigger-cell">
+            <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
+            <span class="text-body-2 text-medium-emphasis trigger-text">{{ item.sending || '—' }}</span>
+          </div>
+        </template>
+
+        <template v-else-if="hasTriggerColumn" #item.sending="{ item }">
           <div class="d-flex  align-center justify-space-between trigger-cell">
             <div class="d-flex align-center">
               <v-icon size="16" :color="item.sending ? 'grey-darken-1' : 'warning'" class="mr-2">
                 {{ item.sending ? 'mdi-clock-outline' : 'mdi-alert-circle-outline' }}
               </v-icon>
-              <span v-if="item.sending" class="text-body-2 text-medium-emphasis trigger-text">{{ item.sending }}</span>
+              <v-tooltip v-if="item.bulkHasMixedTrigger && item.bulkTriggerDetails?.length" location="top" max-width="360">
+                <template #activator="{ props }">
+                  <span v-bind="props" class="text-body-2 text-medium-emphasis trigger-text trigger-text--interactive">
+                    {{ item.sending }}
+                  </span>
+                </template>
+                <div class="mixed-trigger-tooltip">
+                  <div class="mixed-trigger-tooltip__title">Selected leads currently have different trigger settings</div>
+                  <div
+                    v-for="detail in item.bulkTriggerDetails"
+                    :key="detail.leadId"
+                    class="mixed-trigger-tooltip__row"
+                  >
+                    <span class="mixed-trigger-tooltip__lead">{{ detail.leadName }}</span>
+                    <span class="mixed-trigger-tooltip__value">{{ detail.triggerLabel }}</span>
+                  </div>
+                </div>
+              </v-tooltip>
+              <span v-else-if="item.sending" class="text-body-2 text-medium-emphasis trigger-text">{{ item.sending }}</span>
               <span v-else class="text-body-2 trigger-text trigger-text--unset">Set trigger</span>
             </div>
             <v-tooltip location="top">
@@ -280,13 +306,14 @@
                   width="18"
                   height="18"
                   class="action-icon-btn"
-                  @click="$emit('openEdit', item)"
+                  :class="{ 'action-icon-disabled': disableEditForSent && item.sent }"
+                  @click="disableEditForSent && item.sent ? null : $emit('openEdit', item)"
                 />
               </template>
               <span>Edit</span>
             </v-tooltip>
 
-            <v-tooltip location="top">
+            <v-tooltip v-if="showDelete" location="top">
               <template #activator="{ props }">
                 <img
                   v-bind="props"
@@ -349,7 +376,7 @@
 
         <template v-if="hasSentStatusColumn" #item.sentStatus="{ item }">
           <v-chip
-            v-if="item.lastSentAt"
+            v-if="item.lastSentAt || item.sent"
             size="x-small"
             variant="tonal"
             color="success"
@@ -453,6 +480,22 @@ const props = defineProps({
   resendingKey: {
     type: String,
     default: null,
+  },
+  readOnlyTrigger: {
+    type: Boolean,
+    default: false,
+  },
+  showDelete: {
+    type: Boolean,
+    default: true,
+  },
+  loading: {
+    type: Boolean,
+    default: false,
+  },
+  disableEditForSent: {
+    type: Boolean,
+    default: false,
   },
   filterType: {
     type: String,
@@ -638,10 +681,46 @@ const formatRelativeTime = (dateStr) => {
   display: inline-block;
 }
 
+.trigger-text--interactive {
+  cursor: help;
+  border-bottom: 1px dashed rgba(107, 114, 128, 0.5);
+}
+
 .trigger-text--unset {
   color: #f59e0b;
   font-style: italic;
   font-weight: 500;
+}
+
+.mixed-trigger-tooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 340px;
+}
+
+.mixed-trigger-tooltip__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mixed-trigger-tooltip__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mixed-trigger-tooltip__lead {
+  color: #111827;
+  font-weight: 500;
+}
+
+.mixed-trigger-tooltip__value {
+  color: #6b7280;
+  text-align: right;
 }
 
 .switch-active :deep(.v-selection-control__input) {

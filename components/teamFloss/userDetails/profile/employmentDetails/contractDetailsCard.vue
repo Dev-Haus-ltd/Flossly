@@ -16,8 +16,8 @@
         </template>
       </v-expansion-panel-title>
       <v-expansion-panel-text class="panel-text">
-        <v-row>
-          <v-col cols="12" md="6">
+        <div class="fields-grid">
+          <div class="field-item">
             <label class="field-label">Contract Type</label>
             <p
               class="field-value"
@@ -30,8 +30,8 @@
             >
               {{ data.contractType || "Not specified" }}
             </p>
-          </v-col>
-          <v-col cols="12" md="6">
+          </div>
+          <div class="field-item">
             <label class="field-label">Contract Start Date</label>
             <v-menu
               v-model="menu"
@@ -60,13 +60,13 @@
                 @update:model-value="onDateChange"
               ></v-date-picker>
             </v-menu>
-          </v-col>
+          </div>
 
-          <v-col cols="12" md="6">
+          <div class="field-item">
             <label class="field-label">Eligible for Pension?</label>
             <v-switch v-model="data.pensionEligible" @update:modelValue="checkDirty"></v-switch>
-          </v-col>
-        </v-row>
+          </div>
+        </div>
         <div class="d-flex justify-end mt-4" v-if="panel === 0 && isDirty">
           <v-btn color="primary" @click="savePanel"> Save </v-btn>
         </div>
@@ -217,6 +217,22 @@ const savePanel = () => {
 }
 .panel-text {
   padding: 12px 16px;
+}
+
+.fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.field-item {
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  .fields-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Heading & subtitle */

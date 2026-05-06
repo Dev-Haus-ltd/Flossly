@@ -27,7 +27,12 @@ import {
   createScriptPoolItem,
   updateScriptPoolItem,
   deleteScriptPoolItem,
+  listClinicalNoteTemplatesAdmin,
+  createClinicalNoteTemplateAdmin,
+  updateClinicalNoteTemplateAdmin,
+  getClinicalNoteTemplateVersionsAdmin,
   seedCrmAutomationDictionary,
+  seedConsentFormTemplates,
   listCrmAutomationDictionaryGroups,
   getCrmAutomationDictionaryGroupById,
   createCrmAutomationDictionaryGroup,
@@ -246,6 +251,22 @@ export default defineEventHandler(async (event) => {
 
     case 'deleteScriptPoolItem':
       return await deleteScriptPoolItem(event);
+
+    case 'listClinicalNoteTemplates':
+      return await listClinicalNoteTemplatesAdmin(event);
+
+    case 'createClinicalNoteTemplate':
+      return await createClinicalNoteTemplateAdmin(event);
+
+    case 'updateClinicalNoteTemplate':
+      return await updateClinicalNoteTemplateAdmin(event);
+
+    case 'getClinicalNoteTemplateVersions':
+      return await getClinicalNoteTemplateVersionsAdmin(event);
+
+    // Consent Form Templates
+    case 'seedConsentFormTemplates':
+      return await seedConsentFormTemplates(event);
 
     // CRM Automation Dictionary
     case 'seedCrmAutomationDictionary':

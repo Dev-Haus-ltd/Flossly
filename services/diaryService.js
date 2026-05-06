@@ -8,6 +8,27 @@ export default {
         .catch(reject);
     });
   },
+  addTreatment(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treatments-create", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  updateTreatment(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treatments-update", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  deleteTreatment(id) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/treatments-delete", { id })
+        .then(resolve)
+        .catch(reject);
+    });
+  },
   listPatients(search = "") {
     const q = search ? `?search=${encodeURIComponent(search)}` : "";
     return new Promise((resolve, reject) => {
@@ -64,6 +85,14 @@ export default {
         .catch(reject);
     });
   },
+  
+  deletePatient(id) {
+  return new Promise((resolve, reject) => {
+    Post("/diary/patientDelete", { id: id })
+      .then(resolve)
+      .catch(reject);
+  });
+},
   listAppointments({ date, dentistId, status, treatmentId, search, patientId } = {}) {
     const params = new URLSearchParams();
     if (date) params.append("date", date);
@@ -91,6 +120,13 @@ export default {
   updateAppointment(payload) {
     return new Promise((resolve, reject) => {
       Post("/diary/appointmentUpdate", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+  deleteAppointment(id) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/appointmentDelete", { id })
         .then(resolve)
         .catch(reject);
     });
@@ -249,6 +285,41 @@ export default {
     if (formId) q.append("id", formId);
     return new Promise((resolve, reject) => {
       Get(`/diary/formDelete?${q.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  // --- Diary Zones ---
+  listZones({ dentistId } = {}) {
+    const q = new URLSearchParams();
+    if (dentistId) q.append("dentistId", dentistId);
+    return new Promise((resolve, reject) => {
+      Get(`/diary/zones?${q.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  createZone(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/zoneCreate", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  updateZone(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/zoneUpdate", payload)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  deleteZone(id) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/zoneDelete", { id })
         .then(resolve)
         .catch(reject);
     });

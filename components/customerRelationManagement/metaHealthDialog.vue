@@ -229,7 +229,6 @@
                 No active Meta page is currently connected for this organisation.
               </div>
             </div>
-
           </template>
         </template>
       </div>
@@ -333,6 +332,20 @@ const onAvatarError = (e) => {
   padding: 32px 0;
   display: flex;
   justify-content: center;
+}
+
+.mh-stat__key {
+  font-size: 10px;
+  color: rgba(0, 0, 0, 0.42);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.mh-divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(15, 23, 42, 0.08);
+  flex-shrink: 0;
 }
 
 /* Pages section */
@@ -478,6 +491,12 @@ const onAvatarError = (e) => {
 
 .mh-chip--issue {
   cursor: default;
+}
+
+.mh-page-row__meta {
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.58);
+  line-height: 1.4;
 }
 
 .mh-account-row__warn {

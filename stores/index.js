@@ -6,14 +6,23 @@ import teamIcon from "@/assets/icons/mainDrawerIcons/team.svg";
 import flosslyDocs from '@/assets/icons/mainDrawerIcons/docs.svg'
 import crmIcon from '@/assets/icons/mainDrawerIcons/crm.svg'
 import academyIcon from '@/assets/icons/mainDrawerIcons/academy.svg'
+import settingsIcon from '@/assets/icons/mainDrawerIcons/settings.svg'
 import { DEVELOPER_EMAILS } from '@/composables/useDeveloperAccess';
 
-const LICENSE_TYPES = {
+export const LICENSE_TYPES = {
   SYSTEM: "System",
   TRIAL: "Trial",
   DRIFT: "Drift",
   GLIDE: "Glide",
   SOAR: "Soar",
+};
+
+export const resolveUserLicenseType = (user) => {
+  const preference = Array.isArray(user?.preferences)
+    ? user.preferences[0]
+    : user?.preferences;
+
+  return preference?.licenseType || LICENSE_TYPES.TRIAL;
 };
 
 const LICENSE_FEATURES = {
@@ -23,7 +32,7 @@ const LICENSE_FEATURES = {
     "docs",
     "team",
     "crm",
-    // "diary",
+    "diary",
   ]),
   [LICENSE_TYPES.DRIFT]: new Set(["dashboard", "tasks", "docs"]),
   [LICENSE_TYPES.GLIDE]: new Set(["dashboard", "tasks", "docs", "team", "crm"]),
@@ -45,14 +54,14 @@ const LICENSE_FEATURES = {
   ]),
 };
 
-const getLicenseTypeFromStorage = () => {
+export const getLicenseTypeFromStorage = () => {
   if (typeof localStorage === "undefined") {
     return LICENSE_TYPES.TRIAL;
   }
 
   try {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
-    return user?.preferences?.licenseType || LICENSE_TYPES.TRIAL;
+    return resolveUserLicenseType(user);
   } catch {
     return LICENSE_TYPES.TRIAL;
   }
@@ -111,9 +120,12 @@ export const useMainStore = defineStore("mainStore", {
     getManagerOptions() {
       const licenseType = getLicenseTypeFromStorage();
       const authStore = useAuthStore();
-      
+
       const isDeveloper = authStore.getIsDeveloper;
-      
+
+      const { user } = useUser();
+      const userRoleId = user.value?.roleId;
+
       const menuItems = [
         {
           title: "DashBoard",
@@ -179,7 +191,7 @@ export const useMainStore = defineStore("mainStore", {
             //   imgPath: teamIcon,
             //   to: "/teams/invoice",
             // }, 
-        
+
           ],
         },
         // {
@@ -196,19 +208,19 @@ export const useMainStore = defineStore("mainStore", {
         //     },
         //   ],
         // },
-          {
-            title: "CRM",
-            imgPath: crmIcon,
-            value: "crm",
-            to:"/crm",
-            children: [
-              {
-                title: "Leads",
-                value: "crmLeads",
-                imgPath: crmIcon,
-                to: "/crm/leads",
-                featureKey: "crm",
-              },
+        {
+          title: "CRM",
+          imgPath: crmIcon,
+          value: "crm",
+          to: "/crm",
+          children: [
+            {
+              title: "Leads",
+              value: "crmLeads",
+              imgPath: crmIcon,
+              to: "/crm/leads",
+              featureKey: "crm",
+            },
             {
               title: "DMs",
               value: "crmDms",
@@ -238,6 +250,13 @@ export const useMainStore = defineStore("mainStore", {
               to: "/crm/google_analytics",
               featureKey: "crm",
             },
+            // {
+            //   title: "Google Ads Analytics",
+            //   value: "crm Google Ads Analytics",
+            //   imgPath: crmIcon,
+            //   to: "/crm/google_ads",
+            //   featureKey: "crm",
+            // },
           ],
           featureKey: "crm",
         },
@@ -245,7 +264,7 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossy Diary",
           imgPath: tasksIcon,
           value: "flosslyDiary",
-          to:"/diary",
+          to: "/diary",
           featureKey: "diary",
           children: [
             {
@@ -308,18 +327,34 @@ export const useMainStore = defineStore("mainStore", {
       if (isDeveloper) {
         menuItems.push({
           title: "Support Chat",
-          imgPath: teamIcon, // Using team icon temporarily, can be replaced with chat icon
+          imgPath: teamIcon,
           value: "supportChat",
           to: "/support-chat",
-          featureKey: "dashboard", // Use dashboard feature key so it's always visible
+          featureKey: "dashboard",
         });
-      } 
+      }
+
+      // Add Settings menu item for roleId 16 and roleId 1
+      if (userRoleId === 16 || userRoleId === 1) {
+        menuItems.push({
+          title: "Settings",
+          imgPath: settingsIcon,
+          value: "settings",
+          to: "/settings",
+          featureKey: "dashboard",
+        });
+      }
 
       const filtered = filterMenuByLicense(menuItems, licenseType);
       return filtered;
     },
     getuserOptions() {
       const licenseType = getLicenseTypeFromStorage();
+      
+      // Get user data to check roleId
+      const { user } = useUser();
+      const userRoleId = user.value?.roleId;
+      
       const menuItems = [
         {
           title: "DashBoard",
@@ -402,6 +437,17 @@ export const useMainStore = defineStore("mainStore", {
         //   ],
         // },
       ];
+
+      // Add Settings menu item for roleId 16 and roleId 1
+      if (userRoleId === 16 || userRoleId === 1) {
+        menuItems.push({
+          title: "Settings",
+          imgPath: settingsIcon,
+          value: "settings",
+          to: "/settings",
+          featureKey: "dashboard", // Use dashboard feature key so it's always visible
+        });
+      }
 
       return filterMenuByLicense(menuItems, licenseType);
     },

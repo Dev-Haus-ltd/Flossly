@@ -197,6 +197,7 @@ const normalizeAutomationTrigger = (trigger) => {
     case 'send_now':
       return { type }
     case 'inquiry_days':
+    case 'activation_days':
     case 'birthday_offset':
       return { type, days: safeNumber(trigger.days, 0) }
     case 'birthday_month_start':
@@ -382,7 +383,7 @@ export const listLeads = async (event) => {
     // Optional equals filters
     if (q.leadStatus) {
       const key = String(q.leadStatus).toLowerCase()
-      const map = { new: 'New', converted: 'Converted', contacted: 'Contacted', lost: 'Lost' }
+      const map = { new: 'New', converted: 'Converted', contacted: 'Contacted', lost: 'Lost', uploaded: 'Uploaded' }
       const value = map[key] || q.leadStatus
       // Use exact match against our canonical stored value
       where.leadStatus = value
@@ -779,6 +780,7 @@ export const bulkUploadLeads = async (event) => {
       ['contacted', 'Contacted'],
       ['lost', 'Lost'],
       ['archived', 'Archived'],
+      ['uploaded', 'Uploaded'],
     ])
 
     const candidateUserIds = [...new Set(leads.map((l) => Number(l.assignedUserId)).filter(Boolean))]
@@ -808,9 +810,9 @@ export const bulkUploadLeads = async (event) => {
       const name = (raw?.name || '').trim()
       const email = (raw?.email || '').trim()
       const telephone = (raw?.telephone || '').trim()
-      const leadSource = raw?.leadSource?.trim?.() || 'Manual'
+      const leadSource = raw?.leadSource?.trim?.() || null
       const treatment = raw?.treatment?.trim?.() || null
-      const rawStatus = raw?.leadStatus?.trim?.() || 'New'
+      const rawStatus = raw?.leadStatus?.trim?.() || 'Uploaded'
       const status = statusMap.get(rawStatus.toLowerCase())
       const assignedUserIdRaw = raw?.assignedUserId ? Number(raw.assignedUserId) : null
       const assignedUserId = assignedUserIdRaw && allowedUserIds.has(assignedUserIdRaw)
@@ -832,8 +834,8 @@ export const bulkUploadLeads = async (event) => {
           email,
           telephone,
           leadSource,
-          leadStatus: status || 'New',
-          softDeleted: (status || 'New') === 'Archived',
+          leadStatus: status || 'Uploaded',
+          softDeleted: (status || 'Uploaded') === 'Archived',
           treatment,
           inquiryDate: raw?.inquiryDate ? inquiryDate : new Date(),
           followUpDate,
@@ -1093,7 +1095,8 @@ export const listOptions = async (event) => {
           { name: 'New', color: '#1BA34C' },
           { name: 'Converted', color: '#0D47A1' },
           { name: 'Contacted', color: '#F39C12' },
-          { name: 'Lost', color: '#E53935' }
+          { name: 'Lost', color: '#E53935' },
+          { name: 'Uploaded', color: '#8B5CF6' }
         ]
       }
       const items = (defaults[category] || []).map((n, i) =>
@@ -1135,6 +1138,21 @@ export const deleteOption = async (event) => {
     if (!id) return error(400, 'id required')
     await CrmOption.destroy({ where: { id, organisationId: Number(orgId) } })
     return success('deleted')
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const updateOption = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { id, name } = payload || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    if (!id || !name?.trim()) return error(400, 'id and name required')
+    await CrmOption.update({ name: name.trim() }, { where: { id, organisationId: Number(orgId) } })
+    return success({ id, name: name.trim() })
   } catch (e) {
     return error(500, e.message)
   }
@@ -1448,6 +1466,9 @@ export const uploadLeadWhatsAppMedia = async (event) => {
   }
 }
 
+// Alias so legacy route 'whatsappUploadAttachment' still works
+export const uploadWhatsAppAttachment = uploadLeadWhatsAppMedia
+
 export const getLeadPriceAttachmentRecent = async (event) => {
   try {
     const { orgId } = event.context.user || {}
@@ -1650,8 +1671,14 @@ export const listAutomation = async (event) => {
 
     crmAutomationDefaults.forEach((def) => {
       const saved = dbMap.get(def.key) || {}
+      const hasLeadOverride = leadId && !!overrides[def.key]
       const override = overrides[def.key] || {}
-      const combined = { ...def, ...saved, ...override, key: def.key }
+      // When viewing for a specific lead with no per-lead override, the global
+      // template enabled state must not bleed through — new leads start disabled.
+      const effectiveOverride = leadId && !hasLeadOverride
+        ? { ...override, enabled: false }
+        : override
+      const combined = { ...def, ...saved, ...effectiveOverride, key: def.key }
       if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(def.key)
       if (!saved?.type) combined.type = def.type
       if (!saved?.sending) combined.sending = def.sending
@@ -1664,8 +1691,15 @@ export const listAutomation = async (event) => {
 
     dbRows.forEach((row) => {
       if (seen.has(row.key)) return
+      const hasLeadOverride = leadId && !!overrides[row.key]
       const override = overrides[row.key]
-      const combined = override ? { ...row, ...override, key: row.key } : row
+      // When viewing for a specific lead with no per-lead override, default to
+      // disabled — global template enabled must not auto-enrol new leads.
+      const combined = hasLeadOverride
+        ? { ...row, ...override, key: row.key }
+        : leadId
+          ? { ...row, enabled: false }
+          : row
       if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(row.key)
       merged.push(combined)
       seen.add(row.key)
@@ -2130,6 +2164,7 @@ export const sendLeadMail = async (event) => {
       html: safeHtml,
       senderName: fullName,
       attachments: normalizedAttachments,
+      orgId: Number(orgId),
     })
 
     const sentAt = new Date().toISOString()

@@ -113,7 +113,7 @@
                 variant="outlined"
                 rounded="lg"
                 class="action-btn"
-                @click="disconnectMeta"
+                @click="metaDisconnectDialog = true"
               >
                 Disconnect
               </v-btn>
@@ -148,21 +148,30 @@
                   :loading="whapiDisconnecting"
                   @click="disconnectWhapi"
                 >
-                  Logout
+                  Disconnect
                 </v-btn>
               </template>
               <v-btn
-                v-else
+                v-else-if="!whapiActivating"
                 color="primary"
                 variant="flat"
                 rounded="lg"
                 class="action-btn action-btn--primary"
-                :loading="whapiLoading || whapiStatusLoading"
                 :disabled="whapiStatusLoading || !canManageWhapi"
                 @click="openWhapiConnectDialog"
               >
                 Connect
               </v-btn>
+              <v-chip
+                v-else-if="whapiActivating"
+                color="warning"
+                variant="flat"
+                size="small"
+                class="action-btn"
+                prepend-icon="mdi-loading mdi-spin"
+              >
+                Setting up...
+              </v-chip>
               <span
                 v-if="!whapiStatusLoading && !canManageWhapi"
                 class="text-caption text-medium-emphasis mt-1"
@@ -275,7 +284,6 @@
           :error="metaChartError"
         />
 
-        <!-- GOOGLE ANALYTICS CHART — hidden until Google integration is live on prod
         <CrmCharts
           :chartType="'line'"
           :chartTitle="gscChartConfig.chartTitle"
@@ -289,7 +297,6 @@
           :showFallback="!gscChartLoading && (!isGoogleConnected || gscChartConfig.chartData.datasets.length === 0)"
           :error="gscChartError"
         />
-        -->
       </div>
     </div>
 
@@ -310,97 +317,6 @@
       @confirm="disconnectMeta"
     />
 
-    <v-dialog v-model="whapiDialog" max-width="460">
-      <v-card class="rounded-xl" elevation="2">
-        <!-- Header -->
-        <div class="d-flex align-center justify-space-between px-5 pt-4 pb-3">
-          <div class="d-flex align-center gap-2">
-            <v-icon size="18" color="#25D366">mdi-whatsapp</v-icon>
-            <span class="text-subtitle-2 font-weight-semibold">WhatsApp Connection</span>
-            <v-chip :color="whapiStatusColor" size="x-small" label class="ml-1">{{ whapiStatusLabel }}</v-chip>
-          </div>
-          <v-btn icon variant="text" size="small" density="compact" @click="whapiDialog = false">
-            <v-icon size="16">mdi-close</v-icon>
-          </v-btn>
-        </div>
-
-        <v-divider />
-
-        <div class="px-5 py-4">
-          <!-- QR ready: show code + compact instructions -->
-          <div v-if="whapiQr" class="d-flex flex-column align-center gap-3">
-            <div style="position:relative;display:inline-block">
-              <img
-                :src="whapiQr"
-                alt="WhatsApp QR"
-                style="width:200px;height:200px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);display:block"
-              />
-            </div>
-            <div class="text-center">
-              <p class="text-body-2 font-weight-medium mb-1">Scan with WhatsApp</p>
-              <p class="text-caption text-medium-emphasis" style="max-width:300px">
-                Open WhatsApp → <strong>⋮</strong> Menu (or Settings) →
-                <strong>Linked Devices</strong> → <strong>Link a Device</strong>
-              </p>
-            </div>
-            <v-alert type="info" variant="tonal" density="compact" class="w-100 text-caption py-2">
-              QR code refreshes automatically — keep this window open while scanning
-            </v-alert>
-          </div>
-
-          <!-- Already connected state (shown when re-opening on a connected channel) -->
-          <div v-else-if="whapiDisplayLabel && isWhatsAppConnected" class="d-flex flex-column align-center gap-2 py-3">
-            <div
-              class="d-flex align-center justify-center rounded-circle"
-              style="width:52px;height:52px;background:#e8f5e9"
-            >
-              <v-icon color="success" size="26">mdi-check</v-icon>
-            </div>
-            <p class="text-body-2 font-weight-semibold mt-1">WhatsApp Connected</p>
-            <p class="text-caption text-medium-emphasis">{{ whapiDisplayLabel }}</p>
-          </div>
-
-          <!-- Waiting / activating: spinner + contextual message -->
-          <div v-else class="d-flex flex-column align-center gap-3 py-3">
-            <v-progress-circular indeterminate color="primary" size="44" width="3" />
-            <div class="text-center">
-              <p class="text-body-2 font-weight-medium mb-1">
-                {{ String(whapiStatus.status || '').toLowerCase() === 'activating' ? 'Activating channel…' : 'Preparing WhatsApp channel…' }}
-              </p>
-              <p class="text-caption text-medium-emphasis">
-                QR code will appear here shortly — usually within 30 seconds
-              </p>
-            </div>
-            <v-alert
-              v-if="whapiQrWarning"
-              type="warning"
-              variant="tonal"
-              density="compact"
-              class="w-100 text-caption py-2"
-            >
-              {{ whapiQrWarning }}
-            </v-alert>
-          </div>
-        </div>
-
-        <template v-if="whapiQr">
-          <v-divider />
-          <div class="d-flex justify-end px-5 py-3">
-            <v-btn
-              size="small"
-              variant="outlined"
-              color="grey-darken-1"
-              :loading="whapiLoading"
-              @click="refreshWhapiQr"
-            >
-              <v-icon size="13" class="mr-1">mdi-refresh</v-icon>
-              Refresh QR
-            </v-btn>
-          </div>
-        </template>
-      </v-card>
-    </v-dialog>
-
     <v-dialog v-model="whapiConnectDialog" max-width="560">
       <v-card class="pa-5 rounded-xl">
         <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex align-center justify-space-between">
@@ -411,7 +327,7 @@
         </v-card-title>
         <v-card-text class="pa-0">
           <p class="text-caption text-medium-emphasis mb-3">
-            Choose an existing WhatsApp number or create a new one for this organisation.
+            Select a WhatsApp number to connect. If your number is listed, pick it to reconnect without any extra cost.
           </p>
           <v-select
             v-model="whapiSelectedChannel"
@@ -451,7 +367,7 @@
         </v-card-title>
         <v-card-text class="pa-0">
           <v-alert type="error" variant="tonal" class="mb-3">
-            Changing the number will affect all organisations using this shared WhatsApp channel.
+            Changing the number will affect all organisations using this shared WhatsApp number.
           </v-alert>
           <p class="text-body-2 mb-2">
             This WhatsApp number is currently shared with:
@@ -469,9 +385,9 @@
             </v-chip>
           </div>
           <p class="text-caption text-medium-emphasis">
-            Changing the number will log out the shared WhatsApp channel and require a new QR scan.
-            This affects all organisations listed above because they share the same channel.
-            If you want a separate number for this organisation, connect a new number instead.
+            Changing the number will disconnect the shared WhatsApp number and require a new QR scan.
+            This affects all organisations listed above because they share the same WhatsApp number.
+            If you want a separate number for this organisation, disconnect first and then connect a new one.
           </p>
         </v-card-text>
         <v-card-actions class="pa-0 mt-4">
@@ -498,7 +414,7 @@
     <v-dialog v-model="whapiLogoutConfirm" max-width="560">
       <v-card class="pa-5 rounded-xl">
         <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex align-center justify-space-between">
-          <span>Logout WhatsApp</span>
+          <span>Disconnect WhatsApp</span>
           <v-btn icon variant="text" size="small" @click="whapiLogoutConfirm = false">
             <v-icon size="18">mdi-close</v-icon>
           </v-btn>
@@ -520,15 +436,15 @@
             </v-chip>
           </div>
           <p class="text-caption text-medium-emphasis">
-            Logging out here will remove this number from the current organisation only.
-            Other organisations will remain connected because they share the same channel.
+            Disconnecting here will remove this number from the current organisation only.
+            Other organisations will remain connected because they share the same WhatsApp number.
           </p>
         </v-card-text>
         <v-card-actions class="pa-0 mt-4">
           <v-btn variant="text" @click="whapiLogoutConfirm = false">Cancel</v-btn>
           <v-spacer />
           <v-btn color="error" variant="flat" @click="confirmWhapiLogout">
-            Logout
+            Disconnect
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -614,6 +530,7 @@ import { format, startOfDay, startOfMonth, subDays } from 'date-fns'
 import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
 import { useAuthStore } from '@/stores/auth'
+import { useWhapiStream } from '@/composables/useWhapiStream'
 import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
 import ConfirmDialog from '@/components/Common/ConfirmDialog.vue'
 import IntegrationCard from '@/components/customerRelationManagement/IntegrationCard.vue'
@@ -635,14 +552,42 @@ const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
+// ── Shared WhatsApp stream state (persists across navigation) ────────────────
+const {
+  whapiActivating,
+  whapiActivationProgress,
+  isNewChannel,
+  whapiQr,
+  whapiQrWarning,
+  whapiDialog,
+  whapiStatus,
+  isWhatsAppConnected,
+  whapiStatusLoading,
+  whapiLoading,
+  whapiDisplayLabel,
+  whapiStatusLabel,
+  whapiStatusColor,
+  whapiSpinnerTitle,
+  whapiSpinnerSubtitle,
+  startWhapiStatusStream,
+  stopWhapiStatusStream,
+  loadWhapiStatus,
+  refreshWhapiQr,
+  startQrPoll,
+  stopQrPoll,
+  stopAllQrTimers,
+  resetActivationState,
+  startActivationProgress,
+  stopActivationProgress,
+  dismissActivation,
+  onWhapiConnected,
+} = useWhapiStream()
+
 const user = ref(null)
 const isMetaConnected = ref(false)
-const isWhatsAppConnected = ref(false)
-const whapiDialog = ref(false)
+const metaDisconnectDialog = ref(false)
+const metaDisconnecting = ref(false)
 const whapiConnectDialog = ref(false)
-const whapiQr = ref('')
-const whapiQrWarning = ref('')
-const whapiLoading = ref(false)
 const whapiDisconnecting = ref(false)
 const whapiChannelsLoading = ref(false)
 const whapiChannels = ref([])
@@ -652,14 +597,23 @@ const whapiShareOrgNames = ref([])
 const whapiLogoutConfirm = ref(false)
 const whapiShareMode = ref('change')
 const whapiSingleLogoutConfirm = ref(false)
-const whapiStatus = reactive({
+const isGoogleConnected = ref(false)
+const googleHealthDialog = ref(false)
+const googleHealthLoading = ref(false)
+const googleHealthData = ref(null)
+const googleConnecting = ref(false)
+const googleDisconnecting = ref(false)
+const googleErrorDialog = ref(false)
+const googleErrorMessage = ref('')
+const googleStatus = reactive({
   connected: false,
-  channelId: '',
-  phoneNumber: '',
-  displayName: '',
-  status: '',
+  email: '',
+  tokenId: '',
+  tokenValid: false,
+  connectedAt: '',
+  expiresAt: '',
+  scopes: [],
 })
-const whapiStatusLoading = ref(true)
 const autoReplyEnabled = ref(false)
 const whatsappAutoReplyEnabled = ref(false)
 const autoReplyLoading = ref(false)
@@ -692,7 +646,6 @@ const metaChartConfig = reactive({
   },
   summaryStats: []
 })
-
 const gscChartLoading = ref(false)
 const gscChartError = ref(null)
 const gscChartConfig = reactive({
@@ -705,28 +658,12 @@ const gscChartConfig = reactive({
   summaryStats: []
 })
 
-const googleStatus = reactive({
-  connected: false,
-  email: '',
-  tokenId: '',
-  tokenValid: false,
-  connectedAt: '',
-  expiresAt: '',
-  scopes: [],
-})
-
 const metaHealthDialog = ref(false)
 const metaHealthLoading = ref(false)
 const metaHealthData = ref(null)
 
 
 const userEmail = computed(() => user.value?.email || '')
-const whapiDisplayLabel = computed(() => {
-  if (whapiStatus.displayName && whapiStatus.phoneNumber) {
-    return `${whapiStatus.displayName} (${whapiStatus.phoneNumber})`
-  }
-  return whapiStatus.displayName || whapiStatus.phoneNumber || ''
-})
 const currentOrgName = computed(() => {
   const orgId = user.value?.currentLoggedInOrgId
   const list = user.value?.userOrganisations || []
@@ -765,17 +702,16 @@ const integrationCards = computed(() => ([
     icon: whatsappLogo,
     iconClass: 'whatsapp',
   },
-  // GOOGLE ANALYTICS CARD — hidden until Google integration is live on prod
-  // {
-  //   key: 'google',
-  //   title: 'Google',
-  //   subtitlePrimary: googleStatus.email || userEmail.value || '-',
-  //   subtitleSecondary: currentOrgName.value || '-',
-  //   statusLabel: googleStatusLabel.value,
-  //   statusColor: googleStatusColor.value,
-  //   icon: googleLogo,
-  //   iconClass: 'google',
-  // },
+  {
+    key: 'google',
+    title: 'Google',
+    subtitlePrimary: googleStatus.email || userEmail.value || '-',
+    subtitleSecondary: currentOrgName.value || '-',
+    statusLabel: googleStatusLabel.value,
+    statusColor: googleStatusColor.value,
+    icon: googleLogo,
+    iconClass: 'google',
+  },
   {
     key: 'chatbot',
     title: 'Chatbot',
@@ -787,34 +723,6 @@ const integrationCards = computed(() => ([
     iconClass: 'chatbot',
   },
 ]))
-
-const whapiStatusLabel = computed(() => {
-  if (!whapiStatus.status && !whapiStatus.connected) return INTEGRATION_STATUS_NOT_CONNECTED_LABEL
-  const raw = String(whapiStatus.status || '').trim().toLowerCase()
-  if (raw.includes('stopped')) return 'Stopped'
-  if (raw.includes('overdue')) return 'Overdue'
-  if (raw.includes('loggedout') || raw.includes('disconnected')) return 'Logged Out'
-  if (raw === 'qr' || raw.includes('awaiting')) return 'Awaiting Scan'
-  if (raw.includes('pending') || raw.includes('created')) return 'Pending'
-  if (raw.includes('activating')) return 'Activating'
-  if (raw.includes('auth')) return 'Authorized'
-  if (raw.includes('active') || raw.includes('live') || raw.includes('trial')) return 'Active'
-  return whapiStatus.connected ? 'Connected' : INTEGRATION_STATUS_NOT_CONNECTED_LABEL
-})
-
-const whapiStatusColor = computed(() => {
-  const label = String(whapiStatusLabel.value || '').toLowerCase()
-  if (label === 'connected' || label.includes('active') || label.includes('authorized')) {
-    return INTEGRATION_STATUS_CHIP_SUCCESS
-  }
-  return INTEGRATION_STATUS_CHIP_ACCENT
-})
-
-const whapiQrCtaLabel = computed(() => {
-  if (whapiLoading.value) return 'Generating QR...'
-  if (!whapiQr.value) return 'Refresh QR (wait ~1 min)'
-  return 'Refresh QR'
-})
 
 const googleStatusLabel = computed(() => {
   if (!isGoogleConnected.value) return INTEGRATION_STATUS_NOT_CONNECTED_LABEL
@@ -830,7 +738,7 @@ const googleStatusColor = computed(() => {
 })
 
 const whapiChannelOptions = computed(() => {
-  const base = [{ title: 'Connect new number', value: 'new' }]
+  const newOption = { title: 'Connect new number (creates a new connection)', value: 'new' }
   const items = (whapiChannels.value || []).map((ch) => {
     const label = ch.displayName || ch.phoneNumber || ch.channelId
     const orgLabel = (ch.orgNames || []).slice(0, 2).join(', ')
@@ -847,7 +755,8 @@ const whapiChannelOptions = computed(() => {
       value: ch.channelId,
     }
   })
-  return base.concat(items)
+  // Put "new" at the bottom so existing numbers are easier to pick
+  return items.concat([newOption])
 })
 
 const whapiChannelMap = computed(() => {
@@ -858,122 +767,9 @@ const whapiChannelMap = computed(() => {
   return map
 })
 
-let whapiEventSource = null;
-let qrPollTimer = null;
-let qrRefreshTimer = null;
-let statusFallbackTimer = null;
-let sseActive = false;
-let sseRetryDelay = 2000;
-let qrPollAttempts = 0;
-const MAX_QR_POLL = 12; // ~60s at 5s intervals
-
-const stopQrPoll = () => {
-  if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
-};
-const stopQrAutoRefresh = () => {
-  if (qrRefreshTimer) { clearInterval(qrRefreshTimer); qrRefreshTimer = null; }
-};
-const stopStatusFallback = () => {
-  if (statusFallbackTimer) { clearInterval(statusFallbackTimer); statusFallbackTimer = null; }
-};
-
-const _onWhapiConnected = () => {
-  whapiQr.value = '';
-  whapiDialog.value = false;
-  stopQrPoll();
-  stopQrAutoRefresh();
-  stopStatusFallback();
-  loadWhapiChannels(false);
-  mainStore?.setSnackbar?.({ title: 'WhatsApp connected successfully!', type: 'success' });
-};
-
-const startWhapiStatusStream = () => {
-  if (typeof window === 'undefined' || !('EventSource' in window)) return;
-  if (whapiEventSource) return;
-  sseActive = true;
-  whapiEventSource = new EventSource('/api/whapi/stream');
-  whapiEventSource.addEventListener('status', (evt) => {
-    sseRetryDelay = 2000;
-    try {
-      const payload = JSON.parse(evt.data || '{}');
-      whapiStatus.status = payload.status || whapiStatus.status;
-      whapiStatus.connected = !!payload.connected;
-      if (payload.phoneNumber) whapiStatus.phoneNumber = payload.phoneNumber;
-      if (payload.displayName) whapiStatus.displayName = payload.displayName;
-      if (payload.channelId) whapiStatus.channelId = payload.channelId;
-      isWhatsAppConnected.value = !!payload.connected;
-      if (whapiDialog.value && payload.connected) _onWhapiConnected();
-    } catch {}
-  });
-  whapiEventSource.onerror = () => {
-    whapiEventSource?.close();
-    whapiEventSource = null;
-    if (!sseActive) return;
-    setTimeout(() => {
-      sseRetryDelay = Math.min(sseRetryDelay * 2, 30000);
-      if (sseActive) startWhapiStatusStream();
-    }, sseRetryDelay);
-  };
-};
-
-const stopWhapiStatusStream = () => {
-  sseActive = false;
-  sseRetryDelay = 2000;
-  if (whapiEventSource) { whapiEventSource.close(); whapiEventSource = null; }
-};
-
-const startQrPoll = () => {
-  qrPollAttempts = 0;
-  if (qrPollTimer) return;
-  qrPollTimer = setInterval(async () => {
-    if (!whapiDialog.value) { stopQrPoll(); return; }
-    if (whapiQr.value) { stopQrPoll(); return; }
-    if (qrPollAttempts >= MAX_QR_POLL) {
-      stopQrPoll();
-      whapiQrWarning.value = 'QR code is taking longer than expected. The channel may still be activating — try refreshing, or contact support if this persists.';
-      return;
-    }
-    qrPollAttempts++;
-    if (!whapiLoading.value) await refreshWhapiQr();
-  }, 5000);
-};
-
-const startQrAutoRefresh = () => {
-  stopQrAutoRefresh();
-  qrRefreshTimer = setInterval(async () => {
-    if (!whapiDialog.value || !whapiQr.value) { stopQrAutoRefresh(); return; }
-    if (!whapiLoading.value) await refreshWhapiQr();
-  }, 28000);
-};
-
-const startStatusFallback = () => {
-  stopStatusFallback();
-  statusFallbackTimer = setInterval(async () => {
-    if (!whapiDialog.value) { stopStatusFallback(); return; }
-    await loadWhapiStatus();
-    if (whapiStatus.connected) _onWhapiConnected();
-  }, 10000);
-};
-
-watch(whapiDialog, (open) => {
-  if (!open) {
-    stopQrPoll();
-    stopQrAutoRefresh();
-    stopStatusFallback();
-    whapiQr.value = '';
-    whapiQrWarning.value = '';
-  }
-});
-
-watch(whapiQr, (qr) => {
-  if (qr) {
-    startQrAutoRefresh();
-    startStatusFallback();
-  } else {
-    stopQrAutoRefresh();
-    stopStatusFallback();
-  }
-});
+// Reload channel list whenever WhatsApp connects (e.g. after QR scan).
+// onWhapiConnected auto-deregisters this callback when overview unmounts.
+onWhapiConnected(() => loadWhapiChannels(false))
 
 const normalizeMetaMessage = (message) => {
   if (!message) return ''
@@ -1113,6 +909,7 @@ const integrateMeta = async () => {
 }
 
 const disconnectMeta = async () => {
+  metaDisconnectDialog.value = false
   try {
     const res = await crmStore.disconnectMeta()
     if (res?.code === 0) {
@@ -1139,48 +936,32 @@ const fetchMetaHealthSilent = async () => {
   } catch {}
 }
 
-const loadWhapiStatus = async () => {
-  try {
-    const res = await crmStore.getWhapiStatus()
-    if (res?.code === 0 && res.data) {
-      whapiStatus.connected = !!res.data.connected
-      whapiStatus.channelId = res.data.channelId || ''
-      whapiStatus.phoneNumber = res.data.phoneNumber || ''
-      whapiStatus.displayName = res.data.displayName || ''
-      whapiStatus.status = res.data.status || ''
-      isWhatsAppConnected.value = whapiStatus.connected
-    } else {
-      whapiStatus.connected = false
-      whapiStatus.channelId = ''
-      whapiStatus.phoneNumber = ''
-      whapiStatus.displayName = ''
-      whapiStatus.status = ''
-      isWhatsAppConnected.value = false
-    }
-  } catch (e) {
-    whapiStatus.connected = false
-    whapiStatus.channelId = ''
-    whapiStatus.phoneNumber = ''
-    whapiStatus.displayName = ''
-    whapiStatus.status = ''
-    isWhatsAppConnected.value = false
-  } finally {
-    whapiStatusLoading.value = false
-  }
-}
-
-const connectWhapi = async (channelId = null) => {
+const connectWhapi = async (channelId = null, forceNew = false) => {
   if (whapiLoading.value) return
   whapiLoading.value = true
   try {
-    const payload = channelId ? { channelId } : {}
+    const payload = channelId ? { channelId } : (forceNew ? { forceNew: true } : {})
     const res = await crmStore.startWhapiConnect(payload)
     if (res?.code === 0 && res.data) {
+      // Extend failed — channel is blocked and couldn't be reactivated
+      if (res.data.canActivate && !res.data.activationPending) {
+        const msg = res.data.warning || 'Unable to reactivate WhatsApp. Please contact support.'
+        mainStore?.setSnackbar?.({ title: msg, type: 'error' })
+        return
+      }
       whapiQr.value = res.data.qr || ''
-      whapiQrWarning.value = res.data.warning || ''
-      whapiDialog.value = true
+      whapiQrWarning.value = ''
+      isNewChannel.value = !!res.data.activationPending
       loadWhapiStatus()
       loadWhapiChannels(false)
+      if (isNewChannel.value) {
+        // Channel activating — show floating banner, open QR dialog automatically when ready
+        whapiActivating.value = true
+        startActivationProgress()
+        mainStore?.setSnackbar?.({ title: 'WhatsApp is being set up — QR code will appear in about 1–2 minutes', type: 'info' })
+      } else {
+        whapiDialog.value = true
+      }
       if (!whapiQr.value) startQrPoll()
       return
     }
@@ -1214,6 +995,10 @@ const openWhapiConnectDialog = async () => {
   whapiSelectedChannel.value = 'new'
   whapiConnectDialog.value = true
   await loadWhapiChannels(true)
+  // Auto-select the only existing number so users don't accidentally create a new one
+  if (whapiChannels.value?.length === 1) {
+    whapiSelectedChannel.value = whapiChannels.value[0].channelId
+  }
 }
 
 const confirmWhapiConnect = async () => {
@@ -1222,27 +1007,8 @@ const confirmWhapiConnect = async () => {
   if (value && value !== 'new') {
     await connectWhapi(value)
   } else {
-    await connectWhapi()
-  }
-}
-
-const refreshWhapiQr = async () => {
-  if (whapiLoading.value) return
-  whapiLoading.value = true
-  try {
-    const res = await crmStore.getWhapiQr()
-    if (res?.code === 0 && res.data) {
-      whapiQr.value = res.data.qr || ''
-      whapiQrWarning.value = res.data.warning || ''
-      return
-    }
-    const msg = res?.error || res?.message || 'Unable to refresh QR'
-    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
-  } catch (e) {
-    const msg = e?.data?.message || e?.message || 'Unable to refresh QR'
-    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
-  } finally {
-    whapiLoading.value = false
+    // forceNew: true tells the server to create a brand new channel even if one exists
+    await connectWhapi(null, true)
   }
 }
 
@@ -1283,10 +1049,10 @@ const forceWhapiLogoutAndShowQr = async () => {
       if (!whapiQr.value) startQrPoll()
       return
     }
-    const msg = res?.error || res?.message || 'Failed to logout WhatsApp'
+    const msg = res?.error || res?.message || 'Failed to disconnect WhatsApp'
     mainStore?.setSnackbar?.({ title: msg, type: 'error' })
   } catch (e) {
-    const msg = e?.data?.message || e?.message || 'Failed to logout WhatsApp'
+    const msg = e?.data?.message || e?.message || 'Failed to disconnect WhatsApp'
     mainStore?.setSnackbar?.({ title: msg, type: 'error' })
   } finally {
     whapiDisconnecting.value = false
@@ -1320,48 +1086,35 @@ const disconnectWhapi = async () => {
   whapiSingleLogoutConfirm.value = true
 }
 
-const confirmWhapiSingleLogout = async () => {
-  whapiSingleLogoutConfirm.value = false
+const _executeWhapiDisconnect = async (payload = {}) => {
   if (whapiDisconnecting.value) return
   whapiDisconnecting.value = true
   try {
-    const res = await crmStore.disconnectWhapi()
+    const res = await crmStore.disconnectWhapi(payload)
     if (res?.code === 0) {
       whapiQr.value = ''
       await loadWhapiStatus()
-      mainStore?.setSnackbar?.({ title: 'WhatsApp logged out', type: 'success' })
+      mainStore?.setSnackbar?.({ title: 'WhatsApp disconnected', type: 'success' })
       return
     }
-    const msg = res?.error || res?.message || 'Failed to logout WhatsApp'
+    const msg = res?.error || res?.message || 'Failed to disconnect WhatsApp'
     mainStore?.setSnackbar?.({ title: msg, type: 'error' })
   } catch (e) {
-    const msg = e?.data?.message || e?.message || 'Failed to logout WhatsApp'
+    const msg = e?.data?.message || e?.message || 'Failed to disconnect WhatsApp'
     mainStore?.setSnackbar?.({ title: msg, type: 'error' })
   } finally {
     whapiDisconnecting.value = false
   }
 }
 
+const confirmWhapiSingleLogout = async () => {
+  whapiSingleLogoutConfirm.value = false
+  await _executeWhapiDisconnect()
+}
+
 const confirmWhapiLogout = async () => {
   whapiLogoutConfirm.value = false
-  if (whapiDisconnecting.value) return
-  whapiDisconnecting.value = true
-  try {
-    const res = await crmStore.disconnectWhapi()
-    if (res?.code === 0) {
-      whapiQr.value = ''
-      await loadWhapiStatus()
-      mainStore?.setSnackbar?.({ title: 'WhatsApp logged out', type: 'success' })
-      return
-    }
-    const msg = res?.error || res?.message || 'Failed to logout WhatsApp'
-    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
-  } catch (e) {
-    const msg = e?.data?.message || e?.message || 'Failed to logout WhatsApp'
-    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
-  } finally {
-    whapiDisconnecting.value = false
-  }
+  await _executeWhapiDisconnect()
 }
 
 const onConnectChatbot = async () => {
@@ -1719,16 +1472,15 @@ const saveAutoReplyConfig = async () => {
 onMounted(async () => {
   loadUser()
   handleMetaQuery()
+  handleGoogleCallback()
   startWhapiStatusStream()
-  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads(), loadAutoReplySettings()])
+  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads(), checkGoogleConnection(), loadAutoReplySettings()])
   loadWhapiChannels(false)
 })
 
 onBeforeUnmount(() => {
   stopWhapiStatusStream()
-  stopQrPoll()
-  stopQrAutoRefresh()
-  stopStatusFallback()
+  stopAllQrTimers()
 })
 
 watch(
@@ -1896,5 +1648,14 @@ watch(
   padding-left: 16px;
   margin: 0;
   line-height: 1.8;
+}
+
+.whapi-activation-banner {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 320px;
+  z-index: 1000;
+  border: 1px solid #c8e6c9;
 }
 </style>

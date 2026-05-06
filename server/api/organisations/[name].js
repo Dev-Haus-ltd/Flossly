@@ -18,6 +18,11 @@ import {
   getScripts,
   saveScript,
   seedScripts,
+  listClinicalNoteTemplateVersions,
+  createClinicalNoteTemplate,
+  updateClinicalNoteTemplate,
+  cloneClinicalNoteTemplate,
+  setDefaultClinicalNoteTemplate,
   createOrganisationReferral,
   getAllOrganisationReferrals,
   createOrganisationForUser,
@@ -63,6 +68,16 @@ export default defineEventHandler(async (event) => {
       return await saveScript(event);
     case "seedScripts":
       return await seedScripts(event);
+    case "clinicalNoteTemplateVersions":
+      return await listClinicalNoteTemplateVersions(event);
+    case "clinicalNoteTemplateCreate":
+      return await createClinicalNoteTemplate(event);
+    case "clinicalNoteTemplateUpdate":
+      return await updateClinicalNoteTemplate(event);
+    case "clinicalNoteTemplateClone":
+      return await cloneClinicalNoteTemplate(event);
+    case "clinicalNoteTemplateSetDefault":
+      return await setDefaultClinicalNoteTemplate(event);
     case "createReferral":
       return await createOrganisationReferral(event);
     case "allReferrals":

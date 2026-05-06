@@ -23,7 +23,7 @@ import { ONBOARDING_EMAIL_TEMPLATES } from "@shared/defaults/onboardingCampaign.
 import { buildOnboardingContext, sendOnboardingEmail } from "./onboardingCampaign.js";
 import { renderPatientTokens } from "./templateTokens.js";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
-import { transporter } from "./nodeMailer.js";
+import { getOrgTransporter, getFromAddress } from "./nodeMailer.js";
 import {
   ensureOnboardingEventsTable,
   getDiffDaysFromStart,
@@ -348,9 +348,11 @@ export const startPatientJourneyAutomationScheduler = () => {
               const subject = renderPatientTokens(baseSubject, ctx)
               const html = renderPatientTokens(bodyRaw, ctx)
               const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
-              await transporter.sendMail({
+              const orgTransporter = await getOrgTransporter(Number(orgId));
+              const orgFrom = getFromAddress(Number(orgId));
+              await orgTransporter.sendMail({
                 to: patient.email,
-                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                from: orgFrom,
                 subject,
                 html: wrap(html),
               })
@@ -376,9 +378,11 @@ export const startPatientJourneyAutomationScheduler = () => {
               const subject = renderPatientTokens(baseSubject, ctx)
               const html = renderPatientTokens(bodyRaw, ctx)
               const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
-              await transporter.sendMail({
+              const orgTransporter = await getOrgTransporter(Number(orgId));
+              const orgFrom = getFromAddress(Number(orgId));
+              await orgTransporter.sendMail({
                 to: patient.email,
-                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                from: orgFrom,
                 subject,
                 html: wrap(html),
               })
@@ -403,9 +407,11 @@ export const startPatientJourneyAutomationScheduler = () => {
               const subject = renderPatientTokens(baseSubject, ctx)
               const html = renderPatientTokens(bodyRaw, ctx)
               const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
-              await transporter.sendMail({
+              const orgTransporter = await getOrgTransporter(Number(orgId));
+              const orgFrom = getFromAddress(Number(orgId));
+              await orgTransporter.sendMail({
                 to: patient.email,
-                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                from: orgFrom,
                 subject,
                 html: wrap(html),
               })
@@ -438,9 +444,11 @@ export const startPatientJourneyAutomationScheduler = () => {
               const subject = renderPatientTokens(baseSubject, ctx)
               const html = renderPatientTokens(bodyRaw, ctx)
               const wrap = (inner) => EMAIL_TEMPLATE.replaceAll('{subject}', subject).replace('{content}', inner)
-              await transporter.sendMail({
+              const orgTransporter = await getOrgTransporter(Number(orgId));
+              const orgFrom = getFromAddress(Number(orgId));
+              await orgTransporter.sendMail({
                 to: patient.email,
-                from: process.env.MAIL_FROM || 'helloflossly@gmail.com',
+                from: orgFrom,
                 subject,
                 html: wrap(html),
               })
@@ -718,6 +726,7 @@ export const startOnboardingScheduler = () => {
               key: tpl.key,
               to: user.email,
               ctx,
+              orgId: evt.organisationId,
             });
             await recordOnboardingEvent({
               userId: evt.userId,
@@ -737,14 +746,64 @@ export const startOnboardingScheduler = () => {
   });
 };
 
+export const startShiftReminderScheduler = () => {
+  cron.schedule('0 9 * * *', async () => {
+    console.log('[Shift Reminder] Running daily shift reminder check...');
+    try {
+      const { RotaShift, RotaUser, Rota } = await import('../models/index.js');
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+
+      const dayAfterTomorrow = new Date(tomorrow);
+      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+
+      const upcomingShifts = await RotaShift.findAll({
+        where: {
+          date: {
+            [Op.gte]: tomorrow,
+            [Op.lt]: dayAfterTomorrow,
+          },
+        },
+        include: [
+          {
+            model: RotaUser,
+            as: 'rotaUsers',
+            include: [{ model: User, as: 'user', attributes: ['id', 'fullName'] }],
+          },
+          { model: Rota, as: 'rota' },
+        ],
+      });
+
+      for (const shift of upcomingShifts) {
+        if (!shift.rotaUsers || shift.rotaUsers.length === 0) continue;
+
+        const shiftDate = new Date(shift.date).toLocaleDateString('en-GB');
+        const shiftTime = shift.startTime || '';
+        const shiftOrganisationId = shift.rota?.organisationId;
+
+        for (const rotaUser of shift.rotaUsers) {
+          if (!rotaUser.user?.id) continue;
+          await sendShiftReminderNotification({
+            userId: rotaUser.user.id,
+            shiftDate,
+            shiftTime,
+            organisationId: shiftOrganisationId,
+          });
+        }
+      }
+
+      console.log(`[Shift Reminder] Processed ${upcomingShifts.length} upcoming shifts`);
+    } catch (err) {
+      console.error('[Shift Reminder] scheduler error:', err?.message);
+    }
+  });
+};
+
 /**
  * Meta daily sync scheduler
- *
- * Runs at 3 AM every day. Finds all orgs with at least one active Meta page
- * and runs the structure + insights sync for each, spaced 10 s apart to
- * avoid hammering Meta's API when many orgs are connected.
- *
- * Configurable via META_SYNC_SCHEDULE env var (default: "0 3 * * *").
+ * Runs at midnight every day. Configurable via META_SYNC_SCHEDULE env var.
  */
 export const startMetaSyncScheduler = () => {
   const schedule = process.env.META_SYNC_SCHEDULE || "0 0 * * *";
@@ -770,7 +829,7 @@ export const startMetaSyncScheduler = () => {
         }
 
         try {
-          await runInsightsSync(orgId, 2); // last 2 days for daily delta
+          await runInsightsSync(orgId, 2);
         } catch (e) {
           console.error(`[MetaScheduler] Insights sync failed for org ${orgId}:`, e?.message);
         }
@@ -785,67 +844,3 @@ export const startMetaSyncScheduler = () => {
     }
   });
 };
-
-export const startShiftReminderScheduler = () => {
-  cron.schedule('0 9 * * *', async () => {
-    console.log('[Shift Reminder] Running daily shift reminder check...');
-    try {
-      const { RotaShift, RotaUser, Rota } = await import('../models/index.js');
-      
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      
-      const dayAfterTomorrow = new Date(tomorrow);
-      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
-      
-      const upcomingShifts = await RotaShift.findAll({
-        where: {
-          date: {
-            [Op.gte]: tomorrow,
-            [Op.lt]: dayAfterTomorrow
-          }
-        },
-        include: [
-          {
-            model: RotaUser,
-            as: 'rotaUsers',
-            include: [{
-              model: User,
-              as: 'user',
-              attributes: ['id', 'fullName']
-            }]
-          },
-          {
-            model: Rota,
-            as: 'rota'
-          }
-        ]
-      });
-      
-      for (const shift of upcomingShifts) {
-        if (!shift.rotaUsers || shift.rotaUsers.length === 0) continue;
-        
-        const shiftDate = new Date(shift.date).toLocaleDateString('en-GB');
-        const shiftTime = shift.startTime || '';
-        const shiftOrganisationId = shift.rota?.organisationId;
-        
-        for (const rotaUser of shift.rotaUsers) {
-          if (!rotaUser.user?.id) continue;
-          
-          await sendShiftReminderNotification({
-            userId: rotaUser.user.id,
-            shiftDate,
-            shiftTime,
-            organisationId: shiftOrganisationId
-          });
-        }
-      }
-      
-      console.log(`[Shift Reminder] Processed ${upcomingShifts.length} upcoming shifts`);
-    } catch (err) {
-      console.error('[Shift Reminder] scheduler error:', err?.message);
-    }
-  });
-};
-

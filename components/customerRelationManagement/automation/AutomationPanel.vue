@@ -1,7 +1,15 @@
 <template>
   <div>
     <template v-if="!activeAutomation || displayMode === 'modal'">
+      <div
+        v-if="isPatientJourney && patientJourneyGroupsLoading"
+        class="patient-journey-automation-loading d-flex flex-column align-center justify-center py-12"
+      >
+        <v-progress-circular indeterminate color="primary" size="48" width="4" class="mb-4" />
+        <div class="text-body-2 text-medium-emphasis">Loading automations...</div>
+      </div>
       <AutomationCards
+        v-else
         :cards="automationCards"
         :add-folder-icon="addFolderIcon"
         :show-card-toggle="props.showCardToggle"
@@ -36,6 +44,10 @@
         :show-resend-action="props.showResendAction"
         :resending-key="resendingKey"
         :default-automation-key-set="defaultAutomationKeySet"
+        :read-only-trigger="props.readOnlyTrigger"
+        :show-delete="!isPatientJourney"
+        :loading="patientTemplatesLoading"
+        :disable-edit-for-sent="isPatientJourney"
         @back="clearAutomationSelection"
         @update:search="(val) => (search = val)"
         @update:filterEnabled="(val) => (filterEnabled = val)"
@@ -93,6 +105,10 @@
             :show-resend-action="props.showResendAction"
             :resending-key="resendingKey"
             :default-automation-key-set="defaultAutomationKeySet"
+            :read-only-trigger="props.readOnlyTrigger"
+            :show-delete="!isPatientJourney"
+            :loading="patientTemplatesLoading"
+            :disable-edit-for-sent="isPatientJourney"
             @update:search="(val) => (search = val)"
             @update:filterEnabled="(val) => (filterEnabled = val)"
             @update:filterDisabled="(val) => (filterDisabled = val)"
@@ -184,10 +200,12 @@
 
             <v-row dense>
 
-              <!-- inquiry_days: days number + date picker -->
-              <template v-if="triggerForm.triggerType === 'inquiry_days'">
+              <!-- inquiry_days / activation_days: days number + date picker -->
+              <template v-if="['inquiry_days', 'activation_days'].includes(triggerForm.triggerType)">
                 <v-col cols="12" sm="6">
-                  <div class="trig-field-label">Days after {{ resolvedLeadId ? 'activation' : 'enquiry' }}</div>
+                  <div class="trig-field-label">
+                    Days after {{ triggerForm.triggerType === 'activation_days' ? 'activation' : (resolvedLeadId ? 'activation' : 'enquiry') }}
+                  </div>
                   <v-text-field
                     v-model="triggerForm.triggerDays"
                     type="number"
@@ -202,7 +220,12 @@
                   />
                 </v-col>
                 <v-col cols="12" sm="6">
-                  <div class="trig-field-label">Or pick a target date <span class="trig-field-hint">(calculates days from today)</span></div>
+                  <div class="trig-field-label">
+                    Or pick a target date
+                    <span class="trig-field-hint">
+                      (calculates days from {{ triggerForm.triggerType === 'activation_days' ? 'activation day' : 'today' }})
+                    </span>
+                  </div>
                   <v-text-field
                     :model-value="triggerInquiryDatePickerValue"
                     type="date"
@@ -440,11 +463,15 @@
           <!-- Editor Section -->
           <div class="editor-section">
             <template v-if="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'">
-              <div class="d-flex align-center justify-space-between mb-3">
+              <div
+                v-if="!isPatientJourney"
+                class="d-flex align-center justify-space-between mb-3"
+              >
                 <label class="fld-lbl">Subject</label>
                 <v-chip size="x-small" variant="tonal" color="primary">Use [First Name] to personalise</v-chip>
               </div>
               <v-text-field
+                v-if="!isPatientJourney"
                 v-model="active.subject"
                 variant="solo"
                 density="compact"
@@ -506,10 +533,14 @@ import { isDefaultAutomationGroup, resolveAutomationGroupAuthor } from '@/lib/cr
 import { buildRecipientContext } from '@/lib/crm/previewContext'
 import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { htmlToPlainText } from '@/lib/format/text'
+import patientJourneyService from '@/services/patientJourneyService'
+import { getLeadDisplayName } from '@/lib/normalizers/lead'
 
 const props = defineProps({
   leadId: { type: [Number, String], default: null },
   lead: { type: Object, default: null },
+  patientId: { type: [Number, String], default: null },
+  patient: { type: Object, default: null },
   displayMode: { type: String, default: 'inline' },
   groups: { type: Array, default: null },
   useGroupsApi: { type: Boolean, default: true },
@@ -525,12 +556,49 @@ const props = defineProps({
   showLastSentColumn: { type: Boolean, default: false },
   showSentStatusColumn: { type: Boolean, default: false },
   showResendAction: { type: Boolean, default: false },
+  readOnlyTrigger: { type: Boolean, default: false },
   selectedLeadIds: { type: Array, default: null },
+  selectedLeads: { type: Array, default: null },
 })
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
 const orgStore = useOrgStore()
 const emit = defineEmits(['update:rows','save','edit-group','delete-group','go-to-automations'])
+
+const resolvedPatientId = computed(() => {
+  const raw = props.patientId ?? props.patient?.id
+  if (raw === null || raw === undefined || raw === '') return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+})
+
+const isPatientJourney = computed(() => resolvedPatientId.value != null)
+
+const patientTemplatesLoading = ref(false)
+const patientJourneyGroupsLoading = ref(false)
+
+watch(
+  isPatientJourney,
+  (journey) => {
+    if (journey) patientJourneyGroupsLoading.value = true
+  },
+  { immediate: true }
+)
+
+const previewLeadLike = computed(() => {
+  if (props.lead && Object.keys(props.lead).length) return props.lead
+  const p = props.patient
+  if (!p) return {}
+  const name =
+    [p.firstName, p.lastName].filter(Boolean).join(' ').trim() ||
+    (typeof p.name === 'string' ? p.name.trim() : '') ||
+    ''
+  return {
+    ...p,
+    name: name || p.name || '',
+    email: p.email || p.emailAddress || '',
+  }
+})
 
 // Table state
 const rows = reactive([])
@@ -543,6 +611,7 @@ const saving = ref(false)
 const activeAutomation = ref(null)
 const showGroupDialog = ref(false)
 const infoAlertText = "Most content is tailored to your practice profile. Please review and update details before enabling, as you're responsible for the final message."
+const groupRows = ref([])
 const defaultAutomationKeySet = new Set(crmAutomationDefaults.map(item => item.key))
 const defaultGroupKeySet = new Set(crmAutomationGroups.map(group => group.key))
 
@@ -567,16 +636,24 @@ const tableHeaders = computed(() => {
   return headers
 })
 
-const triggerTypes = [
-  { label: 'Send Now', value: 'send_now', icon: 'mdi-send-circle-outline' },
-  { label: 'After Enquiry', value: 'inquiry_days', icon: 'mdi-calendar-clock' },
-  { label: 'Birthday', value: 'birthday_offset', icon: 'mdi-cake-variant-outline' },
-  { label: 'Birthday Month', value: 'birthday_month_start', icon: 'mdi-cake-layered' },
-  { label: 'Black Friday', value: 'black_friday', icon: 'mdi-tag-outline' },
-  { label: 'Fixed Date', value: 'month_day', icon: 'mdi-calendar-star' },
-  { label: 'Nth Weekday', value: 'weekday_of_month', icon: 'mdi-calendar-week' },
-  { label: 'Anniversary', value: 'practice_anniversary', icon: 'mdi-office-building-outline' },
-]
+const canUseSendNowTrigger = computed(() => !!resolvedLeadId.value)
+
+const triggerTypes = computed(() => {
+  const items = [
+    { label: 'After Enquiry', value: 'inquiry_days', icon: 'mdi-calendar-clock' },
+    { label: 'After Activation', value: 'activation_days', icon: 'mdi-timer-outline' },
+    { label: 'Birthday', value: 'birthday_offset', icon: 'mdi-cake-variant-outline' },
+    { label: 'Birthday Month', value: 'birthday_month_start', icon: 'mdi-cake-layered' },
+    { label: 'Black Friday', value: 'black_friday', icon: 'mdi-tag-outline' },
+    { label: 'Fixed Date', value: 'month_day', icon: 'mdi-calendar-star' },
+    { label: 'Nth Weekday', value: 'weekday_of_month', icon: 'mdi-calendar-week' },
+    { label: 'Anniversary', value: 'practice_anniversary', icon: 'mdi-office-building-outline' },
+  ]
+  if (canUseSendNowTrigger.value) {
+    items.unshift({ label: 'Send Now', value: 'send_now', icon: 'mdi-send-circle-outline' })
+  }
+  return items
+})
 
 const weekdayOptions = [
   { label: 'Sunday', value: 0 },
@@ -609,7 +686,9 @@ const filteredRows = computed(() => {
   if (!activeAutomation.value) return []
   const keys = activeAutomation.value.templateKeys || []
   let result = []
-  if (keys.length) {
+  if (isPatientJourney.value) {
+    result = rows
+  } else if (keys.length) {
     const keySet = new Set(keys)
     result = rows.filter(r => keySet.has(r.key))
   } else {
@@ -623,10 +702,7 @@ const filteredRows = computed(() => {
     const t = filterType.value.toLowerCase()
     result = result.filter(r => String(r.type || 'email').toLowerCase() === t)
   }
-  return result.map((row) => ({
-    ...row,
-    sending: row?.trigger ? formatLeadAwareTriggerPreview(row.trigger) : row?.sending,
-  }))
+  return result
 })
 
 const clearFilters = () => {
@@ -640,7 +716,11 @@ const resolvedGroups = computed(() => {
   if (Array.isArray(props.groups) && props.groups.length) {
     return props.groups
   }
-  if (crmStore.automationGroupRows.length) return crmStore.automationGroupRows
+  if (isPatientJourney.value) {
+    if (groupRows.value.length) return groupRows.value
+  } else if (crmStore.automationGroupRows.length) {
+    return crmStore.automationGroupRows
+  }
   return crmAutomationGroups
 })
 
@@ -649,6 +729,9 @@ const isDefaultGroup = (group) =>
 
 const visibleGroups = computed(() => {
   const withoutLegacy = resolvedGroups.value.filter((group) => String(group?.source || '').toLowerCase() !== 'legacy')
+  if (isPatientJourney.value) {
+    return withoutLegacy
+  }
   if (props.includeDefaults) {
     return withoutLegacy.filter((group) => String(group?.source || '').toLowerCase() === 'system')
   }
@@ -661,15 +744,36 @@ const resolveGroupAuthor = (group) =>
     fallbackName: getCurrentUserName(),
   })
 
+const selectedLeadIdsNormalized = computed(() =>
+  [...new Set((Array.isArray(props.selectedLeadIds) ? props.selectedLeadIds : [])
+    .map((id) => Number(id || 0))
+    .filter(Boolean))]
+)
+
+const selectedLeadNameMap = computed(() => {
+  const entries = Array.isArray(props.selectedLeads) ? props.selectedLeads : []
+  return new Map(
+    entries
+      .map((lead) => {
+        const id = Number(lead?.id || 0)
+        if (!id) return null
+        return [id, getLeadDisplayName(lead || {}) || `Lead #${id}`]
+      })
+      .filter(Boolean)
+  )
+})
+
+const isBulkLeadMode = computed(() => selectedLeadIdsNormalized.value.length > 0)
+
 const bulkGroupState = computed(() => {
-  if (!props.selectedLeadIds?.length) return null
-  const total = props.selectedLeadIds.length
+  if (!selectedLeadIdsNormalized.value.length) return null
+  const total = selectedLeadIdsNormalized.value.length
   const result = {}
   for (const group of visibleGroups.value) {
     const keys = group.templateKeys || []
     let enabledCount = 0
-    for (const leadId of props.selectedLeadIds) {
-      const leadRows = crmStore.automationRowsCache[Number(leadId)] || []
+    for (const leadId of selectedLeadIdsNormalized.value) {
+      const leadRows = crmStore.automationRowsCache[leadId] || []
       const groupRows = keys.length
         ? leadRows.filter(r => new Set(keys).has(r.key))
         : leadRows.filter(r => r.groupKey === group.key)
@@ -686,17 +790,10 @@ const automationCards = computed(() => {
     const groupRows = keys.length
       ? rows.filter(r => keys.includes(r.key))
       : rows.filter(r => r.groupKey === group.key)
-    const bulkState = bulkGroupState.value
-      ? (bulkGroupState.value[group.key] || { enabledCount: 0, totalCount: props.selectedLeadIds.length })
-      : null
-    const enabled = bulkState
-      ? bulkState.enabledCount === bulkState.totalCount && bulkState.totalCount > 0
-      : groupRows.some(r => r.enabled)
     return {
       ...group,
       itemCount: groupRows.length,
-      enabled,
-      bulkState,
+      enabled: groupRows.some(r => r.enabled),
       author: resolveGroupAuthor(group),
       isDefault: isDefaultGroup(group),
       hasWhatsApp: groupRows.some(r => String(r.type || 'Email').toLowerCase() === 'whatsapp'),
@@ -704,10 +801,44 @@ const automationCards = computed(() => {
   })
 })
 
-const selectAutomation = (card) => {
+const loadPatientJourneyTemplates = async (groupKey) => {
+  if (!resolvedPatientId.value || !groupKey) return
+  patientTemplatesLoading.value = true
+  try {
+    const res = await patientJourneyService.listAutomationTemplates(groupKey, resolvedPatientId.value)
+    const data = Array.isArray(res?.data) ? res.data : []
+    rows.splice(0, rows.length, ...data)
+  } catch {
+    rows.splice(0, rows.length)
+  } finally {
+    patientTemplatesLoading.value = false
+  }
+}
+
+const loadPatientJourneyGroupsOnly = async () => {
+  if (!resolvedPatientId.value) return
+  patientJourneyGroupsLoading.value = true
+  try {
+    const res = await patientJourneyService.listAutomationGroups(resolvedPatientId.value)
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      groupRows.value = res.data
+    } else {
+      groupRows.value = []
+    }
+  } catch {
+    groupRows.value = []
+  } finally {
+    patientJourneyGroupsLoading.value = false
+  }
+}
+
+const selectAutomation = async (card) => {
   activeAutomation.value = card
   search.value = ''
   clearFilters()
+  if (isPatientJourney.value) {
+    await loadPatientJourneyTemplates(card?.key)
+  }
   if (props.displayMode === 'modal') {
     showGroupDialog.value = true
   }
@@ -718,6 +849,9 @@ const clearAutomationSelection = () => {
   search.value = ''
   clearFilters()
   showGroupDialog.value = false
+  if (isPatientJourney.value) {
+    rows.splice(0, rows.length)
+  }
 }
 
 const showTriggerDialog = ref(false)
@@ -833,6 +967,7 @@ const onInquiryDatePick = (val) => {
 }
 
 const openTriggerEditor = (row) => {
+  if (resolvedPatientId.value || props.readOnlyTrigger) return
   triggerEditingRow.value = row
   hydrateTriggerForm(row?.trigger || {})
   showTriggerDialog.value = true
@@ -848,7 +983,81 @@ const resolvedLeadId = computed(() => {
   return id ? Number(id) : null
 })
 
+const stableTriggerKey = (trigger) => {
+  if (!trigger || typeof trigger !== 'object') return ''
+  const normalized = Object.keys(trigger).sort().reduce((acc, key) => {
+    acc[key] = trigger[key]
+    return acc
+  }, {})
+  return JSON.stringify(normalized)
+}
+
+const buildBulkRowsFromSelectedLeads = () => {
+  const leadIds = selectedLeadIdsNormalized.value
+  if (!leadIds.length) return []
+
+  const rowMap = new Map()
+  leadIds.forEach((leadId) => {
+    const leadRows = Array.isArray(crmStore.automationRowsCache[leadId])
+      ? crmStore.automationRowsCache[leadId]
+      : []
+    leadRows.forEach((row) => {
+      if (!row?.key) return
+      if (!rowMap.has(row.key)) rowMap.set(row.key, [])
+      rowMap.get(row.key).push({ ...row, __sourceLeadId: leadId })
+    })
+  })
+
+  if (props.includeDefaults) {
+    crmAutomationDefaults.forEach((row) => {
+      if (!row?.key || rowMap.has(row.key)) return
+      rowMap.set(row.key, [])
+    })
+  }
+
+  return Array.from(rowMap.entries()).map(([key, leadRows]) => {
+    const fallback = crmAutomationDefaults.find((item) => item.key === key) || {}
+    const baseRow = leadRows[0] || fallback
+    const triggerKeys = [...new Set(leadRows.map((row) => stableTriggerKey(row?.trigger)).filter(Boolean))]
+    const hasMixedTrigger = triggerKeys.length > 1
+    const resolvedTrigger = hasMixedTrigger
+      ? null
+      : (leadRows.find((row) => row?.trigger)?.trigger || baseRow?.trigger)
+    const enabledCount = leadRows.filter((row) => !!row?.enabled).length
+    const bulkTriggerDetails = leadIds.map((leadId) => {
+      const matchingRow = leadRows.find((row) => Number(row?.__sourceLeadId || 0) === leadId)
+      const leadName = selectedLeadNameMap.value.get(leadId) || `Lead #${leadId}`
+      const detailTrigger = matchingRow?.trigger || null
+      return {
+        leadId,
+        leadName,
+        triggerLabel: detailTrigger ? formatLeadAwareTriggerPreview(detailTrigger) : 'No lead-specific trigger',
+      }
+    })
+
+    return {
+      ...fallback,
+      ...baseRow,
+      key,
+      trigger: resolvedTrigger,
+      sending: hasMixedTrigger
+        ? 'Mixed across selected leads'
+        : (resolvedTrigger ? formatLeadAwareTriggerPreview(resolvedTrigger) : (baseRow?.sending || fallback?.sending || '')),
+      enabled: leadRows.length ? enabledCount === leadIds.length : !!baseRow?.enabled,
+      bulkEnabledCount: enabledCount,
+      bulkTotalCount: leadIds.length,
+      bulkHasMixedTrigger: hasMixedTrigger,
+      bulkTriggerDetails,
+    }
+  })
+}
+
 const formatLeadAwareTriggerPreview = (trigger = {}) => {
+  if (trigger?.type === 'activation_days') {
+    const days = Number(trigger?.days || 0)
+    if (days === 0) return 'Immediately when automation is activated'
+    return `${days} day${days === 1 ? '' : 's'} after activation`
+  }
   if (resolvedLeadId.value && trigger?.type === 'inquiry_days') {
     const days = Number(trigger?.days || 0)
     if (days === 0) return 'Immediately when automation is activated'
@@ -858,6 +1067,19 @@ const formatLeadAwareTriggerPreview = (trigger = {}) => {
 }
 
 const buildPayload = (row) => {
+  if (resolvedPatientId.value) {
+    return {
+      key: row.key,
+      type: row.type || 'Email',
+      name: row.name || row.key,
+      sending: row.sending || '',
+      enabled: !!row.enabled,
+      template: row.template || '',
+      roleName: row.roleName,
+      groupKey: row.groupKey || activeAutomation.value?.key,
+      patientId: resolvedPatientId.value,
+    }
+  }
   const payload = {
     key: row.key,
     type: row.type,
@@ -937,11 +1159,6 @@ const toggleAutomationGroupBulk = async (card, val) => {
 }
 
 const toggleAutomationGroup = async (card, val) => {
-  if (props.selectedLeadIds?.length) {
-    await toggleAutomationGroupBulk(card, val)
-    return
-  }
-
   const keys = card?.templateKeys || []
   let groupRows
   if (keys.length) {
@@ -988,7 +1205,14 @@ const toggleAutomationGroup = async (card, val) => {
 const loadRows = async ({ force = false } = {}) => {
   try {
     let apiItems = []
-    if (resolvedLeadId.value) {
+    if (isBulkLeadMode.value) {
+      await Promise.all(
+        selectedLeadIdsNormalized.value.map((leadId) =>
+          crmStore.fetchLeadAutomations(leadId, { force })
+        )
+      )
+      apiItems = buildBulkRowsFromSelectedLeads()
+    } else if (resolvedLeadId.value) {
       await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force })
       apiItems = crmStore.automationRowsCache[Number(resolvedLeadId.value)] || []
     } else {
@@ -1036,6 +1260,17 @@ onBeforeUnmount(() => {
 })
 
 watch(resolvedLeadId, () => {
+  if (resolvedPatientId.value) return
+  clearAutomationSelection()
+  refresh({ forceRows: true })
+})
+
+watch(resolvedPatientId, () => {
+  clearAutomationSelection()
+  refresh({ forceRows: true })
+})
+
+watch(selectedLeadIdsNormalized, () => {
   clearAutomationSelection()
   refresh({ forceRows: true })
 })
@@ -1052,6 +1287,19 @@ watch(
       : cacheRows.filter(item => !defaultAutomationKeySet.has(item.key))
     rows.splice(0, rows.length, ...(filtered.length ? filtered : (props.includeDefaults ? crmAutomationDefaults : [])))
   }
+)
+
+watch(
+  () => selectedLeadIdsNormalized.value.map((leadId) => crmStore.automationRowsCache[leadId] || []),
+  () => {
+    if (!isBulkLeadMode.value) return
+    const nextRows = buildBulkRowsFromSelectedLeads()
+    const filtered = props.includeDefaults
+      ? nextRows
+      : nextRows.filter(item => !defaultAutomationKeySet.has(item.key))
+    rows.splice(0, rows.length, ...(filtered.length ? filtered : (props.includeDefaults ? crmAutomationDefaults : [])))
+  },
+  { deep: true }
 )
 
 // Preview dialog state
@@ -1071,7 +1319,7 @@ const previewItem = ref(null)
 
 const previewRecipient = computed(() => {
   return buildRecipientContext({
-    lead: props.lead || {},
+    lead: previewLeadLike.value,
     many: false,
     fallbackName: '[Patient Name]',
     fallbackEmail: '[Email]',
@@ -1079,6 +1327,13 @@ const previewRecipient = computed(() => {
   })
 })
 const openEdit = async (row) => {
+  if (resolvedPatientId.value && row?.sent) {
+    mainStore?.setSnackbar?.({
+      title: 'This automation was already sent and cannot be edited.',
+      type: 'info',
+    })
+    return
+  }
   active.value = row
   show.value = true
 
@@ -1110,6 +1365,7 @@ const openEdit = async (row) => {
 }
 
 const confirmDeleteAutomation = (row) => {
+  if (resolvedPatientId.value) return
   if (!row || defaultAutomationKeySet.has(row.key)) return
   deleteAutomationTarget.value = row
   showDeleteAutomation.value = true
@@ -1204,7 +1460,7 @@ const previewSubject = computed(() => {
   const def = resolveDefault(row)
   const rawSubject = row.subject || def.subject || def.name
   return applyCrmPlaceholders(rawSubject, {
-    lead: props.lead || null,
+    lead: previewLeadLike.value || null,
     recipient: previewRecipient.value,
     practiceName: practiceName.value,
     org: resolveOrgDetails(),
@@ -1217,7 +1473,7 @@ const previewHtml = computed(() => {
   const def = resolveDefault(row)
   const rawTemplate = row.template && row.template.trim() ? row.template : def.template || ''
   return applyCrmPlaceholders(rawTemplate, {
-    lead: props.lead || null,
+    lead: previewLeadLike.value || null,
     recipient: previewRecipient.value,
     practiceName: practiceName.value,
     org: resolveOrgDetails(),
@@ -1335,6 +1591,17 @@ const saveContent = async () => {
     }
     emit('update:rows', rows)
     const payload = buildPayload(active.value || {})
+    if (resolvedPatientId.value) {
+      const res = await patientJourneyService.saveAutomationTemplate(payload)
+      if (res?.code !== 0) {
+        mainStore?.setSnackbar?.({ title: res?.message || 'Failed to save automation', type: 'error' })
+        return
+      }
+      emit('save', payload)
+      show.value = false
+      mainStore?.setSnackbar?.({ title: 'Automation saved successfully', type: 'success' })
+      return
+    }
     const res = await crmStore.saveAutomation(payload)
     if (res?.code !== 0) {
       mainStore?.setSnackbar?.({ title: res?.message || 'Failed to save automation', type: 'error' })
@@ -1364,6 +1631,11 @@ const onToggleEnabled = async (row, val) => {
     trigger: row.trigger || def.trigger || undefined,
   })
   try {
+    if (resolvedPatientId.value) {
+      const res = await patientJourneyService.saveAutomationTemplate(payload)
+      if (res?.code !== 0) throw new Error(res?.message || 'Failed to update automation')
+      return
+    }
     await crmStore.saveAutomation(payload)
   } catch (e) {
     row.enabled = !row.enabled
@@ -1380,13 +1652,13 @@ const sendImmediateLeadMail = async (row) => {
     ? row.template
     : (def.template || '')
   const subject = applyCrmPlaceholders(rawSubject, {
-    lead: props.lead || null,
+    lead: previewLeadLike.value || null,
     recipient: previewRecipient.value,
     practiceName: practiceName.value,
     org: resolveOrgDetails(),
   })
   const html = applyCrmPlaceholders(rawTemplate, {
-    lead: props.lead || null,
+    lead: previewLeadLike.value || null,
     recipient: previewRecipient.value,
     practiceName: practiceName.value,
     org: resolveOrgDetails(),
@@ -1402,6 +1674,7 @@ const sendImmediateLeadMail = async (row) => {
 const resendingKey = ref(null)
 
 const handleResend = async (row) => {
+  if (resolvedPatientId.value) return
   if (resendingKey.value) return
   resendingKey.value = row.key
   try {
@@ -1420,6 +1693,7 @@ const handleResend = async (row) => {
 }
 
 const saveTrigger = async () => {
+  if (resolvedPatientId.value) return
   if (!triggerEditingRow.value) return
   try {
     const selectedRow = triggerEditingRow.value

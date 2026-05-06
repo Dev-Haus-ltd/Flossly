@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flossly Work Summary - Taha Iqbal</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f4f7fb;
+      color: #1f2937;
+      line-height: 1.6;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .page { max-width: 980px; margin: 0 auto; padding: 34px; }
+    .hero {
+      background: linear-gradient(135deg, #0b3558 0%, #1b4965 52%, #2a6f97 100%);
+      color: #fff;
+      border-radius: 14px;
+      padding: 34px 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 24px rgba(11, 53, 88, 0.25);
+    }
+    .hero h1 { font-size: 34px; margin-bottom: 6px; }
+    .hero p { color: #dbeafe; }
+    .meta { margin-top: 14px; font-size: 14px; }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      padding: 24px;
+      margin-bottom: 18px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      page-break-inside: avoid;
+    }
+    .title {
+      font-size: 22px;
+      color: #0b3558;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .stat {
+      background: #eef6ff;
+      border: 1px solid #cfe6ff;
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+    }
+    .stat .num { font-size: 28px; font-weight: 800; color: #0b3558; }
+    .stat .label { font-size: 12px; color: #4b5563; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+    th, td {
+      border-bottom: 1px solid #edf2f7;
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #1d4e89; color: #fff; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
+    ul { margin-left: 18px; }
+    li { margin: 6px 0; }
+    .tag {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-right: 6px;
+    }
+    .ok { background: #dcfce7; color: #166534; }
+    .muted { color: #6b7280; font-size: 13px; }
+    .commit {
+      font-family: Consolas, monospace;
+      font-size: 12.5px;
+      border-left: 3px solid #cbd5e1;
+      padding: 6px 10px;
+      margin: 5px 0;
+      background: #f8fafc;
+    }
+    .footer {
+      text-align: center;
+      color: #6b7280;
+      font-size: 12px;
+      margin-top: 8px;
+      padding-top: 10px;
+      border-top: 1px solid #e5e7eb;
+    }
+    @media print {
+      .page { padding: 0; max-width: none; }
+      .card, .hero { box-shadow: none; }
+      .grid { gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <h1>Flossly Work Summary</h1>
+      <p>Contribution review curated from verified local <code>prod</code> branch history for CV documentation</p>
+      <div class="meta">
+        <strong>Taha Iqbal</strong> | Full-Stack Developer<br />
+        Reviewed delivery window on <strong>prod</strong>: <strong>October 12, 2025</strong> to <strong>April 17, 2026</strong> (~27 weeks)
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="title">1) Contribution Snapshot</div>
+      <div class="grid">
+        <div class="stat"><div class="num">413</div><div class="label">Total Commits on prod</div></div>
+        <div class="stat"><div class="num">313</div><div class="label">Non-Merge Commits</div></div>
+        <div class="stat"><div class="num">396</div><div class="label">Unique Files Touched</div></div>
+        <div class="stat"><div class="num">+49,304</div><div class="label">Net Lines Added</div></div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Metric</th><th>Value</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Lines Added</td><td><strong>89,205</strong></td><td>From non-merge commits authored by Taha Iqbal on <code>prod</code></td></tr>
+          <tr><td>Lines Deleted</td><td><strong>39,901</strong></td><td>Cleanup, refactors, production fixes, and rewrites</td></tr>
+          <tr><td>Top Areas by Change Volume</td><td><strong>components, server, stores</strong></td><td>Based on aggregated numstat totals</td></tr>
+          <tr><td>Date Range</td><td><strong>2025-10-12 to 2026-04-17</strong></td><td>Verified from <code>git log prod --author="Taha Iqbal"</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <div class="title">2) Key Delivered Work (updated with AI features)</div>
+      <ul>
+        <li><strong>AI-powered CRM automation:</strong> shipped the AI automation generator with preview, retry, follow-up generation, and OpenAI-backed automation drafting for CRM workflows.</li>
+        <li><strong>AI messaging layer:</strong> merged Abdul Hanan's AI wrapper and LLM changes into <code>prod</code>, centralizing AI calls and later updating the DM system prompt behavior.</li>
+        <li><strong>Auto DM / auto reply:</strong> added AI-assisted DM auto-reply functionality for both Meta and WhatsApp, including follow-up fixes after initial rollout.</li>
+        <li><strong>Meta DM inbox:</strong> delivered the Meta DM system with dual OAuth, webhooks, history sync, queued delivery, attachments, story/share handling, and incremental sync fixes.</li>
+        <li><strong>CRM automation reliability:</strong> expanded send-now flows, resend support, sent status tracking, trigger handling, preview token fixes, and safer delete/refresh behavior.</li>
+        <li><strong>Meta analytics and sync hardening:</strong> shipped analytics to prod, added drill-downs and filters, aligned metrics with Ads Manager, and fixed creative image/video handling with S3 caching.</li>
+        <li><strong>WhatsApp chat and media workflows:</strong> improved connection UX, reactions/edit/delete handling, media upload/send reliability, placeholders, timeline rendering, and attachment persistence.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <div class="title">3) AI / Messaging Commits Worth Highlighting</div>
+      <div class="commit">68f684e | 2026-03-28 | Abdul Hanan (committed to prod by Taha) | Add AI automation generator with improved UI, preview, retry, and OpenAI generation flow</div>
+      <div class="commit">a3db9f6 | 2026-03-30 | Abdul Hanan (committed to prod by Taha) | Fix AI automation generator and add follow-up generation</div>
+      <div class="commit">624924a | 2026-04-10 | Abdul Hanan | Add AI wrapper and change LLM integration strategy</div>
+      <div class="commit">23ceeda | 2026-04-10 | Abdul Hanan | Add DM auto-reply functionality for Meta and WhatsApp</div>
+      <div class="commit">80f2bc1 | 2026-04-13 | Abdul Hanan | Fix auto-reply behavior in Meta and Whapi controllers</div>
+      <div class="commit">22d3849 | 2026-04-14 | Abdul Hanan | Update system prompt flow and add DM AI testing endpoint</div>
+      <div class="commit">51026b1 | 2026-02-24 | Taha Iqbal | Add Meta DM inbox with dual OAuth, webhooks, and queued delivery</div>
+      <div class="commit">8362612 | 2026-03-31 | Taha Iqbal | Overhaul CRM automation system with triggers, history, performance, and WhatsApp UX improvements</div>
+      <div class="commit">5ca0755 | 2026-04-01 | Taha Iqbal | Add DM media attachments, UI refinements, and remove beta flag</div>
+      <div class="commit">c0b50e9 | 2026-04-02 | Taha Iqbal | Improve DM inbox with profile handling, attachments, story/share support, and UX polish</div>
+      <p class="muted" style="margin-top:8px;">This list is intentionally focused on AI automation, DM auto-reply, Meta/WhatsApp messaging, and nearby production hardening work.</p>
+    </section>
+
+    <section class="card">
+      <div class="title">4) Source Review Notes</div>
+      <p><span class="tag ok">Primary Source</span> Local <code>prod</code> branch commit history</p>
+      <p><span class="tag ok">Current Checkout</span> Repository currently checked out on <code>dev-usama</code>; summary content above was compiled from <code>git log prod</code></p>
+      <p class="muted" style="margin-top:8px;">The working tree currently has unrelated local edits in patient/diary files, so this document was updated without assuming a clean branch state.</p>
+    </section>
+
+    <section class="card">
+      <div class="title">5) CV-Ready Contribution Summary</div>
+      <ul>
+        <li>Delivered and productionized core CRM messaging features across Meta DMs and WhatsApp, including inbox sync, attachments, webhooks, connection handling, and UX stabilization.</li>
+        <li>Helped bring AI capabilities into Flossly CRM by shipping AI-generated automations, merging the AI wrapper / LLM abstraction work, and integrating DM auto-reply flows for Meta and WhatsApp.</li>
+        <li>Contributed 413 commits on <code>prod</code> (313 non-merge), touching 396 files with roughly <strong>+49K</strong> net lines across frontend, backend APIs, automation systems, and integrations.</li>
+      </ul>
+    </section>
+
+    <div class="footer">
+      Report updated on April 20, 2026 from local repository <code>c:\Users\tahai\PersonalProjects\Flossly</code> using verified <code>prod</code> history
+    </div>
+  </div>
+</body>
+</html>

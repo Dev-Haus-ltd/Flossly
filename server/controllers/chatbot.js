@@ -406,7 +406,7 @@ export const createAppointmentViaChatbot = async (event) => {
         }
       });
       if (treatment) {
-        amount = Number(treatment.amount || 0);
+        amount = Number(treatment.price ?? 0);
         if (!treatmentName) {
           treatmentName = treatment.name;
         }
@@ -566,6 +566,7 @@ export const createLeadViaChatbot = async (event) => {
       if (userIds.length) {
         await sendNotificationToMultipleUsers({
           userIds,
+          organisationId: Number(organisationId),
           title: 'New Chatbot Lead',
           body: created.name || created.email || 'A new lead was received from chatbot',
           type: 'lead_created',
@@ -575,6 +576,7 @@ export const createLeadViaChatbot = async (event) => {
             leadId: String(created.id),
             leadName: created.name || created.email,
             leadSource: 'Chatbot',
+            organisationId: String(organisationId),
             url: `/crm/leads?leadId=${created.id}`,
           },
           priority: 'high',

@@ -496,7 +496,16 @@ export const useFCM = () => {
   // Listen for messages from service worker (background notifications)
   const setupServiceWorkerListener = () => {
     if (process.client && 'serviceWorker' in navigator) {
+      const router = useRouter();
       navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'SW_NAVIGATE') {
+          const targetUrl = event.data?.url;
+          if (targetUrl) {
+            router.push(targetUrl).catch(() => {});
+          }
+          return;
+        }
+
         if (event.data && event.data.type === 'FCM_NOTIFICATION') {
           console.log('Background notification received from service worker:', event.data.payload);
           

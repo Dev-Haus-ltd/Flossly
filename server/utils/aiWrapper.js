@@ -1,5 +1,25 @@
 let anthropicClient = null;
 
+function parseJsonObject(raw = "") {
+  const text = String(raw || "").trim();
+  if (!text) throw new Error("Empty AI response");
+
+  const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fencedMatch?.[1]?.trim() || text;
+
+  try {
+    return JSON.parse(candidate);
+  } catch {}
+
+  const firstBrace = candidate.indexOf("{");
+  const lastBrace = candidate.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return JSON.parse(candidate.slice(firstBrace, lastBrace + 1));
+  }
+
+  throw new Error("Failed to parse AI JSON response");
+}
+
 function getConfig() {
   return useRuntimeConfig();
 }
@@ -340,11 +360,175 @@ Return ONLY the JSON object with "automations" array. No other text.`;
   return automations;
 }
 
+export async function generateTreatmentPlanContentDraft({
+  organisationName,
+  organisationType,
+  patientName,
+  planName,
+  currentContent = {},
+  organisationDefaults = {},
+  practitioners = [],
+  research = {},
+}) {
+  const systemPrompt = `You write polished, credible marketing-style content for dental treatment plans.
+
+Return ONLY valid JSON. Do not wrap in markdown. Do not add commentary.
+
+Rules:
+- Use only the facts provided in the input. If a detail is missing, keep the field empty rather than inventing it.
+- Keep tone professional, warm, and patient-friendly.
+- Avoid clinical claims, guarantees, awards, years of experience, qualifications, or service specifics unless they were explicitly provided in the input.
+- Testimonials must sound generic and safe unless exact quotes were provided.
+- Prefer concise copy that fits a treatment plan PDF.
+
+Output schema:
+{
+  "cover": {
+    "title": "string",
+    "subtitle": "string",
+    "imageUrl": "string",
+    "sourceUrl": "string",
+    "sourceLabel": "string"
+  },
+  "practice": {
+    "title": "string",
+    "about": "string",
+    "imageUrl": "string",
+    "website": "string",
+    "phone": "string",
+    "email": "string",
+    "address": "string",
+    "sourceUrl": "string",
+    "sourceLabel": "string"
+  },
+  "dentists": [
+    {
+      "id": null,
+      "name": "string",
+      "role": "string",
+      "bio": "string",
+      "imageUrl": "string",
+      "sourceUrl": "string",
+      "sourceLabel": "string"
+    }
+  ],
+  "testimonials": ["string"],
+  "paymentPlan": { "intro": "string" },
+  "consentForm": { "intro": "string" }
+}`;
+
+  const prompt = `Build a treatment plan content draft for:
+- Organisation: ${organisationName || ""}
+- Organisation type: ${organisationType || ""}
+- Patient name: ${patientName || ""}
+- Plan name: ${planName || ""}
+
+CURRENT CONTENT:
+${JSON.stringify(currentContent, null, 2)}
+
+ORGANISATION DEFAULTS:
+${JSON.stringify(organisationDefaults, null, 2)}
+
+PRACTITIONERS:
+${JSON.stringify(practitioners, null, 2)}
+
+RESEARCH:
+${JSON.stringify(research, null, 2)}
+
+Instructions:
+- Reuse the strongest existing/default values where appropriate.
+- If research includes a better cover or clinic image URL, use it.
+- Write the practice about section in 2-4 sentences max.
+- Write each dentist bio in 2-3 sentences max.
+- Return 2-4 testimonials only if there is enough credible source material or existing defaults; otherwise return an empty array.
+- Keep paymentPlan.intro and consentForm.intro empty unless the input already provides safe non-clinical copy.`;
+
+  const responseText = await chat({
+    prompt,
+    systemPrompt,
+    temperature: 0.2,
+    maxTokens: 2200,
+  });
+
+  return parseJsonObject(responseText);
+}
+
+export async function applyClinicalNoteTemplateDraft({
+  templateType,
+  templateTitle,
+  templateContent,
+  rawNote,
+  currentNote = "",
+  patientContext = {},
+  itemContext = {},
+}) {
+  const systemPrompt = `You are a dental clinical note assistant.
+
+Return ONLY valid JSON. Do not wrap in markdown. Do not add commentary.
+
+Rules:
+- Use the selected template as the output structure whenever possible.
+- Use only the facts supplied in the raw note, current note, patient context, and item context.
+- Never invent clinical findings, treatments, dates, surfaces, or diagnoses.
+- If information is missing, leave the section concise and neutral rather than making up details.
+- If important template sections could not be completed confidently, add one or more short UI warnings.
+- Warnings are for a banner above the editor and must not be inserted into the final note body.
+
+Output schema:
+{
+  "finalNote": "string",
+  "warnings": ["string"]
+}`
+
+  const prompt = `Template type: ${templateType || ""}
+Template title: ${templateTitle || ""}
+
+TEMPLATE CONTENT:
+${templateContent || ""}
+
+CURRENT NOTE:
+${currentNote || ""}
+
+RAW NOTE:
+${rawNote || ""}
+
+PATIENT CONTEXT:
+${JSON.stringify(patientContext || {}, null, 2)}
+
+ITEM CONTEXT:
+${JSON.stringify(itemContext || {}, null, 2)}
+
+Instructions:
+- Merge the raw note into the selected template.
+- Preserve useful existing content from CURRENT NOTE only when it is consistent with the RAW NOTE and context.
+- Keep the final note readable and suitable for a patient chart.
+- If RAW NOTE is too sparse to complete important sections, return a warning like "Some information may be incomplete or inaccurate. Please review before saving."
+- If the template is not usable, return the best clean note you can plus a warning.
+- finalNote must always be returned as HTML-friendly plain text or simple structured text, not JSON fragments.`
+
+  const responseText = await chat({
+    prompt,
+    systemPrompt,
+    temperature: 0.1,
+    maxTokens: 2200,
+  })
+
+  const parsed = parseJsonObject(responseText)
+  return {
+    finalNote: String(parsed?.finalNote || currentNote || templateContent || '').trim(),
+    warnings: Array.isArray(parsed?.warnings)
+      ? parsed.warnings.map((item) => String(item || '').trim()).filter(Boolean)
+      : [],
+  }
+}
+
 export const aiWrapper = {
   chat,
   summarize,
   generateAutomations,
   generateAutoReply,
+  generateTreatmentPlanContentDraft,
+  applyClinicalNoteTemplateDraft,
   getLlmModel,
 };
 

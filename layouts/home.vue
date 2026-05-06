@@ -76,6 +76,137 @@
         </div>
       </v-card>
     </v-dialog>
+    <!-- ── WhatsApp activation banner (persists across navigation) ── -->
+    <v-card
+      v-if="whapiActivating"
+      class="whapi-activation-banner"
+      elevation="8"
+      rounded="xl"
+    >
+      <div class="d-flex align-center gap-3 px-4 pt-4 pb-3">
+        <div
+          class="d-flex align-center justify-center rounded-circle flex-shrink-0"
+          style="width:40px;height:40px;background:#e8f5e9"
+        >
+          <v-icon color="#25D366" size="20">mdi-whatsapp</v-icon>
+        </div>
+        <div class="flex-grow-1 min-w-0">
+          <p class="text-body-2 font-weight-semibold mb-0">Setting up WhatsApp</p>
+          <p class="text-caption text-medium-emphasis mb-2">QR code will appear automatically in ~1–2 min</p>
+          <v-progress-linear
+            :model-value="whapiActivationProgress"
+            color="#25D366"
+            bg-color="green-lighten-4"
+            rounded
+            height="5"
+          />
+        </div>
+        <v-btn
+          icon
+          variant="text"
+          size="small"
+          density="compact"
+          class="flex-shrink-0 ml-1"
+          @click="dismissActivation"
+        >
+          <v-icon size="16">mdi-close</v-icon>
+        </v-btn>
+      </div>
+    </v-card>
+
+    <!-- ── WhatsApp QR dialog (persists across navigation) ── -->
+    <v-dialog v-model="whapiDialog" max-width="460">
+      <v-card class="rounded-xl" elevation="2">
+        <div class="d-flex align-center justify-space-between px-5 pt-4 pb-3">
+          <div class="d-flex align-center gap-2">
+            <v-icon size="18" color="#25D366">mdi-whatsapp</v-icon>
+            <span class="text-subtitle-2 font-weight-semibold">WhatsApp Connection</span>
+            <v-chip :color="whapiStatusColor" size="x-small" label class="ml-1">{{ whapiStatusLabel }}</v-chip>
+          </div>
+          <v-btn icon variant="text" size="small" density="compact" @click="whapiDialog = false">
+            <v-icon size="16">mdi-close</v-icon>
+          </v-btn>
+        </div>
+
+        <v-divider />
+
+        <div class="px-5 py-4">
+          <div v-if="whapiQr" class="d-flex flex-column align-center gap-3">
+            <div style="position:relative;display:inline-block">
+              <img
+                :src="whapiQr"
+                alt="WhatsApp QR"
+                style="width:200px;height:200px;border-radius:10px;border:1px solid rgba(0,0,0,0.08);display:block"
+              />
+            </div>
+            <div class="text-center">
+              <p class="text-body-2 font-weight-medium mb-1">Scan with WhatsApp</p>
+              <p class="text-caption text-medium-emphasis" style="max-width:300px">
+                Open WhatsApp → <strong>⋮</strong> Menu (or Settings) →
+                <strong>Linked Devices</strong> → <strong>Link a Device</strong>
+              </p>
+            </div>
+            <v-alert type="info" variant="tonal" density="compact" class="w-100 text-caption py-2">
+              QR code refreshes automatically — keep this window open while scanning
+            </v-alert>
+          </div>
+
+          <div v-else-if="whapiDisplayLabel && isWhatsAppConnected" class="d-flex flex-column align-center gap-2 py-3">
+            <div
+              class="d-flex align-center justify-center rounded-circle"
+              style="width:52px;height:52px;background:#e8f5e9"
+            >
+              <v-icon color="success" size="26">mdi-check</v-icon>
+            </div>
+            <p class="text-body-2 font-weight-semibold mt-1">WhatsApp Connected</p>
+            <p class="text-caption text-medium-emphasis">{{ whapiDisplayLabel }}</p>
+          </div>
+
+          <div v-else class="d-flex flex-column align-center gap-3 py-3">
+            <v-progress-circular indeterminate color="primary" size="44" width="3" />
+            <div class="text-center">
+              <p class="text-body-2 font-weight-medium mb-1">{{ whapiSpinnerTitle }}</p>
+              <p class="text-caption text-medium-emphasis">{{ whapiSpinnerSubtitle }}</p>
+            </div>
+            <v-alert
+              v-if="isNewChannel"
+              type="info"
+              variant="tonal"
+              density="compact"
+              class="w-100 text-caption py-2"
+            >
+              Do not close this window. The QR code is on its way.
+            </v-alert>
+            <v-alert
+              v-else-if="whapiQrWarning"
+              type="warning"
+              variant="tonal"
+              density="compact"
+              class="w-100 text-caption py-2"
+            >
+              {{ whapiQrWarning }}
+            </v-alert>
+          </div>
+        </div>
+
+        <template v-if="whapiQr">
+          <v-divider />
+          <div class="d-flex justify-end px-5 py-3">
+            <v-btn
+              size="small"
+              variant="outlined"
+              color="grey-darken-1"
+              :loading="whapiLoading"
+              @click="refreshWhapiQr"
+            >
+              <v-icon size="13" class="mr-1">mdi-refresh</v-icon>
+              Refresh QR
+            </v-btn>
+          </div>
+        </template>
+      </v-card>
+    </v-dialog>
+
     <v-dialog
       v-model="trialExpiredDialog"
       max-width="640"
@@ -131,8 +262,32 @@
 <script setup>
 import { useDisplay } from "vuetify";
 import PricingModal from "@/components/signUpSetup/PricingModal.vue";
+import { useWhapiStream } from "@/composables/useWhapiStream";
 
 const { smAndDown } = useDisplay();
+
+// ── WhatsApp activation state (shared with overview.vue via composable) ──────
+const {
+  whapiActivating,
+  whapiActivationProgress,
+  isNewChannel,
+  whapiQr,
+  whapiQrWarning,
+  whapiDialog,
+  isWhatsAppConnected,
+  whapiLoading,
+  whapiDisplayLabel,
+  whapiStatusLabel,
+  whapiStatusColor,
+  whapiSpinnerTitle,
+  whapiSpinnerSubtitle,
+  startWhapiStatusStream,
+  stopWhapiStatusStream,
+  stopActivationProgress,
+  stopAllQrTimers,
+  dismissActivation,
+  refreshWhapiQr,
+} = useWhapiStream();
 const drawer = ref(true);
 const rail = ref(false);
 const onDrawerChange = () => {
@@ -342,6 +497,9 @@ onBeforeUnmount(() => {
   if (typeof window !== "undefined") {
     window.removeEventListener("resize", updateBannerHeight);
   }
+  stopWhapiStatusStream();
+  stopAllQrTimers();
+  stopActivationProgress();
 });
 const menuItems = computed(() => {
   // Read license type to refresh menu when preferences change.
@@ -375,6 +533,8 @@ onMounted(async () => {
   if (!user.value) {
     router.push("/logout");
   }
+  // Start SSE here so it persists across page navigation
+  startWhapiStatusStream();
 });
 
 watch(
@@ -620,6 +780,15 @@ watch(
   justify-content: flex-end;
   gap: 12px;
   padding: 8px 4px 4px;
+}
+
+.whapi-activation-banner {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 320px;
+  z-index: 1000;
+  border: 1px solid #c8e6c9;
 }
 
 @media (max-width: 768px) {

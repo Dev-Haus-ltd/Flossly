@@ -211,23 +211,32 @@ self.addEventListener('notificationclick', (event) => {
   urlToOpen = appendOrgId(urlToOpen);
 
   // Open the URL in a window
+  const absoluteUrl = new URL(urlToOpen, self.location.origin).href;
+
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
       // Check if there's already a window open
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
-        if (client.url.includes(self.registration.scope) && 'focus' in client) {
-          return client.focus().then(client => {
-            // Navigate to the URL
-            if ('navigate' in client) {
-              return client.navigate(urlToOpen);
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          const focusedClient = await client.focus();
+          // Post SW_NAVIGATE so the Vue router handles SPA navigation (no full reload).
+          // Falls back to navigate() if postMessage isn't available.
+          if (focusedClient) {
+            try {
+              focusedClient.postMessage({ type: 'SW_NAVIGATE', url: urlToOpen });
+            } catch (_) {
+              if ('navigate' in focusedClient) {
+                focusedClient.navigate(absoluteUrl);
+              }
             }
-          });
+          }
+          return;
         }
       }
-      // If no window is open, open a new one
+      // If no window is open, open a new one with an absolute URL
       if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
+        return clients.openWindow(absoluteUrl);
       }
     })
   );
