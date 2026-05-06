@@ -426,6 +426,11 @@ function getVisibleTreatmentItems(fdi) {
   return visibleTreatmentItems.value.filter((item) => Number(item.fdi) === Number(fdi))
 }
 
+function surfaceShortLabel(surfaceValue) {
+  const surfaces = String(surfaceValue || '').split('+').filter(Boolean)
+  return surfaces.map((surface) => surface.charAt(0).toUpperCase()).join('/')
+}
+
 function onToothMouseEnter(fdi, event) {
   const items = getVisibleTreatmentItems(fdi)
   const annotation = getBaseAnnotation(fdi)
@@ -449,7 +454,7 @@ function onToothMouseEnter(fdi, event) {
 
   lines.push(...items.map((i) => {
     const toothLabel = TEETH_BY_FDI[fdi]?.palmer || String(fdi)
-    const surf = i.surface ? ` - ${i.surface.charAt(0).toUpperCase()}` : ''
+    const surf = i.surface ? ` - ${surfaceShortLabel(i.surface)}` : ''
     const label = i.treatmentName || i.conditionLabel || i.condition || 'Treatment'
     const text = `${toothLabel}${surf} - ${label}`
     const dateStr = i.createdAt

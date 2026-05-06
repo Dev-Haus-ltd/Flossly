@@ -39,7 +39,7 @@
             <div v-for="item in baseItems" :key="item.id || item._tempId" class="psp-tp-item">
               <span class="psp-tp-tooth">{{ toothLabel(item) }}</span>
               <span class="psp-tp-name">{{ item.conditionLabel || item.condition || '—' }}</span>
-              <span class="psp-tp-cost">{{ item.surface || 'Full tooth' }}</span>
+              <span class="psp-tp-cost">{{ String(item.surface || '').split('+').filter(Boolean).join(' / ') || 'Full tooth' }}</span>
             </div>
           </div>
         </div>
@@ -88,7 +88,8 @@ function isSectionEnabled(key) {
 
 function toothLabel(item) {
   const base = getToothLabel(item.fdi, props.notation)
-  return item.surface ? `${base}-${item.surface.charAt(0).toUpperCase()}` : base
+  const surfaces = String(item.surface || '').split('+').filter(Boolean)
+  return surfaces.length ? `${base}-${surfaces.map((surface) => surface.charAt(0).toUpperCase()).join('/')}` : base
 }
 
 function toggleSection(key) {

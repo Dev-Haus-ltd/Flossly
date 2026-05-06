@@ -243,13 +243,13 @@ export const useMainStore = defineStore("mainStore", {
               to: "/crm/analytics",
               featureKey: "crm",
             },
-            // {
-            //   title: "Google Analytics",
-            //   value: "crm Google Analytics",
-            //   imgPath: crmIcon,
-            //   to: "/crm/google_analytics",
-            //   featureKey: "crm",
-            // },
+            {
+              title: "Google Analytics",
+              value: "crm Google Analytics",
+              imgPath: crmIcon,
+              to: "/crm/google_analytics",
+              featureKey: "crm",
+            },
             // {
             //   title: "Google Ads Analytics",
             //   value: "crm Google Ads Analytics",

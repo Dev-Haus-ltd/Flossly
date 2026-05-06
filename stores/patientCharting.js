@@ -20,6 +20,7 @@ import {
 const _saveTimers = {}
 const STATUS_ANNOTATION_CODE = '__STATUS_ANNOTATION__'
 const DIAGNOSIS_ANNOTATION_CODE = '__DIAGNOSIS_ANNOTATION__'
+const SURFACE_ORDER = ['mesial', 'distal', 'buccal', 'lingual', 'occlusal']
 const DIAGNOSIS_LABELS = {
   drifted_mesially: 'Drifted Mesially',
   drifted_distally: 'Drifted Distally',
@@ -28,6 +29,26 @@ const DIAGNOSIS_LABELS = {
   over_erupted: 'Over Erupted',
   impacted: 'Impacted',
   mobile: 'Mobile',
+}
+
+function normalizeSurfaceList(surfaceOrList) {
+  const raw = Array.isArray(surfaceOrList)
+    ? surfaceOrList
+    : String(surfaceOrList || '').split('+').map((item) => item.trim()).filter(Boolean)
+  return [...new Set(raw)]
+    .filter((surface) => SURFACE_ORDER.includes(surface))
+    .sort((a, b) => SURFACE_ORDER.indexOf(a) - SURFACE_ORDER.indexOf(b))
+}
+
+function serializeSurfaceList(surfaceOrList) {
+  const normalized = normalizeSurfaceList(surfaceOrList)
+  return normalized.length ? normalized.join('+') : null
+}
+
+function surfaceListsOverlap(left, right) {
+  const leftList = normalizeSurfaceList(left)
+  const rightList = normalizeSurfaceList(right)
+  return leftList.some((surface) => rightList.includes(surface))
 }
 
 export const usePatientChartingStore = defineStore('patientChartingStore', {
@@ -53,6 +74,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     chartScope: 'both',         // 'base' | 'plan' | 'both'
     toothStatuses: {},          // map of fdi → status string
     appointments: [makeDefaultAppointment()],
+    activeAppointmentId: DEFAULT_APPOINTMENT_ID,
     plans: [makeDefaultPlan()],
     activePlanId: DEFAULT_PLAN_ID,
     favoriteCodeIds: [],
@@ -289,6 +311,9 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       }
       this.activePlanId = plan.id
       this.appointments = plan.appointments.map((a) => ({ ...a }))
+      if (!this.appointments.some((appt) => appt.id === this.activeAppointmentId)) {
+        this.activeAppointmentId = this.appointments[0]?.id || DEFAULT_APPOINTMENT_ID
+      }
     },
     _saveActivePlanAppointments() {
       const idx = this.plans.findIndex((p) => p.id === this.activePlanId)
@@ -326,6 +351,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     async loadChart(patientId) {
       this.toothStatuses = {}
       this.appointments = this._defaultAppointments()
+      this.activeAppointmentId = DEFAULT_APPOINTMENT_ID
       this.plans = [makeDefaultPlan()]
       this.activePlanId = DEFAULT_PLAN_ID
       this.activeCodeId = null
@@ -452,14 +478,15 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     },
 
     // ── Apply condition to a surface or full tooth ───────────────────────
-    applyCondition(fdi, surface) {
+    applyCondition(fdi, surface, options = {}) {
       const selectedTreatment = this._getActiveTreatment()
       const mappedCondition = selectedTreatment?.conditionKey || null
       const condition = this.activeCondition || mappedCondition
       const condMeta = condition ? CONDITIONS[condition] : null
       const hasConditionFlow = !!(condition && condMeta)
-
-      if (!hasConditionFlow && !selectedTreatment) return
+      const combine = !!options?.combine
+      const removeRequested = !!options?.remove
+      const targetSurfaces = normalizeSurfaceList(options?.surfaces?.length ? options.surfaces : surface)
 
       if (!this.chart[fdi]) {
         this.chart[fdi] = createDefaultTooth(fdi)
@@ -468,6 +495,26 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       const status = this.mode === 'treatment' ? 'planned'
                    : this.mode === 'completed' ? 'completed'
                    : 'existing'
+
+      if (removeRequested && targetSurfaces.length) {
+        const surfaceCondition = tooth.surfaces?.[targetSurfaces[0]]?.condition || null
+        let removedItems = []
+        if (surfaceCondition) {
+          removedItems = this._removeTreatmentItemsBySurfaceGroup(fdi, serializeSurfaceList(targetSurfaces), surfaceCondition, status, selectedTreatment)
+        }
+        const surfacesToClear = removedItems.length
+          ? [...new Set(removedItems.flatMap((item) => normalizeSurfaceList(item.surface)))]
+          : targetSurfaces
+        surfacesToClear.forEach((name) => {
+          if (!tooth.surfaces?.[name]) return
+          tooth.surfaces[name].condition = null
+          tooth.surfaces[name].status = 'existing'
+        })
+        this._scheduleSave(fdi)
+        return
+      }
+
+      if (!hasConditionFlow && !selectedTreatment) return
 
       if (hasConditionFlow && condition === 'missing') {
         // Toggle missing
@@ -499,17 +546,27 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         } else {
           this._removeTreatmentItem(fdi, null, condition, status, selectedTreatment)
         }
-      } else if (hasConditionFlow && condMeta.surface && surface) {
+      } else if (hasConditionFlow && condMeta.surface && targetSurfaces.length) {
         // Surface condition
-        const surf = tooth.surfaces[surface]
-        if (!surf) return
-        const wasApplied = surf.condition === condition
-        surf.condition = wasApplied ? null : condition
-        surf.status    = wasApplied ? 'existing' : status
-        if (!wasApplied) {
-          this._maybeAddTreatmentItem(fdi, surface, condition, condMeta, status, selectedTreatment)
+        const serializedSurfaces = serializeSurfaceList(targetSurfaces)
+        const wasApplied = targetSurfaces.every((name) => tooth.surfaces?.[name]?.condition === condition)
+        if (removeRequested || wasApplied) {
+          targetSurfaces.forEach((name) => {
+            if (!tooth.surfaces?.[name]) return
+            tooth.surfaces[name].condition = null
+            tooth.surfaces[name].status = 'existing'
+          })
+          this._removeTreatmentItem(fdi, serializedSurfaces, condition, status, selectedTreatment)
         } else {
-          this._removeTreatmentItem(fdi, surface, condition, status, selectedTreatment)
+          targetSurfaces.forEach((name) => {
+            if (!tooth.surfaces?.[name]) return
+            tooth.surfaces[name].condition = condition
+            tooth.surfaces[name].status = status
+          })
+          if (combine && targetSurfaces.length > 1) {
+            this._removeTreatmentItemsBySurfaceGroup(fdi, serializedSurfaces, condition, status, selectedTreatment)
+          }
+          this._maybeAddTreatmentItem(fdi, serializedSurfaces, condition, condMeta, status, selectedTreatment)
         }
       } else if (hasConditionFlow && condMeta.fullTooth) {
         // Can also act as full-tooth if surface supports it
@@ -523,7 +580,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         // Persist a treatment plan item directly so the click still has a useful effect.
         this._maybeAddTreatmentItem(
           fdi,
-          surface || null,
+          serializeSurfaceList(targetSurfaces),
           null,
           null,
           status,
@@ -575,8 +632,33 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     },
 
     // ── Treatment Plan helpers ───────────────────────────────────────────
+    _removeTreatmentItemsBySurfaceGroup(fdi, surfaceGroup, condition, status = 'planned', treatment = null) {
+      const isBaseChartItem = status === 'existing'
+      const treatmentId = treatment?.id || null
+      const treatmentCode = treatment?.code || null
+      const removed = []
+      this.treatmentPlan = this.treatmentPlan.filter((item) => {
+        if (Number(item.fdi) !== Number(fdi)) return true
+        const itemIsBase = !item.appointmentGroupId
+        if (itemIsBase !== isBaseChartItem) return true
+        if (treatmentId && Number(item.treatmentId || 0) !== Number(treatmentId)) return true
+        if (!treatmentId && treatmentCode && String(item.treatmentCode || '') !== String(treatmentCode)) return true
+        if (!treatmentId && !treatmentCode && item.condition !== condition) return true
+        if (!surfaceListsOverlap(item.surface, surfaceGroup)) return true
+        removed.push(item)
+        return false
+      })
+      removed
+        .filter((item) => item.id)
+        .forEach((item) => {
+          patientChartingService.deleteTreatmentPlanItem(item.id).catch((error) => this._logError('deleteGroupedTreatmentPlanItem', error))
+        })
+      return removed
+    },
+
     _maybeAddTreatmentItem(fdi, surface, condition, condMeta, status, treatment = null) {
       const isBaseChartItem = status === 'existing'
+      const normalizedSurface = serializeSurfaceList(surface)
       const treatmentId = treatment?.id || null
       const treatmentCode = treatment?.code || null
       const treatmentName = treatment?.name || null
@@ -584,7 +666,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       // would be falsely deduplicated). Now match by treatmentId first, then code, then condition.
       const exists = this.treatmentPlan.find(
         (i) => {
-          if (i.fdi !== fdi || i.surface !== surface) return false
+          if (i.fdi !== fdi || serializeSurfaceList(i.surface) !== normalizedSurface) return false
           const itemIsBase = !i.appointmentGroupId
           if (itemIsBase !== isBaseChartItem) return false
           if (treatmentId) return Number(i.treatmentId || 0) === Number(treatmentId)
@@ -595,11 +677,11 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       if (exists) return
       const priority = this.treatmentPlan.length + 1
       const item = {
-        _tempId: `${Date.now()}-${fdi}-${surface}-${condition}`,
+        _tempId: `${Date.now()}-${fdi}-${normalizedSurface}-${condition}`,
         planId: this.activePlanId || DEFAULT_PLAN_ID,
         planName: this.plans.find((p) => p.id === (this.activePlanId || DEFAULT_PLAN_ID))?.name || DEFAULT_PLAN_NAME,
         fdi,
-        surface,
+        surface: normalizedSurface,
         condition,
         conditionLabel: treatmentName || condMeta?.label || null,
         treatmentId,
@@ -610,7 +692,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         priority,
         status,
         notes: '',
-        appointmentGroupId: isBaseChartItem ? null : (this.appointments[0]?.id || DEFAULT_APPOINTMENT_ID),
+        appointmentGroupId: isBaseChartItem ? null : (this.activeAppointmentId || this.appointments[0]?.id || DEFAULT_APPOINTMENT_ID),
         appointmentId: null,
         clinicianName: '',
         practitionerId: null,
@@ -629,16 +711,17 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
           }).catch((error) => this._logError('createTreatmentPlanItem', error))
       }
       const label = item.treatmentName || item.conditionLabel || item.condition || 'Treatment'
-      this._logHistory('Treatment item added', `${label} on tooth ${fdi}${surface ? `-${surface}` : ''}`)
+      this._logHistory('Treatment item added', `${label} on tooth ${fdi}${normalizedSurface ? `-${normalizedSurface}` : ''}`)
     },
 
     _removeTreatmentItem(fdi, surface, condition, status = 'planned', treatment = null) {
       const isBaseChartItem = status === 'existing'
+      const normalizedSurface = serializeSurfaceList(surface)
       const treatmentId = treatment?.id || null
       const treatmentCode = treatment?.code || null
       const idx = this.treatmentPlan.findIndex(
         (i) => {
-          if (i.fdi !== fdi || i.surface !== surface) return false
+          if (i.fdi !== fdi || serializeSurfaceList(i.surface) !== normalizedSurface) return false
           const itemIsBase = !i.appointmentGroupId
           if (itemIsBase !== isBaseChartItem) return false
           if (treatmentId) return Number(i.treatmentId || 0) === Number(treatmentId)
@@ -652,7 +735,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       if (item.id) {
         patientChartingService.deleteTreatmentPlanItem(item.id).catch((error) => this._logError('deleteTreatmentPlanItem', error))
       }
-      this._logHistory('Treatment item removed', `${condition} on tooth ${fdi}${surface ? `-${surface}` : ''}`)
+      this._logHistory('Treatment item removed', `${condition} on tooth ${fdi}${normalizedSurface ? `-${normalizedSurface}` : ''}`)
     },
 
     async updateTreatmentItem(itemOrId, patch) {
@@ -673,8 +756,13 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         this.treatmentPlan.splice(idx, 1)
         // Also clear from chart
         if (item.fdi && this.chart[item.fdi]) {
-          if (item.surface && this.chart[item.fdi].surfaces[item.surface]) {
-            this.chart[item.fdi].surfaces[item.surface] = { condition: null, status: 'existing' }
+          const surfaces = normalizeSurfaceList(item.surface)
+          if (surfaces.length) {
+            surfaces.forEach((surface) => {
+              if (this.chart[item.fdi].surfaces?.[surface]) {
+                this.chart[item.fdi].surfaces[surface] = { condition: null, status: 'existing' }
+              }
+            })
           } else {
             this.chart[item.fdi].toothCondition = null
           }
@@ -956,7 +1044,9 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
     },
     addAppointment() {
       const n = this.appointments.length + 1
-      this.appointments.push({ id: `appt-${Date.now()}`, name: `Appointment ${n}`, status: 'pending' })
+      const id = `appt-${Date.now()}`
+      this.appointments.push({ id, name: `Appointment ${n}`, status: 'pending' })
+      this.activeAppointmentId = id
       this._saveActivePlanAppointments()
       this._logHistory('Appointment group added', `Plan ${this.activePlanId}`)
     },
@@ -968,6 +1058,9 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         patientChartingService.deleteTreatmentPlanItem(item.id).catch((error) => this._logError('deleteAppointmentItems', error))
       })
       if (!this.appointments.length) this.appointments = this._defaultAppointments()
+      if (this.activeAppointmentId === id || !this.appointments.some((appt) => appt.id === this.activeAppointmentId)) {
+        this.activeAppointmentId = this.appointments[0]?.id || DEFAULT_APPOINTMENT_ID
+      }
       this._saveActivePlanAppointments()
       this._logHistory('Appointment group deleted', id)
     },
@@ -975,6 +1068,77 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       const appt = this.appointments.find(a => a.id === id)
       if (appt) Object.assign(appt, patch)
       this._saveActivePlanAppointments()
+    },
+    setActiveAppointment(id) {
+      if (!id || !this.appointments.some((appt) => appt.id === id)) return
+      this.activeAppointmentId = id
+    },
+    async moveTreatmentItem({ id, toAppointmentId, toIndex = null }) {
+      if (!id || !toAppointmentId) return
+      const planId = this.activePlanId || DEFAULT_PLAN_ID
+      const activeItems = [...this.treatmentPlan]
+        .filter((item) => (item.planId || DEFAULT_PLAN_ID) === planId)
+        .sort((a, b) => a.priority - b.priority)
+      const moved = activeItems.find((item) => (item.id || item._tempId) === id)
+      if (!moved) return
+
+      const fromAppointmentId = moved.appointmentGroupId || DEFAULT_APPOINTMENT_ID
+      const grouped = new Map(this.appointments.map((appt) => [appt.id, []]))
+      activeItems.forEach((item) => {
+        if ((item.id || item._tempId) === id) return
+        const groupId = item.appointmentGroupId || DEFAULT_APPOINTMENT_ID
+        if (!grouped.has(groupId)) grouped.set(groupId, [])
+        grouped.get(groupId).push(item)
+      })
+      if (!grouped.has(toAppointmentId)) grouped.set(toAppointmentId, [])
+
+      const targetItems = grouped.get(toAppointmentId)
+      const insertAt = Number.isInteger(toIndex)
+        ? Math.max(0, Math.min(toIndex, targetItems.length))
+        : targetItems.length
+      moved.appointmentGroupId = toAppointmentId
+      targetItems.splice(insertAt, 0, moved)
+
+      const rebuilt = []
+      this.appointments.forEach((appt) => {
+        rebuilt.push(...(grouped.get(appt.id) || []))
+      })
+      grouped.forEach((items, groupId) => {
+        if (this.appointments.some((appt) => appt.id === groupId)) return
+        rebuilt.push(...items)
+      })
+
+      rebuilt.forEach((item, index) => {
+        item.priority = index + 1
+      })
+
+      const byKey = new Map(rebuilt.map((item) => [item.id || item._tempId, item]))
+      this.treatmentPlan = this.treatmentPlan.map((item) => byKey.get(item.id || item._tempId) || item)
+      this.activeAppointmentId = toAppointmentId
+
+      if (moved.id) {
+        await patientChartingService.updateTreatmentPlanItem({
+          id: moved.id,
+          appointmentGroupId: toAppointmentId,
+          priority: moved.priority,
+        }).catch((error) => this._logError('moveTreatmentItem', error))
+      }
+      if (this.patientId) {
+        const affectedGroups = [...new Set([fromAppointmentId, toAppointmentId])]
+        affectedGroups.forEach((appointmentGroupId) => {
+          const orderedIds = rebuilt
+            .filter((item) => (item.appointmentGroupId || DEFAULT_APPOINTMENT_ID) === appointmentGroupId)
+            .map((item) => item.id)
+            .filter(Boolean)
+          if (!orderedIds.length) return
+          patientChartingService.reorderTreatmentPlan({
+            patientId: this.patientId,
+            orderedIds,
+            appointmentGroupId,
+          }).catch((error) => this._logError('moveTreatmentItemReorder', error))
+        })
+      }
+      this._logHistory('Treatment item moved', `Moved to ${toAppointmentId}`)
     },
     addTreatmentPlan(payload = null) {
       this._normalizePlans()
@@ -1269,6 +1433,7 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
       this.chartScope = 'both'
       this.toothStatuses = {}
       this.appointments = this._defaultAppointments()
+      this.activeAppointmentId = DEFAULT_APPOINTMENT_ID
       this.plans = [makeDefaultPlan()]
       this.activePlanId = DEFAULT_PLAN_ID
       this.favoriteCodeIds = []

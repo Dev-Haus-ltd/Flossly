@@ -169,6 +169,7 @@
             :completed-count="store.completedCount"
             :notation="store.notation"
             :appointments="store.appointments"
+            :active-appointment-id="store.activeAppointmentId"
             :plans="store.plans"
             :active-plan-id="store.activePlanId"
             :images="store.chartImages"
@@ -178,7 +179,9 @@
             @remove="store.removeTreatmentItemById($event)"
             @update="onTreatmentUpdate"
             @select-note-item="onSelectNoteItem"
+            @select-appointment="store.setActiveAppointment($event)"
             @reorder="onReorder"
+            @move-item="onMoveTreatmentItem"
             @add-appointment="store.addAppointment()"
             @add-plan="store.addTreatmentPlan($event)"
             @select-plan="store.selectTreatmentPlan($event)"
@@ -585,12 +588,21 @@ function buildChartByScope(scope = 'both') {
   const raw = store.chart
   if (scope === 'both') return raw
 
+  const surfaceList = (value) => String(value || '').split('+').map((item) => item.trim()).filter(Boolean)
+
   const activePlanId = store.activePlanId || DEFAULT_PLAN_ID
   const activePlanKeys = new Set()
   if (scope === 'plan') {
     store.treatmentPlan
       .filter(i => (i.planId || DEFAULT_PLAN_ID) === activePlanId && i.status !== 'existing')
-      .forEach(i => activePlanKeys.add(`${i.fdi}:${i.surface || ''}:${i.condition || ''}`))
+      .forEach((i) => {
+        const surfaces = surfaceList(i.surface)
+        if (surfaces.length) {
+          surfaces.forEach((surface) => activePlanKeys.add(`${i.fdi}:${surface}:${i.condition || ''}`))
+          return
+        }
+        activePlanKeys.add(`${i.fdi}::${i.condition || ''}`)
+      })
   }
 
   const result = {}
@@ -660,16 +672,16 @@ watch(currentStep, () => {
 })
 
 // ── Event handlers ───────────────────────────────────────────────────────────
-function onSurfaceClick({ fdi, surface }) {
-  if (currentStep.value === 1 && !store.activeCondition) {
+function onSurfaceClick({ fdi, surface, surfaces = [], combine = false, remove = false }) {
+  if (!remove && currentStep.value === 1 && !store.activeCondition) {
     mainStore?.setSnackbar?.({ title: 'Select a condition from the panel first.', type: 'warning' })
     return
   }
-  if (currentStep.value === 2 && !store.activeCodeId && !store.activeCondition) {
+  if (!remove && currentStep.value === 2 && !store.activeCodeId && !store.activeCondition) {
     mainStore?.setSnackbar?.({ title: 'Select a treatment code from the panel first.', type: 'warning' })
     return
   }
-  store.applyCondition(fdi, surface)
+  store.applyCondition(fdi, surface, { surfaces, combine, remove })
 }
 
 function onToothClick(fdi) {
@@ -737,6 +749,7 @@ function onMarkComplete(payload) {
 }
 
 function onReorder(payload) { store.reorderTreatmentPlan(payload) }
+function onMoveTreatmentItem(payload) { store.moveTreatmentItem(payload) }
 function onUpdateAppointment({ id, patch }) { store.updateAppointment(id, patch) }
 
 function onDeletePlan(planId) { deletePlanId.value = planId; deletePlanDialog.value = true }
@@ -750,7 +763,8 @@ function onConfirmDeletePlan() {
 
 function formatShareTooth(item) {
   const base = getToothLabel(item.fdi, store.notation)
-  return item.surface ? `${base}-${item.surface.charAt(0).toUpperCase()}` : base
+  const surfaces = String(item.surface || '').split('+').filter(Boolean)
+  return surfaces.length ? `${base}-${surfaces.map((surface) => surface.charAt(0).toUpperCase()).join('/')}` : base
 }
 
 const shareModel = computed(() => {
@@ -779,7 +793,7 @@ const shareModel = computed(() => {
     const rows = baseChartItems.value.map((item) => ({
       tooth: formatShareTooth(item),
       condition: item.conditionLabel || item.condition || '—',
-      surface: item.surface || 'Full tooth',
+      surface: String(item.surface || '').split('+').filter(Boolean).join(' / ') || 'Full tooth',
     }))
     sections.push({
       title: 'Diagnoses',

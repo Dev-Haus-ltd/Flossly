@@ -175,7 +175,8 @@ function toggleExpand(item) {
 
 function toothLabel(item) {
   const meta = TEETH_BY_FDI[item.fdi] || {}
-  const surface = item.surface ? `-${item.surface.charAt(0).toUpperCase()}` : ''
+  const surfaces = String(item.surface || '').split('+').filter(Boolean)
+  const surface = surfaces.length ? `-${surfaces.map((value) => value.charAt(0).toUpperCase()).join('/')}` : ''
   return `${meta.palmer || item.fdi}${surface}`
 }
 
@@ -194,7 +195,7 @@ function rowColor(item) {
 
 function rowScopeLabel(item) {
   if (isStatusEntry(item)) return 'Tooth status'
-  return item?.surface || 'Full tooth'
+  return String(item?.surface || '').split('+').filter(Boolean).join(' / ') || 'Full tooth'
 }
 
 function formatDate(iso) {

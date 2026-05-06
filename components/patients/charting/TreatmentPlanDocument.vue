@@ -223,7 +223,8 @@ const totalFormatted = computed(() => planItems.value.reduce((sum, i) => sum + N
 
 function toothLabel(item) {
   const base = getToothLabel(item.fdi, props.notation)
-  return item.surface ? `${base}-${item.surface.charAt(0).toUpperCase()}` : base
+  const surfaces = String(item.surface || '').split('+').filter(Boolean)
+  return surfaces.length ? `${base}-${surfaces.map((surface) => surface.charAt(0).toUpperCase()).join('/')}` : base
 }
 
 function formatCost(val) {

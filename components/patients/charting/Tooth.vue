@@ -49,8 +49,24 @@
           :stroke="sfStroke(item.logicalName)"
           stroke-width="0.9"
           class="tooth-surface"
+          :class="{ 'tooth-surface--deletable': isSurfaceDeletable(item.logicalName) }"
           @click.stop="onSurface(item.logicalName)"
+          @mousedown.stop="onSurfaceMouseDown(item.logicalName, $event)"
+          @mouseenter="onSurfaceMouseEnter(item.logicalName, $event)"
+          @mousemove="onSurfaceMouseMove(item.logicalName, $event)"
+          @mouseleave="onSurfaceMouseLeave(item.logicalName)"
+          @contextmenu.prevent
         />
+
+        <g v-if="hoveredDeleteSurface && deleteBadgePosition" pointer-events="none">
+          <circle :cx="deleteBadgePosition.x" :cy="deleteBadgePosition.y" r="7" fill="#dc2626" />
+          <path
+            :d="`M ${deleteBadgePosition.x - 3} ${deleteBadgePosition.y - 3} L ${deleteBadgePosition.x + 3} ${deleteBadgePosition.y + 3} M ${deleteBadgePosition.x + 3} ${deleteBadgePosition.y - 3} L ${deleteBadgePosition.x - 3} ${deleteBadgePosition.y + 3}`"
+            stroke="#fff"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          />
+        </g>
 
         <path
           v-if="isCrown"
@@ -158,7 +174,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { CONDITIONS, TEETH_BY_FDI, TOOTH_TYPE, getConditionColor, getSurfaceColor } from './toothData.js'
 import { OCCLUSAL_PATHS, OCCLUSAL_SOURCE_VIEWBOX, OCCLUSAL_VIEWBOX } from './toothPaths.js'
 
@@ -240,6 +256,10 @@ const rctOverlayD = computed(() => {
 })
 
 const veneerPath = computed(() => 'M 15 12 C 11 18 11 34 15 40')
+const hoveredDeleteSurface = ref(null)
+const hoverPoint = ref(null)
+const rightDragSurfaces = ref([])
+const isRightDragging = ref(false)
 
 function surfaceTransform(surface) {
   return surface?.transform
@@ -255,7 +275,7 @@ function sfColor(surface) {
 
 function sfStroke(surface) {
   const sf = props.tooth.surfaces?.[surface]
-  return sf?.condition ? '#777' : '#b8b8b8'
+  return sf?.condition ? 'transparent' : '#b8b8b8'
 }
 
 function condColor(cond) {
@@ -279,8 +299,81 @@ const hasAllCompleted = computed(() => {
   return conditioned.length > 0 && conditioned.every((s) => s.status === 'completed')
 })
 
+const deleteBadgePosition = computed(() => {
+  if (!hoverPoint.value) return null
+  return {
+    x: Math.max(8, Math.min(VB - 8, hoverPoint.value.x)),
+    y: Math.max(8, Math.min(VB - 8, hoverPoint.value.y)),
+  }
+})
+
+function isSurfaceDeletable(surface) {
+  return !!props.tooth.surfaces?.[surface]?.condition
+}
+
+function pointFromEvent(event) {
+  const rect = event.currentTarget?.ownerSVGElement?.getBoundingClientRect?.() || event.currentTarget?.getBoundingClientRect?.()
+  if (!rect) return null
+  const scaleX = VB / rect.width
+  const scaleY = VB / rect.height
+  return {
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY,
+  }
+}
+
+function onSurfaceMouseMove(surface, event) {
+  if (isSurfaceDeletable(surface)) {
+    hoveredDeleteSurface.value = surface
+    hoverPoint.value = pointFromEvent(event)
+  } else if (hoveredDeleteSurface.value === surface) {
+    hoveredDeleteSurface.value = null
+    hoverPoint.value = null
+  }
+}
+
+function onSurfaceMouseEnter(surface, event) {
+  if (isRightDragging.value && event.buttons === 2) {
+    if (!rightDragSurfaces.value.includes(surface)) rightDragSurfaces.value.push(surface)
+  }
+  onSurfaceMouseMove(surface, event)
+}
+
+function onSurfaceMouseLeave(surface) {
+  if (hoveredDeleteSurface.value !== surface) return
+  hoveredDeleteSurface.value = null
+  hoverPoint.value = null
+}
+
+function finishRightDrag() {
+  if (!isRightDragging.value) return
+  const surfaces = [...rightDragSurfaces.value]
+  isRightDragging.value = false
+  rightDragSurfaces.value = []
+  if (!surfaces.length) return
+  emit('surface-click', {
+    fdi: props.fdi,
+    surface: surfaces[0],
+    surfaces,
+    combine: surfaces.length > 1,
+  })
+}
+
+function onSurfaceMouseDown(surface, event) {
+  if (event.button !== 2) return
+  event.preventDefault()
+  event.stopPropagation()
+  isRightDragging.value = true
+  rightDragSurfaces.value = [surface]
+}
+
 function onSurface(surface) {
-  emit('surface-click', { fdi: props.fdi, surface })
+  if (isRightDragging.value) return
+  if (isSurfaceDeletable(surface)) {
+    emit('surface-click', { fdi: props.fdi, surface, surfaces: [surface], remove: true })
+    return
+  }
+  emit('surface-click', { fdi: props.fdi, surface, surfaces: [surface] })
 }
 
 function onToothBodyClick() {
@@ -291,6 +384,14 @@ function onToothBodyClick() {
   }
   emit('tooth-click', props.fdi)
 }
+
+onMounted(() => {
+  window.addEventListener('mouseup', finishRightDrag)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('mouseup', finishRightDrag)
+})
 </script>
 
 <style scoped>
@@ -313,6 +414,10 @@ function onToothBodyClick() {
 .tooth-surface {
   cursor: crosshair;
   transition: filter 0.1s;
+}
+
+.tooth-surface--deletable {
+  cursor: not-allowed;
 }
 
 .tooth-surface:hover {
