@@ -47,6 +47,7 @@ import { uploadBufferFile, deleteLink } from "../utils/storage";
 import { sendS3Object } from "../utils/s3";
 import { createError, setCookie, getQuery } from "h3";
 import { success, error } from "../utils/response";
+import { requireUsageAllowed } from "../utils/requireUsageAllowed";
 import {
   buildOnboardingContext,
   buildOnboardingInAppMessages,
@@ -338,7 +339,7 @@ export const signupRequest = async (event) => {
       {
         userId: user.id,
         organisationId: org.id,
-        licenseType: "Trial",
+        licenseType: "Lite",
         licenseRenewalDate: trialEndDate,
       },
       { transaction }
@@ -386,7 +387,7 @@ export const signupRequest = async (event) => {
         organisationId: org.id,
         creatorName: trimmedFullName,
         creatorEmail: normalizedEmail,
-        licenseType: "Trial",
+        licenseType: "Lite",
         trialEndsOn: trialEndDate,
         origin: "signup",
       });
@@ -1032,6 +1033,12 @@ export const inviteMembers = async (event) => {
       return error(400, "All invitees must have a valid email");
     }
 
+    // Check member limit before proceeding — Lite allows max 3
+    const { current: currentMembers, max: memberMax } = await requireUsageAllowed(event, 'members');
+    if (memberMax !== Infinity && currentMembers + normalizedUsers.length > memberMax) {
+      return error(403, `Your plan allows a maximum of ${memberMax} team members. You currently have ${currentMembers}.`);
+    }
+
     const currentUser = await User.findByPk(loggedUser.userId);
     const currentUserEmail = normalizeEmail(currentUser?.email);
     if (currentUserEmail) {
@@ -1312,7 +1319,7 @@ export const acceptInvitation = async (event) => {
     const trialEndDate = new Date();
     trialEndDate.setDate(trialEndDate.getDate() + 15);
 
-    let licenseType = "Trial";
+    let licenseType = "Lite";
     let licenseRenewalDate = trialEndDate;
 
     if (managerPreference) {

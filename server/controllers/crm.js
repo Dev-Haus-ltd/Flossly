@@ -5,6 +5,7 @@ import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crm
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
+import { requireUsageAllowed } from '../utils/requireUsageAllowed'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
@@ -554,6 +555,7 @@ export const listLeads = async (event) => {
 export const createLead = async (event) => {
   try {
     const logged = event.context.user
+    await requireUsageAllowed(event, 'leads')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']

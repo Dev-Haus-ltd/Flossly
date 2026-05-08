@@ -1194,12 +1194,12 @@
     <v-dialog v-model="showBookPlanDialog" max-width="500">
       <v-card class="pa-4">
         <v-card-title class="text-subtitle-1 pa-0 mb-2">
-          Soar Plan Required
+          CRM or Pro Plan Required
         </v-card-title>
         <v-card-text class="pa-0">
-          This action is available on the Soar plan. Your current plan is
+          This action is available on CRM and Pro plans. Your current plan is
           <strong>{{ currentOrgLicenseLabel }}</strong>.
-          Upgrade to Soar to unlock diary booking, patient auto-creation, lead form sending, and more.
+          Upgrade to CRM or Pro to unlock diary booking, patient auto-creation, lead form sending, and more.
         </v-card-text>
         <v-card-actions class="pa-0 mt-4">
           <v-spacer />
@@ -1675,13 +1675,13 @@ const currentOrgLicense = computed(() => {
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
-  return String(match?.licenseType || 'Trial').trim();
+  return String(match?.licenseType || 'Lite').trim();
 });
 
-const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || 'Trial');
+const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || 'Lite');
 const canBookAppointments = computed(() => {
   const type = String(currentOrgLicense.value || '').toLowerCase();
-  return ['soar', 'system'].includes(type);
+  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type);
 });
 
 const renderTemplateWithContext = (input, ctx, lead) => {

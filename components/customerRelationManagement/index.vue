@@ -645,11 +645,11 @@ const currentOrgLicense = computed(() => {
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
-  return String(match?.licenseType || 'Trial').trim();
+  return String(match?.licenseType || 'Lite').trim();
 });
 const canBookAppointments = computed(() => {
   const type = String(currentOrgLicense.value || '').toLowerCase();
-  return ['soar', 'system'].includes(type);
+  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type);
 });
 watch(bookingPractitionerOptions, (opts) => {
   if (!bookingInitialPractitioner.value && opts.length) {
@@ -1318,7 +1318,7 @@ const onBookLeads = async (selection) => {
     return;
   }
   if (!canBookAppointments.value) {
-    mainStore?.setSnackbar?.({ title: 'Upgrade to the Soar plan to book leads into the diary', type: 'warning' });
+    mainStore?.setSnackbar?.({ title: 'Upgrade to CRM or Pro to book leads into the diary', type: 'warning' });
     return;
   }
   const lead = picked[0];

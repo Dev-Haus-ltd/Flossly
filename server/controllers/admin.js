@@ -3174,7 +3174,7 @@ export const updateUserLicense = async (event) => {
   }
 
   // Validate license type
-  const validLicenseTypes = ['System', 'Trial', 'Drift', 'Glide', 'Soar'];
+  const validLicenseTypes = ['Lite', 'CRM', 'Pro', 'System', 'Trial', 'Drift', 'Glide', 'Soar'];
   if (!validLicenseTypes.includes(licenseType)) {
     return error(400, `Invalid licenseType. Must be one of: ${validLicenseTypes.join(', ')}`);
   }

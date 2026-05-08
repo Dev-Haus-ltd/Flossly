@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, OrganisationTreatment } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
+import { isLeadAllowedForOrg } from '../utils/requireUsageAllowed'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body"
@@ -654,25 +655,28 @@ const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabl
               await existing.save()
               broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
             } else {
-              await CrmLead.create({
-                organisationId: orgId,
-                pageId,
-                formId: form.id,
-                leadId: le.id,
-                campaignId,
-                adSetId,
-                adId,
-                name: fullName,
-                email,
-                telephone: phone,
-                inquiryDate: on,
-                rawData: le,
-                leadSource: 'Meta Leadgen',
-                leadStatus: 'New',
-              })
-              imported++
-              debug.imported += 1
-              broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
+              const allowed = await isLeadAllowedForOrg(orgId)
+              if (allowed) {
+                await CrmLead.create({
+                  organisationId: orgId,
+                  pageId,
+                  formId: form.id,
+                  leadId: le.id,
+                  campaignId,
+                  adSetId,
+                  adId,
+                  name: fullName,
+                  email,
+                  telephone: phone,
+                  inquiryDate: on,
+                  rawData: le,
+                  leadSource: 'Meta Leadgen',
+                  leadStatus: 'New',
+                })
+                imported++
+                debug.imported += 1
+                broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
+              }
             }
             fetchedForForm++
             if (fetchedForForm >= maxPerForm) break
@@ -1685,6 +1689,8 @@ export const webhook = async (event) => {
             await existing.save()
             broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
           } else {
+            const allowed = await isLeadAllowedForOrg(mp.organisationId)
+            if (!allowed) continue
             const created = await CrmLead.create({
               organisationId: mp.organisationId,
               pageId,

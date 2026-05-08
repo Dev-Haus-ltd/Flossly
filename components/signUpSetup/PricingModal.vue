@@ -142,7 +142,7 @@ const features = ref([
       "Dedicated Account Manager",
       "API & Integration Support",
     ],
-    licenseType: "soar",
+    licenseType: "Pro",
   },
   {
     type: "Flossly - Glide Package",
@@ -157,7 +157,7 @@ const features = ref([
       "Team Payroll Overview",
       "Invoicing (Manual, pre-QB)",
     ],
-    licenseType: "glide",
+    licenseType: "CRM",
   },
   {
     type: "Flossly - Drift Package",
@@ -169,7 +169,7 @@ const features = ref([
       "Document Management (Folders, Uploads)",
       "Basic Notifications (task updates, onboarding emails)",
     ],
-    licenseType: "drift",
+    licenseType: "Lite",
   },
 ]);
 
@@ -205,14 +205,14 @@ const displayPlans = computed(() => {
       const featureKey = getFeatureKeyFromType(plan.product?.name);
       const displayName =
         key === "soar"
-          ? "Soar (Coming Soon)" //Full Access
+          ? "Pro (Coming Soon)"
           : key === "glide"
-          ? "Glide"
+          ? "CRM"
           : key === "drift"
-          ? "Drift"
+          ? "Lite"
           : plan.product?.name || "Plan";
       const shortName =
-        key === "soar" ? "Soar" : key === "glide" ? "Glide" : key === "drift" ? "Drift" : "Plan";
+        key === "soar" ? "Pro" : key === "glide" ? "CRM" : key === "drift" ? "Lite" : "Plan";
       const badge = "";
       const featureObj = features.value.find((x) => getFeatureKeyFromType(x.type) === featureKey);
       const featureList = featureObj?.features || [];
@@ -233,7 +233,7 @@ const displayPlans = computed(() => {
         badge,
         features: featureList,
         description,
-        disabled: key === "soar", // 🔴 UI-disable Soar
+        disabled: key === "soar",
         displayAmount,
       };
     })
