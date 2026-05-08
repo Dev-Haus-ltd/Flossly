@@ -106,6 +106,7 @@ import { ConsentFormTemplate } from "./diary/consentFormTemplate";
 import { ConsentFormDocument } from "./diary/consentFormDocument";
 import { ConsentFormSignatureAudit } from "./diary/consentFormSignatureAudit";
 import { DiaryZone } from "./diary/diaryZones";
+import { DiaryPatientCommunicationLogs } from "./diary/patientCommunicationLogs";
 // Organisation dictionary
 import { OrganisationTreatment } from "./organisations/organisationTreatments";
 import { CrmLeadTreatment } from "./crm/leadTreatments";
@@ -297,6 +298,13 @@ PatientPayment.hasMany(PatientPaymentAllocation, { foreignKey: 'paymentId', as: 
 PatientPaymentAllocation.belongsTo(PatientPayment, { foreignKey: 'paymentId', as: 'payment', onDelete: 'CASCADE', hooks: true });
 PatientPaymentAllocation.belongsTo(PatientInvoice, { foreignKey: 'invoiceId', as: 'invoice', onDelete: 'CASCADE', hooks: true });
 PatientPaymentAllocation.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
+// Patient Communication Logs
+DiaryPatient.hasMany(DiaryPatientCommunicationLogs, { foreignKey: 'patientId', as: 'communicationLogs', onDelete: 'CASCADE', hooks: true });
+DiaryPatientCommunicationLogs.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryPatientCommunicationLogs.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+DiaryPatientCommunicationLogs.belongsTo(User, { foreignKey: 'practitionerId', as: 'practitioner', onDelete: 'SET NULL', hooks: true });
+User.hasMany(DiaryPatientCommunicationLogs, { foreignKey: 'practitionerId', as: 'communicationLogs', onDelete: 'SET NULL', hooks: true });
 DiaryTreatmentPlanItem.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
 DiaryTreatmentPlanItem.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryTreatmentPlanItem.belongsTo(DiaryAppointment, { foreignKey: 'appointmentId', as: 'appointment', onDelete: 'SET NULL' });
@@ -788,6 +796,7 @@ export {
   ConsentFormDocument,
   ConsentFormSignatureAudit,
   DiaryZone,
+  DiaryPatientCommunicationLogs,
   OrganisationTreatment,
   PatientInvoice,
   PatientInvoiceItem,

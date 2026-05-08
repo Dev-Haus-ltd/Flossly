@@ -1,4 +1,4 @@
-import { listTreatments, createTreatment, updateTreatment, deleteTreatment, listPatients, createPatient, updatePatient, deletePatient, listAppointments, createAppointment, updateAppointment, deleteAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats, getPatientChart, savePatientChart, savePatientChartTooth, getPatientChartMeta, savePatientChartMeta, listTreatmentPlans, createTreatmentPlan, updateTreatmentPlan, deleteTreatmentPlan, listTreatmentPlanItems, createTreatmentPlanItem, updateTreatmentPlanItem, deleteTreatmentPlanItem, reorderTreatmentPlanItems, appointmentConflictCheck, bookFromTreatmentPlan, uploadChartImage, generateTreatmentPlanContent, listClinicalNoteTemplates, applyClinicalNoteTemplate, listZones, createZone, updateZone, deleteZone } from '~/server/controllers/diary'
+import { listTreatments, createTreatment, updateTreatment, deleteTreatment, listPatients, createPatient, updatePatient, deletePatient, listAppointments, createAppointment, updateAppointment, deleteAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats, getPatientChart, savePatientChart, savePatientChartTooth, getPatientChartMeta, savePatientChartMeta, listTreatmentPlans, createTreatmentPlan, updateTreatmentPlan, deleteTreatmentPlan, listTreatmentPlanItems, createTreatmentPlanItem, updateTreatmentPlanItem, deleteTreatmentPlanItem, reorderTreatmentPlanItems, appointmentConflictCheck, bookFromTreatmentPlan, uploadChartImage, generateTreatmentPlanContent, listClinicalNoteTemplates, applyClinicalNoteTemplate, listZones, createZone, updateZone, deleteZone, patientCommunication, sendEmail } from '~/server/controllers/diary'
 import { getAccountStats, listInvoices, createInvoice, updateInvoice, deleteInvoice, generateInvoiceFromTreatments, listPayments, createPayment, allocatePayment, deletePayment } from '~/server/controllers/accounts'
 import { success } from '~/server/utils/response'
 
@@ -123,6 +123,10 @@ export default defineEventHandler(async (event) => {
       return await updateZone(event)
     case 'zoneDelete':
       return await deleteZone(event)
+    case 'communication':
+      return await patientCommunication(event)
+    case 'sendEmail':
+      return await sendEmail(event)
     // Accounts
     case 'accountsStats':
       return await getAccountStats(event)

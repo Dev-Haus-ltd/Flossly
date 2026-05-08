@@ -1,4 +1,4 @@
-import { webhook, connect, qr, status, disconnect, deleteChannel, extendChannel, listChannels, stream, editMessage, deleteMessage, reactToMessage } from "../../controllers/whapi";
+import { webhook, connect, qr, status, disconnect, deleteChannel, extendChannel, listChannels, stream, editMessage, deleteMessage, reactToMessage, sendMessage } from "../../controllers/whapi";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, "name");
@@ -27,6 +27,8 @@ export default defineEventHandler(async (event) => {
       return await deleteMessage(event);
     case "reactToMessage":
       return await reactToMessage(event);
+    case "sendMessage":
+      return await sendMessage(event);
     default:
       return { code: 0, error: "Not found" };
   }

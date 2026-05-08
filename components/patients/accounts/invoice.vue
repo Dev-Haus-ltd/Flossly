@@ -70,9 +70,11 @@
               :key="column.key"
               :style="{
                 width: column.width + 'px',
-                padding: '0px 12px',
+                minWidth: column.width + 'px',
+                position: 'relative',
+                padding: '0px 7px',
                 fontSize: '14px',
-                backgroundColor: '#F6F6F6',
+                backgroundColor: '#f6f6f6',
               }"
             >
               <div class="d-flex align-center th-content">
@@ -453,24 +455,35 @@ const startResize = (event, column) => {
 }
 
 .full-width-table {
-  border-top: 1px solid rgb(var(--v-theme-outline));
+  border-top: 1px solid rgba(0,0,0,0.12);
   border-radius: unset;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
 
   :deep(.v-table__wrapper) {
     overflow-x: auto;
   }
 
   :deep(.v-table .v-table__wrapper > table > thead > tr > th:not(:last-child)) {
-    border-right: 1px solid rgb(var(--v-theme-outline));
+    border-right: 1px solid rgba(0,0,0,0.12);
   }
 
   :deep(.v-table .v-table__wrapper > table > tbody > tr > td:not(:last-child)) {
-    border-right: 1px solid rgb(var(--v-theme-outline));
+    border-right: 1px solid rgba(0,0,0,0.12);
   }
 
   :deep(.v-data-table .v-table__wrapper tbody tr:hover) {
     background-color: #f9fafb;
     transition: background-color 0.2s ease;
+  }
+
+  :deep(.v-table .v-table__wrapper > table > tbody > tr) {
+    height: 48px !important;
+  }
+
+  :deep(.v-table .v-table__wrapper > table > tbody > tr > td) {
+    padding: 4px 8px !important;
   }
 }
 
@@ -480,7 +493,6 @@ const startResize = (event, column) => {
 }
 
 .table-row td {
-  padding: 16px 12px;
   font-size: 14px;
   color: #374151;
 }

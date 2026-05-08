@@ -2,11 +2,13 @@ import { getOrgTransporter, getFromAddress } from "./nodeMailer";
 import { template } from "./emailTemplate";
 import { buildLeadContext, renderTokens } from './tokenRenderer.js'
 import { getS3Object } from './s3.js'
+import { ServerCommunicationLogger } from './serverCommunicationLogger.js'
 const config = useRuntimeConfig();
 
 async function sendEmail(orgId, mailOptions) {
   const mailer = await getOrgTransporter(orgId);
   const from = getFromAddress(orgId);
+  const attachments = await resolveMailAttachments(mailOptions.attachments);
   return mailer.sendMail({
     from: mailOptions.from || from,
     to: mailOptions.to,
@@ -15,8 +17,72 @@ async function sendEmail(orgId, mailOptions) {
     subject: mailOptions.subject,
     html: mailOptions.html,
     text: mailOptions.text,
-    attachments: mailOptions.attachments,
+    attachments: attachments.length ? attachments : undefined,
   });
+}
+
+/**
+ * Send email with optional Communication Hub logging
+ * @param {Object} options
+ * @param {number} options.orgId - Organisation ID
+ * @param {Object} options.mailOptions - Standard mail options
+ * @param {number} options.patientId - Patient ID (optional, for logging)
+ * @param {number} options.practitionerId - Practitioner ID (optional, for logging)
+ * @param {Object} options.logMetadata - Additional metadata for logging
+ * @returns {Promise<Object>} Result with sent status and optional log
+ */
+export async function sendEmailWithLogging(options = {}) {
+  const {
+    orgId,
+    mailOptions,
+    patientId = null,
+    practitionerId = null,
+    logMetadata = {},
+  } = options
+
+  try {
+    const result = await sendEmail(orgId, mailOptions)
+
+    // Log to Communication Hub if patientId is provided
+    if (patientId) {
+      await ServerCommunicationLogger.logEmail(
+        orgId,
+        patientId,
+        mailOptions.subject || 'Email',
+        mailOptions.html || mailOptions.text || '',
+        'Sent',
+        practitionerId,
+        {
+          ...logMetadata,
+          recipientEmail: mailOptions.to?.[0] || '',
+          channel: 'email',
+        }
+      )
+    }
+
+    return { success: true, result }
+  } catch (error) {
+    console.error('Error sending email:', error)
+
+    // Log failed communication if patientId is provided
+    if (patientId) {
+      await ServerCommunicationLogger.logFailed(
+        orgId,
+        patientId,
+        'Email',
+        mailOptions.subject || 'Email',
+        mailOptions.html || mailOptions.text || '',
+        error.message,
+        practitionerId,
+        {
+          ...logMetadata,
+          recipientEmail: mailOptions.to?.[0] || '',
+        }
+      )
+    }
+
+    throw error
+  }
 }
 
 const streamToBuffer = (stream) =>
@@ -26,6 +92,60 @@ const streamToBuffer = (stream) =>
     stream.on('end', () => resolve(Buffer.concat(chunks)));
     stream.on('error', reject);
   });
+
+const inferEmailAttachmentContentType = (filename = '') => {
+  const lower = String(filename || '').toLowerCase();
+  if (lower.endsWith('.pdf')) return 'application/pdf';
+  if (lower.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (lower.endsWith('.doc')) return 'application/msword';
+  if (lower.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (lower.endsWith('.xls')) return 'application/vnd.ms-excel';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.txt')) return 'text/plain';
+  return 'application/octet-stream';
+};
+
+const resolveMailAttachments = async (attachments) => {
+  if (!Array.isArray(attachments)) return [];
+
+  const resolved = [];
+  for (const item of attachments) {
+    if (!item || typeof item !== 'object') continue;
+
+    const filename = String(item?.name || item?.filename || item?.title || 'attachment').trim() || 'attachment';
+    const contentType = String(item?.contentType || item?.mimeType || '').trim() || inferEmailAttachmentContentType(filename);
+
+    if (item.content) {
+      resolved.push({ filename, content: item.content, contentType });
+      continue;
+    }
+
+    if (item.path && typeof item.path === 'string' && item.path.trim()) {
+      resolved.push({ filename, path: item.path, contentType });
+      continue;
+    }
+
+    const key = String(item?.link || item?.url || item?.path || '').trim();
+    if (!key) continue;
+
+    try {
+      const s3Obj = await getS3Object(key);
+      const content = await streamToBuffer(s3Obj.body);
+      resolved.push({
+        filename,
+        content,
+        contentType: item?.contentType || item?.mimeType || s3Obj.contentType || inferEmailAttachmentContentType(filename),
+      });
+    } catch (err) {
+      // Skip attachments that cannot be fetched rather than fail the entire send.
+      console.warn(`Skipping email attachment '${filename}':`, err?.message || err);
+    }
+  }
+
+  return resolved;
+};
 
 /** These notifications are configured */
 
@@ -1196,6 +1316,8 @@ export const sendConsentFormEmail = async (data) => {
     formName,
     practiceInfo = {},
     customMessage = '',
+    customSubject = '',
+    attachments = [],
     expiryDays = 30,
     expiresAt = null,
     token = null,
@@ -1206,11 +1328,11 @@ export const sendConsentFormEmail = async (data) => {
     return;
   }
 
-const baseUrl =
-  (config?.public?.BASE_URL || process.env.BASE_URL || 'http://localhost:3000')
-    .replace(/\/+$/, '');
+  const baseUrl =
+    (config?.public?.BASE_URL || process.env.BASE_URL || 'http://localhost:3000')
+      .replace(/\/+$/, '');
 
-const accessUrl = `${baseUrl}/form/${token}`;
+  const accessUrl = `${baseUrl}/form/${token}`;
 
   const expiryText = expiresAt 
     ? new Date(expiresAt).toLocaleDateString('en-GB', { 
@@ -1221,6 +1343,30 @@ const accessUrl = `${baseUrl}/form/${token}`;
     : `in ${expiryDays} days`;
 
   const practiceName = practiceInfo?.name || practiceInfo?.organisationName || 'Flossly';
+
+  const attachmentsList = Array.isArray(attachments)
+    ? attachments
+        .filter((item) => item && (item.url || item.link))
+        .map((item) => ({
+          filename: item.name || item.filename || 'attachment',
+          link: item.url || item.link || item.path,
+          contentType: item.mimeType || item.contentType || undefined,
+        }))
+    : [];
+
+  const attachmentLinks = attachmentsList.length
+    ? `<br/><div style="background:#f8fafc;border:1px solid #e5e7eb;padding:16px;border-radius:12px;margin-top:16px;">
+      <p style="margin:0 0 8px 0;font-size:13px;color:#374151;"><strong>Attached files</strong></p>
+      <ul style="margin:0;padding-left:18px;color:#374151;font-size:13px;">
+        ${attachmentsList
+          .map(
+            (att) =>
+              `<li><a href="${att.link}" target="_blank" style="color:#0061fb;">${att.filename}</a></li>`,
+          )
+          .join('')}
+      </ul>
+    </div>`
+    : '';
 
   const content = `
     <p>Dear ${patientName || 'Patient'},</p>
@@ -1256,6 +1402,7 @@ const accessUrl = `${baseUrl}/form/${token}`;
     <p style="font-style: italic; color: #6b7280;">${customMessage}</p>
     <br/>
     ` : ''}
+    ${attachmentLinks}
     <p style="font-size: 13px; color: #9ca3af;">
       💡 <strong>Tip:</strong> The link is unique to you and secure. It will only work on the device and browser where you first open it.
     </p>
@@ -1270,7 +1417,7 @@ const accessUrl = `${baseUrl}/form/${token}`;
     </p>
   `;
 
-  const subject = `Please Review & Sign: ${formName}`;
+  const subject = customSubject?.trim() || `Please Review & Sign: ${formName}`;
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
@@ -1280,6 +1427,7 @@ const accessUrl = `${baseUrl}/form/${token}`;
       to: [patientEmail],
       subject,
       html,
+      attachments: attachmentsList.length ? attachmentsList : undefined,
     });
   } catch (error) {
     console.error('Error sending consent form email:', error);

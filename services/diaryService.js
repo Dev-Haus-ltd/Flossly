@@ -324,4 +324,45 @@ export default {
         .catch(reject);
     });
   },
+
+  // Patient Communication Logs
+  getPatientCommunicationLogs({ patientId, page = 1, limit = 20, type, status, search } = {}) {
+    const params = new URLSearchParams();
+    params.append("patientId", patientId);
+    params.append("page", page);
+    params.append("limit", limit);
+    if (type) params.append("type", type);
+    if (status) params.append("status", status);
+    if (search) params.append("search", search);
+
+    return new Promise((resolve, reject) => {
+      Get(`/diary/communication?${params.toString()}`)
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  createCommunicationLog(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/communication", { action: "create", ...payload })
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  updateCommunicationLog(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/communication", { action: "update", ...payload })
+        .then(resolve)
+        .catch(reject);
+    });
+  },
+
+  deleteCommunicationLog(id) {
+    return new Promise((resolve, reject) => {
+      Post("/diary/communication", { action: "delete", id })
+        .then(resolve)
+        .catch(reject);
+    });
+  },
 };

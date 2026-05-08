@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op ,Sequelize } from "sequelize";
 import {
   DiaryPatient,
   DiaryAppointment,
@@ -7,6 +7,7 @@ import {
   DiaryPatientSurvey,
   DiaryPatientForm,
   DiaryPatientChart,
+  DiaryPatientCommunicationLogs,
   DiaryTreatmentPlan,
   DiaryTreatmentPlanItem,
   ConsentFormDocument,
@@ -28,6 +29,7 @@ import path from "path";
 import os from "os";
 import { uploadTempFile } from "../utils/storage";
 import { parseJsonBody } from "../utils/body";
+import { sendEmailWithLogging } from "../utils/emailNotifications";
 import { DEFAULT_ORGANISATION_TREATMENTS } from "~/shared/defaults/charting/treatmentDefaults.js";
 import {
   buildOrganisationTreatmentPlanDefaults,
@@ -3349,6 +3351,381 @@ export const sharePatientSurvey = async (event) => {
 
     // TODO: Implement actual email sending or link generation
     return success({ message: "Survey shared successfully", shareData });
+  } catch (e) {
+    const msg =
+      (e &&
+        (e.message ||
+          (e.data && e.data.message) ||
+          (e.original && e.original.detail))) ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
+
+export const getPatientCommunicationLogs = async (event) => {
+  try {
+    const { orgId } = event.context.user;
+
+    const query = getQuery(event);
+
+    const patientId = Number(query.patientId || 0);
+    const page = Math.max(1, Number(query.page || 1));
+    const limit = Math.max(1, Number(query.limit || 20));
+
+    const type = String(query.type || "").trim();
+    const status = String(query.status || "").trim();
+    const search = String(query.search || "").trim();
+
+    if (!patientId) {
+      return error(400, "patientId is required");
+    }
+
+    const patient = await DiaryPatient.findOne({
+      where: {
+        id: patientId,
+        organisationId: Number(orgId),
+      },
+    });
+
+    if (!patient) {
+      return error(404, "Patient not found");
+    }
+
+    const where = {
+      organisationId: Number(orgId),
+      patientId,
+    };
+
+    // Filters
+    if (type) {
+      where.type = type;
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    // Search
+    if (search) {
+      where[Op.or] = [
+        {
+          subject: {
+            [Op.iLike]: `%${search}%`,
+          },
+        },
+
+        {
+          content: {
+            [Op.iLike]: `%${search}%`,
+          },
+        },
+
+        Sequelize.where(
+          Sequelize.cast(
+            Sequelize.col("DiaryPatientCommunicationLogs.type"),
+            "TEXT"
+          ),
+          {
+            [Op.iLike]: `%${search}%`,
+          }
+        ),
+
+        Sequelize.where(
+          Sequelize.cast(
+            Sequelize.col("DiaryPatientCommunicationLogs.status"),
+            "TEXT"
+          ),
+          {
+            [Op.iLike]: `%${search}%`,
+          }
+        ),
+      ];
+    }
+
+    const offset = (page - 1) * limit;
+
+    const { rows, count: total } =
+      await DiaryPatientCommunicationLogs.findAndCountAll({
+        where,
+        order: [["createdAt", "DESC"]],
+        limit,
+        offset,
+      });
+
+    return success({
+      logs: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (e) {
+    const msg =
+      (e &&
+        (e.message ||
+          (e.data && e.data.message) ||
+          (e.original && e.original.detail))) ||
+      "Internal server error";
+
+    return error(500, msg);
+  }
+};
+
+export const patientCommunication = async (event) => {
+  const method = String(event.node.req.method || "").toUpperCase();
+  if (method === "GET") {
+    return await getPatientCommunicationLogs(event);
+  }
+
+  if (method === "POST") {
+    const raw = await readBody(event);
+    const body = typeof raw === "string" ? parseJsonBody(raw) : raw || {};
+    const action = String(body.action || "").trim();
+
+    switch (action) {
+      case "create":
+        return await createPatientCommunicationLog(event);
+      case "update":
+        return await updatePatientCommunicationLog(event);
+      case "delete":
+        return await deletePatientCommunicationLog(event);
+      default:
+        return error(
+          400,
+          "Invalid action. Must be 'create', 'update', or 'delete'",
+        );
+    }
+  }
+
+  return error(405, "Method not allowed");
+};
+
+export const sendEmail = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user || {};
+    if (!orgId) return error(401, "Unauthenticated");
+
+    const raw = await readBody(event);
+    const body = typeof raw === "string" ? parseJsonBody(raw) : raw || {};
+    const to = String(body.to || body.email || "").trim();
+    const subject = String(body.subject || "").trim();
+    const html = String(body.html || body.message || "").trim();
+    const patientId = Number(body.patientId || 0) || null;
+
+    if (!to) return error(400, "Recipient email is required");
+    if (!subject) return error(400, "Subject is required");
+    if (!html) return error(400, "Email content is required");
+
+    const mailOptions = {
+      to: [to],
+      subject,
+      html,
+      attachments: Array.isArray(body.attachments) ? body.attachments : undefined,
+    };
+
+    await sendEmailWithLogging({
+      orgId: Number(orgId),
+      mailOptions,
+      patientId,
+      practitionerId: userId,
+      logMetadata: {
+        channel: "email",
+        recipientEmail: to,
+        attachments: Array.isArray(body.attachments)
+          ? body.attachments.map((att) => ({
+              name: att?.name || att?.filename || '',
+              contentType: att?.contentType || att?.mimeType || '',
+            }))
+          : [],
+      },
+    });
+
+    await DiaryPatientCommunicationLogs.create({
+      organisationId: Number(orgId),
+      patientId,
+      practitionerId: userId,
+      type: "Email",
+      subject,
+      content: html,
+      status: "Sent",
+      sentAt: new Date(),
+      metadata: {
+        category: "manual-email",
+        recipientEmail: to,
+      },
+    });
+
+    return success({ sent: true });
+  } catch (e) {
+    return error(500, e.message || "Failed to send email");
+  }
+};
+
+export const createPatientCommunicationLog = async (event) => {
+  try {
+    const { orgId } = event.context.user;
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body || {};
+    const {
+      patientId,
+      practitionerId,
+      type,
+      subject,
+      content,
+      status = "Pending",
+      sentAt,
+      deliveredAt,
+      failedAt,
+      errorMessage,
+      metadata,
+      externalId,
+    } = payload;
+
+    if (!patientId || !type) {
+      return error(400, "patientId and type are required");
+    }
+
+    const validTypes = [
+      "Email",
+      "WhatsApp",
+      "SMS",
+      "Phone",
+      "In-Person",
+      "Automation",
+      "Consent Form",
+    ];
+    const validStatuses = ["Sent", "Delivered", "Failed", "Pending", "Draft"];
+
+    if (!validTypes.includes(type)) {
+      return error(
+        400,
+        `Invalid type. Must be one of: ${validTypes.join(", ")}`,
+      );
+    }
+
+    if (!validStatuses.includes(status)) {
+      return error(
+        400,
+        `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+      );
+    }
+
+    const log = await DiaryPatientCommunicationLogs.create({
+      organisationId: Number(orgId),
+      patientId: Number(patientId),
+      practitionerId: practitionerId ? Number(practitionerId) : null,
+      type,
+      subject,
+      content,
+      status,
+      sentAt: sentAt ? new Date(sentAt) : null,
+      deliveredAt: deliveredAt ? new Date(deliveredAt) : null,
+      failedAt: failedAt ? new Date(failedAt) : null,
+      errorMessage,
+      metadata,
+      externalId,
+    });
+
+    return success(log);
+  } catch (e) {
+    const msg =
+      (e &&
+        (e.message ||
+          (e.data && e.data.message) ||
+          (e.original && e.original.detail))) ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
+export const updatePatientCommunicationLog = async (event) => {
+  try {
+    const { orgId } = event.context.user;
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body || {};
+    const { id, type, status, sentAt, deliveredAt, failedAt, ...updates } =
+      payload;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    const log = await DiaryPatientCommunicationLogs.findOne({
+      where: { id: Number(id), organisationId: Number(orgId) },
+    });
+
+    if (!log) {
+      return error(404, "Communication log not found");
+    }
+
+    const validTypes = [
+      "Email",
+      "WhatsApp",
+      "SMS",
+      "Phone",
+      "In-Person",
+      "Automation",
+      "Consent Form",
+    ];
+    const validStatuses = ["Sent", "Delivered", "Failed", "Pending", "Draft"];
+
+    if (type && !validTypes.includes(type)) {
+      return error(
+        400,
+        `Invalid type. Must be one of: ${validTypes.join(", ")}`,
+      );
+    }
+
+    if (status && !validStatuses.includes(status)) {
+      return error(
+        400,
+        `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+      );
+    }
+
+    if (type) updates.type = type;
+    if (status) updates.status = status;
+    if (sentAt) updates.sentAt = new Date(sentAt);
+    if (deliveredAt) updates.deliveredAt = new Date(deliveredAt);
+    if (failedAt) updates.failedAt = new Date(failedAt);
+
+    await log.update(updates);
+    return success(log);
+  } catch (e) {
+    const msg =
+      (e &&
+        (e.message ||
+          (e.data && e.data.message) ||
+          (e.original && e.original.detail))) ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
+export const deletePatientCommunicationLog = async (event) => {
+  try {
+    const { orgId } = event.context.user;
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body || {};
+    const { id } = payload;
+
+    if (!id) {
+      return error(400, "id is required");
+    }
+
+    const log = await DiaryPatientCommunicationLogs.findOne({
+      where: { id: Number(id), organisationId: Number(orgId) },
+    });
+
+    if (!log) {
+      return error(404, "Communication log not found");
+    }
+
+    await log.destroy();
+    return success({ message: "Communication log deleted successfully" });
   } catch (e) {
     const msg =
       (e &&

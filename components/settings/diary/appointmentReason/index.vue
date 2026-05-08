@@ -81,9 +81,11 @@
                 :key="column.key"
                 :style="{
                   width: column.width + 'px',
+                  minWidth: column.width + 'px',
                   padding: '0px 7px',
                   fontSize: '14px',
-                  backgroundColor: '#F6F6F6',
+                  backgroundColor: '#f6f6f6',
+                  position: 'relative',
                 }"
               >
                 <div class="d-flex align-center th-content">
@@ -538,8 +540,57 @@ onMounted(() => {
 }
 
 .full-width-table {
-  border-top: 1px solid rgb(var(--v-theme-outline));
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: unset;
+
+  :deep(table) {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100% !important;
+    table-layout: fixed;
+  }
+
+  /* Vertical lines between columns - matches CRM pattern */
+  :deep(thead tr th) {
+    border-right: 1px solid rgba(0, 0, 0, 0.12);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+    background-color: #f6f6f6 !important;
+    padding: 0px 7px !important;
+    height: 48px !important;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    vertical-align: middle;
+  }
+
+  :deep(thead tr th:last-child) {
+    border-right: none;
+  }
+
+  :deep(tbody tr td) {
+    border-right: 1px solid rgba(0, 0, 0, 0.12);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+    padding: 4px 8px !important;
+    height: 48px !important;
+    vertical-align: middle;
+  }
+
+  :deep(tbody tr td:last-child) {
+    border-right: none;
+  }
+
+  :deep(.v-table__wrapper) {
+    margin-top: 0 !important;
+
+    tbody tr {
+      height: 48px !important;
+    }
+
+    tbody tr:hover {
+      transition: background-color 0.2s ease;
+    }
+  }
 }
 
 :deep(.v-table__wrapper table) {
@@ -547,28 +598,17 @@ onMounted(() => {
   table-layout: fixed;
 }
 
-:deep(.v-table .v-table__wrapper > table > thead > tr > th:not(:last-child)) {
-  border-right: 1px solid rgb(var(--v-theme-outline));
-}
-
-:deep(.v-table .v-table__wrapper > table > tbody > tr > td:not(:last-child)) {
-  border-right: 1px solid rgb(var(--v-theme-outline));
-}
-
-:deep(.v-data-table .v-table__wrapper tbody tr:hover) {
-  background-color: #f9fafb;
-  transition: background-color 0.2s ease;
-}
-
 .table-row {
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
   transition: background 0.15s;
 }
 
 .table-row td {
-  padding: 16px 16px;
+  padding: 4px 8px !important;
   font-size: 14px;
   color: #374151;
+  height: 48px !important;
+  vertical-align: middle;
 }
 
 .resize-handle {
