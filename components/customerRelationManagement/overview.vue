@@ -584,14 +584,6 @@ const whapiShareOrgNames = ref([])
 const whapiLogoutConfirm = ref(false)
 const whapiShareMode = ref('change')
 const whapiSingleLogoutConfirm = ref(false)
-const whapiStatus = reactive({
-  connected: false,
-  channelId: '',
-  phoneNumber: '',
-  displayName: '',
-  status: '',
-})
-const whapiStatusLoading = ref(true)
 const autoReplyEnabled = ref(false)
 const whatsappAutoReplyEnabled = ref(false)
 const autoReplyLoading = ref(false)
@@ -713,28 +705,6 @@ const integrationCards = computed(() => ([
     iconClass: 'chatbot',
   },
 ]))
-
-const whapiStatusLabel = computed(() => {
-  if (!whapiStatus.status && !whapiStatus.connected) return INTEGRATION_STATUS_NOT_CONNECTED_LABEL
-  const raw = String(whapiStatus.status || '').trim().toLowerCase()
-  if (raw.includes('stopped')) return 'Stopped'
-  if (raw.includes('overdue')) return 'Overdue'
-  if (raw.includes('loggedout') || raw.includes('disconnected')) return 'Logged Out'
-  if (raw === 'qr' || raw.includes('awaiting')) return 'Awaiting Scan'
-  if (raw.includes('pending') || raw.includes('created')) return 'Pending'
-  if (raw.includes('activating')) return 'Activating'
-  if (raw.includes('auth')) return 'Authorized'
-  if (raw.includes('active') || raw.includes('live') || raw.includes('trial')) return 'Active'
-  return whapiStatus.connected ? 'Connected' : INTEGRATION_STATUS_NOT_CONNECTED_LABEL
-})
-
-const whapiStatusColor = computed(() => {
-  const label = String(whapiStatusLabel.value || '').toLowerCase()
-  if (label === 'connected' || label.includes('active') || label.includes('authorized')) {
-    return INTEGRATION_STATUS_CHIP_SUCCESS
-  }
-  return INTEGRATION_STATUS_CHIP_ACCENT
-})
 
 const whapiQrCtaLabel = computed(() => {
   if (whapiLoading.value) return 'Generating QR...'
