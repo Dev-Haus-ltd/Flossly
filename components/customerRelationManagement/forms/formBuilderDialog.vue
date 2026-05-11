@@ -139,7 +139,7 @@ const formName = ref(props.form?.name || 'New Form')
 const canvasFields = ref(JSON.parse(JSON.stringify(props.form?.fields || [])))
 const availableFields = ref([])
 const selectedFieldKey = ref(null)
-const rightTab = ref('editor')
+const rightTab = ref('settings')
 const saving = ref(false)
 const shareOpen = ref(false)
 const savedForm = ref(null)
@@ -286,3 +286,26 @@ onUnmounted(() => {
   }
 })
 </script>
+
+<style scoped>
+.settings-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.1s;
+  outline-offset: 2px;
+}
+.settings-swatch:hover { transform: scale(1.15); }
+
+.settings-color-btn {
+  width: 22px;
+  height: 22px;
+  padding: 2px;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: none;
+}
+</style>

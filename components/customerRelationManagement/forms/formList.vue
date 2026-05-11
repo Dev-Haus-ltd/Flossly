@@ -99,18 +99,17 @@
       <div class="px-5">
         <v-expansion-panels v-model="openedPanels" flat multiple class="table-panels">
           <v-expansion-panel rounded="lg" class="border-sm pb-1">
-            <v-expansion-panel-title>
-              <div class="d-flex align-center justify-space-between w-100">
-                <div class="d-flex align-center">
-                  <v-chip color="primary" label>
-                    <v-icon class="mr-2">mdi-form-select</v-icon>
+            <v-expansion-panel-title hide-actions>
+              <template #default="{ expanded }">
+                <div class="d-flex align-center" style="gap: 8px;">
+                  <v-icon size="18" color="#6b7280" :style="{ transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s' }">mdi-chevron-down</v-icon>
+                  <v-chip color="#16a34a" variant="tonal" label>
+                    <img src="/lead-forms/active.svg" class="mr-2" style="width:16px;height:16px;" alt="" />
                     Active Forms
                   </v-chip>
-                  <v-chip class="ml-2" color="primary" label>
-                    {{ activeTotal }}
-                  </v-chip>
+                  <v-chip color="#16a34a" variant="tonal" label>{{ activeTotal }}</v-chip>
                 </div>
-              </div>
+              </template>
             </v-expansion-panel-title>
             <v-expansion-panel-text class="pt-0">
               <v-card elevation="0" rounded="lg" border>
@@ -168,10 +167,30 @@
                   </template>
 
                   <template #item.active="{ item }">
-                    <DataTableColumnsFormStatus
-                      :selected="item"
-                      @toggle="(val) => toggleActive(item, val)"
-                    />
+                    <v-menu :close-on-content-click="true" offset-y>
+                      <template #activator="{ props: menuProps }">
+                        <v-chip
+                          v-bind="menuProps"
+                          size="small"
+                          :color="item.active ? '#16a34a' : '#ef4444'"
+                          variant="tonal"
+                          class="status-chip"
+                          style="cursor: pointer;"
+                        >
+                          {{ item.active ? 'Active' : 'Inactive' }}
+                        </v-chip>
+                      </template>
+                      <v-card width="160" class="pa-1">
+                        <v-list density="compact" nav>
+                          <v-list-item rounded="lg" @click="toggleActive(item, true)">
+                            <v-list-item-title style="font-size:13px;">Active</v-list-item-title>
+                          </v-list-item>
+                          <v-list-item rounded="lg" @click="toggleActive(item, false)">
+                            <v-list-item-title style="font-size:13px;">Inactive</v-list-item-title>
+                          </v-list-item>
+                        </v-list>
+                      </v-card>
+                    </v-menu>
                   </template>
 
                   <template #item.createdAt="{ item }">
@@ -183,19 +202,19 @@
                   <template #item.actions="{ item }">
                     <div class="d-flex align-center justify-end action-cell">
                       <v-btn icon size="small" variant="text" @click.stop="openPreview(item)">
-                        <img :src="viewIcon" alt="View" class="row-action-icon" />
+                        <img src="/lead-forms/Frame.svg" class="row-action-icon" alt="View" />
                         <v-tooltip activator="parent" location="top">View</v-tooltip>
                       </v-btn>
-                      <v-btn icon size="small" variant="text" @click.stop="openShare(item)">
-                        <v-icon size="18">mdi-share-variant</v-icon>
-                        <v-tooltip activator="parent" location="top">Share / Embed</v-tooltip>
-                      </v-btn>
                       <v-btn icon size="small" variant="text" @click.stop="openBuilder(item)">
-                        <v-icon size="18">mdi-pencil-outline</v-icon>
+                        <img src="/lead-forms/Frame-1.svg" class="row-action-icon" alt="Edit" />
                         <v-tooltip activator="parent" location="top">Edit</v-tooltip>
                       </v-btn>
+                      <v-btn icon size="small" variant="text" @click.stop="openShare(item)">
+                        <img src="/lead-forms/Frame-2.svg" class="row-action-icon" alt="Share" />
+                        <v-tooltip activator="parent" location="top">Share / Embed</v-tooltip>
+                      </v-btn>
                       <v-btn icon size="small" variant="text" @click.stop="archiveOne(item)">
-                        <img :src="archiveIcon" alt="Archive" class="row-action-icon" />
+                        <img src="/lead-forms/Frame-3.svg" class="row-action-icon" alt="Archive" />
                         <v-tooltip activator="parent" location="top">Archive</v-tooltip>
                       </v-btn>
                     </div>
@@ -226,7 +245,7 @@
 
                 <div class="actions-container d-flex align-center" style="gap: 8px;">
                   <div class="action-item d-flex flex-column align-center" @click="confirmBulkArchive = true">
-                    <img :src="archiveIcon" alt="Archive" class="action-icon" />
+                    <img src="/lead-forms/Frame-3.svg" class="action-icon" alt="Archive" />
                     <span class="action-label">Archive</span>
                   </div>
                   <v-divider vertical class="mx-2" style="height: 40px;" />
@@ -240,18 +259,17 @@
           </v-expansion-panel>
 
           <v-expansion-panel rounded="lg" class="border-sm pb-1">
-            <v-expansion-panel-title>
-              <div class="d-flex align-center justify-space-between w-100">
-                <div class="d-flex align-center">
-                  <v-chip color="#9E9E9E" label>
-                    <v-icon class="mr-2">mdi-archive-outline</v-icon>
+            <v-expansion-panel-title hide-actions>
+              <template #default="{ expanded }">
+                <div class="d-flex align-center" style="gap: 8px;">
+                  <v-icon size="18" color="#6b7280" :style="{ transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s' }">mdi-chevron-down</v-icon>
+                  <v-chip color="#9333ea" variant="tonal" label>
+                    <img src="/lead-forms/Frame-3.svg" class="mr-2" style="width:16px;height:16px;" alt="" />
                     Archived Forms
                   </v-chip>
-                  <v-chip class="ml-2" color="#9E9E9E" label>
-                    {{ archivedTotal }}
-                  </v-chip>
+                  <v-chip color="#9333ea" variant="tonal" label>{{ archivedTotal }}</v-chip>
                 </div>
-              </div>
+              </template>
             </v-expansion-panel-title>
             <v-expansion-panel-text class="pt-0">
               <v-alert
@@ -311,8 +329,15 @@
                     </div>
                   </template>
 
-                  <template #item.active>
-                    <v-chip size="x-small" color="grey" variant="tonal">Archived</v-chip>
+                  <template #item.active="{ item }">
+                    <v-chip
+                      size="small"
+                      :color="item.active ? '#16a34a' : '#ef4444'"
+                      variant="tonal"
+                      style="font-size: 12px; font-weight: 500;"
+                    >
+                      {{ item.active ? 'Active' : 'Inactive' }}
+                    </v-chip>
                   </template>
 
                   <template #item.createdAt="{ item }">
@@ -323,17 +348,9 @@
 
                   <template #item.actions="{ item }">
                     <div class="d-flex align-center justify-end action-cell">
-                      <v-btn icon size="small" variant="text" @click.stop="openPreview(item)">
-                        <img :src="viewIcon" alt="View" class="row-action-icon" />
-                        <v-tooltip activator="parent" location="top">View</v-tooltip>
-                      </v-btn>
                       <v-btn icon size="small" variant="text" @click.stop="restoreOne(item)">
-                        <v-icon size="18">mdi-restore</v-icon>
+                        <img src="/lead-forms/restore.svg" class="row-action-icon" alt="Restore" />
                         <v-tooltip activator="parent" location="top">Restore</v-tooltip>
-                      </v-btn>
-                      <v-btn icon size="small" variant="text" color="error" @click.stop="deleteOne(item)">
-                        <img :src="deleteIcon" alt="Delete" class="row-action-icon" />
-                        <v-tooltip activator="parent" location="top">Delete Permanently</v-tooltip>
                       </v-btn>
                     </div>
                   </template>
@@ -354,12 +371,8 @@
 
                 <div class="actions-container d-flex align-center" style="gap: 8px;">
                   <div class="action-item d-flex flex-column align-center" @click="confirmBulkRestore = true">
-                    <v-icon size="22" color="#6d6d6d">mdi-restore</v-icon>
+                    <img src="/lead-forms/restore.svg" class="action-icon" alt="Restore" />
                     <span class="action-label">Restore</span>
-                  </div>
-                  <div class="action-item d-flex flex-column align-center" @click="confirmBulkDelete = true">
-                    <img :src="deleteIcon" alt="Delete" class="action-icon" />
-                    <span class="action-label">Delete</span>
                   </div>
                   <v-divider vertical class="mx-2" style="height: 40px;" />
                   <div class="action-item d-flex flex-column align-center" @click="selectedArchivedForms = []">
@@ -424,9 +437,6 @@
 </template>
 
 <script setup>
-import archiveIcon from '@/assets/crm/archive.svg'
-import deleteIcon from '@/assets/crm/delete.svg'
-import viewIcon from '@/assets/icons/view.svg'
 import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
 
@@ -463,15 +473,15 @@ const statusFilterOptions = [
 
 const activeHeaders = [
   { title: 'Form Name', key: 'name', sortable: false, width: 280 },
-  { title: 'Status', key: 'active', sortable: false, width: 120 },
   { title: 'Created', key: 'createdAt', sortable: false, width: 140 },
+  { title: 'Status', key: 'active', sortable: false, width: 120 },
   { title: '', key: 'actions', sortable: false, align: 'end', width: 170 },
 ]
 
 const archivedHeaders = [
   { title: 'Form Name', key: 'name', sortable: false, width: 280 },
-  { title: 'Status', key: 'active', sortable: false, width: 120 },
   { title: 'Created', key: 'createdAt', sortable: false, width: 140 },
+  { title: 'Status', key: 'active', sortable: false, width: 120 },
   { title: '', key: 'actions', sortable: false, align: 'end', width: 150 },
 ]
 
@@ -806,9 +816,41 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
+:deep() .v-table thead tr {
+  background-color: #f9fafb !important;
+}
+
+:deep() .v-table thead tr th {
+  color: #6b7280 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+:deep() .v-table .v-table__wrapper > table > tbody > tr > td {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+:deep() .v-table .v-table__wrapper > table > thead > tr > th {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+.status-chip {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
 .row-action-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+}
+
+.action-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .action-cell {
@@ -837,11 +879,15 @@ onBeforeUnmount(() => {
 }
 
 .action-bar {
-  border: 1px solid #ececec;
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: white;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   width: fit-content;
-  max-width: 100%;
-  margin-left: auto;
-  margin-right: auto;
+  border: 1px solid #ececec;
 }
 
 .action-item {
@@ -863,5 +909,22 @@ onBeforeUnmount(() => {
 .action-icon {
   width: 20px;
   height: 20px;
+}
+
+.form-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.form-name-input :deep(.v-field__input) {
+  font-size: 14px;
+  font-weight: 500;
+  padding-top: 0;
+  padding-bottom: 0;
+  min-height: unset;
+}
+.form-name-input :deep(.v-field) {
+  min-height: unset;
 }
 </style>
