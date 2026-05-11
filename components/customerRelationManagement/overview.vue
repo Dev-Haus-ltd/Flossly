@@ -1369,7 +1369,12 @@ const loadAutoReplySettings = async () => {
     if (res?.code === 0) {
       autoReplyEnabled.value = !!res.data?.autoReplyEnabled
       whatsappAutoReplyEnabled.value = !!res.data?.whatsappAutoReplyEnabled
-      autoReplyConfig.value = res.data?.autoReplyConfig || { services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "" }
+      autoReplyConfig.value = res.data?.autoReplyConfig || {
+        services: '',
+        cta: '',
+        outOfScopeMessage: 'Thank you so much! Our team will contact you shortly.',
+        ctaScript: '',
+      }
     }
   } catch {}
 }
@@ -1378,7 +1383,7 @@ const toggleAutoReply = async (platform) => {
   if (autoReplyLoading.value) return
   const targetValue = platform === 'whatsapp' ? whatsappAutoReplyEnabled.value : autoReplyEnabled.value
   if (targetValue && !hasValidAutoReplyConfig.value) {
-    mainStore?.setSnackbar?.({ title: "Please configure Q&A before enabling auto-reply", type: "warning" })
+    mainStore?.setSnackbar?.({ title: 'Please configure Q&A before enabling auto-reply', type: 'warning' })
     if (platform === 'whatsapp') {
       whatsappAutoReplyEnabled.value = false
     } else {
@@ -1399,9 +1404,9 @@ const toggleAutoReply = async (platform) => {
       } else {
         autoReplyEnabled.value = !!res.data?.autoReplyEnabled
       }
-      mainStore?.setSnackbar?.({ 
-        title: targetValue ? `${platform === 'whatsapp' ? 'WhatsApp' : 'Meta'} auto-reply enabled` : `${platform === 'whatsapp' ? 'WhatsApp' : 'Meta'} auto-reply disabled`, 
-        type: "success" 
+      mainStore?.setSnackbar?.({
+        title: targetValue ? `${platform === 'whatsapp' ? 'WhatsApp' : 'Meta'} auto-reply enabled` : `${platform === 'whatsapp' ? 'WhatsApp' : 'Meta'} auto-reply disabled`,
+        type: 'success',
       })
     } else {
       if (platform === 'whatsapp') {
@@ -1409,7 +1414,7 @@ const toggleAutoReply = async (platform) => {
       } else {
         autoReplyEnabled.value = !targetValue
       }
-      mainStore?.setSnackbar?.({ title: res?.message || "Failed to update auto-reply settings", type: "error" })
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to update auto-reply settings', type: 'error' })
     }
   } catch (e) {
     if (platform === 'whatsapp') {
@@ -1417,7 +1422,7 @@ const toggleAutoReply = async (platform) => {
     } else {
       autoReplyEnabled.value = !targetValue
     }
-    mainStore?.setSnackbar?.({ title: e?.message || "Failed to update auto-reply settings", type: "error" })
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to update auto-reply settings', type: 'error' })
   } finally {
     autoReplyLoading.value = false
   }
@@ -1437,13 +1442,13 @@ const saveAutoReplyConfig = async () => {
     })
     if (res?.code === 0) {
       autoReplyConfig.value = res.data?.autoReplyConfig || autoReplyConfig.value
-      mainStore?.setSnackbar?.({ title: "Auto-reply config saved", type: "success" })
+      mainStore?.setSnackbar?.({ title: 'Auto-reply config saved', type: 'success' })
       autoReplyConfigDialog.value = false
     } else {
-      mainStore?.setSnackbar?.({ title: res?.message || "Failed to save config", type: "error" })
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to save config', type: 'error' })
     }
   } catch (e) {
-    mainStore?.setSnackbar?.({ title: e?.message || "Failed to save config", type: "error" })
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to save config', type: 'error' })
   } finally {
     autoReplyConfigLoading.value = false
   }
