@@ -11,9 +11,9 @@ export default {
         });
     });
   },
-  getSystemFolders() {
+  getSystemFolders(data) {
     return new Promise((resolve, reject) => {
-      Post("/docs/listSystemFolders")
+      Post("/docs/listSystemFolders", data)
         .then((res) => {
           resolve(res);
         })

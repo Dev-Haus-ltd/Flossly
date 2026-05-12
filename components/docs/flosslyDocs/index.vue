@@ -3,32 +3,29 @@
     <div class="cust-border d-flex align-center">
       <p
         class="mr-1"
-        @click="goBack"
-        :style="selectedFolder?.name ? 'color: blue; cursor: pointer;' : ''"
+        @click="goToRoot"
+        :style="folderStack.length > 0 ? 'color: blue; cursor: pointer;' : ''"
       >
         Flossly docs
       </p>
-      <p v-if="selectedFolder?.name">
-        {{ " / " + selectedFolder.name }}
-      </p>
-    </div>
-    <div v-if="!showFolderDetails">
-      <!-- recently assessed  -->
-      <div class="py-2 px-5" v-if="recentFiles.length">
-        <!-- Heading -->
-        <div
-          style="
-            
-            font-weight: 600;
-            font-size: 14px;
-            font-style: SemiBold;
-          "
-          class="my-4"
+      <template v-for="(folder, index) in folderStack" :key="folder.id">
+        <p class="mr-1">/</p>
+        <p
+          class="mr-1"
+          @click="goToFolder(index)"
+          :style="index < folderStack.length - 1 ? 'color: blue; cursor: pointer;' : ''"
         >
+          {{ folder.name }}
+        </p>
+      </template>
+    </div>
+
+    <div v-if="folderStack.length === 0">
+      <!-- recently accessed -->
+      <div class="py-2 px-5" v-if="recentFiles.length">
+        <div style="font-weight: 600; font-size: 14px;" class="my-4">
           Recently Accessed Files
         </div>
-
-        <!-- Grid -->
         <v-row>
           <v-col
             v-for="(file, index) in recentFiles"
@@ -41,7 +38,7 @@
           </v-col>
         </v-row>
       </div>
-      <!-- folders -->
+      <!-- root folders -->
       <div class="mt-5 px-5">
         <DocsMyDocsFolders
           :folders="foldersList"
@@ -49,7 +46,7 @@
           @open-folder="handleOpenFolder"
         />
       </div>
-      <!-- all files table -->
+      <!-- root files -->
       <div class="my-5 px-5">
         <DocsMyDocsAllFiles
           :files="files"
@@ -61,12 +58,22 @@
         />
       </div>
     </div>
+
     <div v-else>
+      <!-- subfolders (only when depth < 3) -->
+      <div class="mt-5 px-5" v-if="folderStack.length < 3">
+        <DocsMyDocsFolders
+          :folders="foldersList"
+          :hideAddFolderButton="true"
+          @open-folder="handleOpenFolder"
+        />
+      </div>
+      <!-- files inside current folder -->
       <div class="my-5 px-5">
         <DocsMyDocsAllFiles
-          :hideAddFileButton="true"
-          :files="files.filter((x) => x.folderId === selectedFolder.id)"
+          :files="files"
           :folder="selectedFolder"
+          :hideAddFileButton="true"
           :is-system="true"
           @view-file="openFile"
           @edit-file="handleEdit"
@@ -82,65 +89,48 @@
 <script setup>
 import { downloadFile } from "~/lib/misc";
 
-const showFolderDetails = ref(false);
-
 const viewFileDialog = ref(false);
-const selectedFolder = ref(null);
 const selectedDoc = ref(null);
 const docStore = useDocStore();
 
 const recentFiles = ref([]);
 const files = ref([]);
 const foldersList = ref([]);
+const folderStack = ref([]);
+
+const selectedFolder = computed(() => folderStack.value[folderStack.value.length - 1] ?? null);
+
 onMounted(() => {
-  getFolders();
+  getSystemFolders();
   getRecentDocs();
-  getDocs({ folderId: null });
+  getSystemDocs({ folderId: null });
 });
 
-const getFolders = () => {
+const getSystemFolders = (parentId = null) => {
   docStore
-    .getSystemFolders()
+    .getSystemFolders({ parentId })
     .then((res) => {
-      if (res.code === 0) {
-        foldersList.value = res.data;
-      } else {
-        //snack
-      }
+      if (res.code === 0) foldersList.value = res.data;
     })
-    .catch((err) => {
-      //snack
-    });
+    .catch(() => {});
 };
 
 const getRecentDocs = () => {
   docStore
     .recentDocs()
     .then((res) => {
-      if (res.code === 0) {
-        recentFiles.value = res.data;
-      } else {
-        //snack
-      }
+      if (res.code === 0) recentFiles.value = res.data;
     })
-    .catch((err) => {
-      //snack
-    });
+    .catch(() => {});
 };
 
-const getDocs = (data) => {
+const getSystemDocs = (data) => {
   docStore
     .listSystemDocs(data)
     .then((res) => {
-      if (res.code === 0) {
-        files.value = res.data;
-      } else {
-        //snack
-      }
+      if (res.code === 0) files.value = res.data;
     })
-    .catch((err) => {
-      //snack
-    });
+    .catch(() => {});
 };
 
 const openFile = (file) => {
@@ -157,13 +147,24 @@ const handleDownload = (file) => {
 };
 
 const handleOpenFolder = (folder) => {
-  selectedFolder.value = folder;
-  showFolderDetails.value = true;
+  folderStack.value.push(folder);
+  getSystemFolders(folder.id);
+  getSystemDocs({ folderId: folder.id });
 };
 
-const goBack = () => {
-  selectedFolder.value = null;
-  showFolderDetails.value = false;
+const goToRoot = () => {
+  folderStack.value = [];
+  getSystemFolders();
+  getSystemDocs({ folderId: null });
+};
+
+const goToFolder = (index) => {
+  if (index < folderStack.value.length - 1) {
+    const target = folderStack.value[index];
+    folderStack.value = folderStack.value.slice(0, index + 1);
+    getSystemFolders(target.id);
+    getSystemDocs({ folderId: target.id });
+  }
 };
 </script>
 
@@ -178,12 +179,5 @@ const goBack = () => {
     font-size: 12px;
     color: #c3c3c3;
   }
-}
-.head {
-  
-  font-weight: 400;
-  font-style: "Regular";
-  font-size: 14px;
-  color: #8a8a8a;
 }
 </style>
