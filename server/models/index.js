@@ -3,6 +3,7 @@ import { DefaultStatus } from "./defaultStatuses";
 import { DictionaryScript } from "./dictionaryScripts";
 import { OrganisationPriority } from "./organisations/organisationPriorities";
 import { Organisation } from "./organisations/organisations";
+import { OrganisationSmtp } from "./organisations/organisationSmtp";
 import { OrganisationStatus } from "./organisations/organisationStatuses";
 import { Role } from "./roles";
 import { TaskCategory } from "./tasks/taskCategories";
@@ -92,6 +93,8 @@ import { CrmAutomationTemplate } from "./crm/automationTemplates";
 import { CrmAutomationGroup } from "./crm/automationGroups";
 import { CrmAutomationGroupTemplate } from "./crm/automationGroupTemplates";
 import { FormConfig } from "./crm/formConfig";
+import { CrmAutomationDictionaryGroup } from "./crm/crmAutomationDictionaryGroups";
+import { CrmAutomationDictionaryTemplate } from "./crm/crmAutomationDictionaryTemplates";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 import { OrganisationReferral } from "./organisationReferrals";
@@ -177,6 +180,7 @@ User.belongsTo(Role, { foreignKey: "roleId", as: "role", onDelete: "SET NULL" })
 // User -> Preference (USER_DELETE)
 User.hasMany(UserPreference, { foreignKey: "userId", as: "preferences" });
 UserPreference.belongsTo(User, { foreignKey: "userId", as: "user", onDelete: "CASCADE", hooks: true });
+UserPreference.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
 
 // User -> OnboardingEvents (USER_DELETE)
 User.hasMany(OnboardingEvent, { foreignKey: "userId", as: "onboardingEvents" });
@@ -264,6 +268,9 @@ OrganisationSurgery.belongsTo(Organisation, { foreignKey: "organisationId", as: 
 
 Organisation.hasMany(OrganisationGroup, { foreignKey: "organisationId", as: "groups" });
 OrganisationGroup.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
+
+Organisation.hasOne(OrganisationSmtp, { foreignKey: "organisationId", as: "smtpConfig" });
+OrganisationSmtp.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", onDelete: "CASCADE", hooks: true });
 
 OrganisationGroup.hasMany(OrganisationGroupUser, { foreignKey: "groupId", as: "groupUsers" });
 OrganisationGroupUser.belongsTo(Organisation, { foreignKey: "organisationId", as: "organisation", hooks: true });
@@ -527,6 +534,7 @@ export {
   Organisation,
   OrganisationPriority,
   OrganisationStatus,
+  OrganisationSmtp,
   OrganisationContact,
   OrganisationPeople,
   OrganisationEquipment,
@@ -555,6 +563,7 @@ export {
   CourseQuestionaire,
   UserCourseHistory,
   // CRM
+  CrmDmAccount,
   MetaPage,
   CrmLead,
   CrmLeadTreatment,
@@ -566,8 +575,9 @@ export {
   CrmAutomationGroup,
   CrmAutomationGroupTemplate,
   FormConfig,
+  CrmAutomationDictionaryGroup,
+  CrmAutomationDictionaryTemplate,
   CrmWhatsAppMessageLog,
-  CrmDmAccount,
   CrmDmConversation,
   CrmDmMessage,
   MetaUserToken,

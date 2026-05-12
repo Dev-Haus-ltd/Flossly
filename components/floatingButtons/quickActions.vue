@@ -8,6 +8,7 @@
           src="@/assets/icons/floatButton/quick-action.svg"
           alt="Support Menu Icon"
           class="support-icon"
+          draggable="false"
         />
       </template>
 
@@ -21,6 +22,7 @@
               width="20"
               height="20"
               class="mr-3"
+              draggable="false"
             />
           </template>
           <v-list-item-title>Create Task</v-list-item-title>
@@ -34,6 +36,7 @@
               width="20"
               height="20"
               class="mr-3"
+              draggable="false"
             />
           </template>
           <v-list-item-title>Add Staff</v-list-item-title>

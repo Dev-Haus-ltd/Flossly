@@ -194,5 +194,20 @@ export const useUserStore = defineStore("userStore", {
           });
       });
     },
+    deleteLeave(data) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        userService
+          .deleteLeave(data)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
   },
 });

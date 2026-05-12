@@ -72,16 +72,16 @@
     </div>
     <div class="mt-5 px-5">
       <v-alert
-        v-if="activeCampaignFilter"
+        v-if="activeMetaFilter"
         type="info"
         variant="tonal"
         density="compact"
         rounded="lg"
         class="mb-3"
         closable
-        @click:close="clearCampaignFilter"
+        @click:close="clearMetaFilter"
       >
-        Showing leads filtered by campaign: <strong>{{ activeCampaignFilter }}</strong>
+        Showing leads filtered by {{ activeMetaFilter.type }}: <strong>{{ activeMetaFilter.label }}</strong>
       </v-alert>
       <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
         <!-- Left: Search + Filters -->
@@ -116,6 +116,57 @@
             :alertOptions="alertOptions.length ? alertOptions : DEFAULT_ALERT_OPTIONS"
             @update:filters="onLeadsFilterUpdate"
           />
+
+          <v-menu :close-on-content-click="false">
+            <template #activator="{ props: menuProps }">
+              <v-btn
+                v-bind="menuProps"
+                variant="flat"
+                density="compact"
+                class="tbl-top-btn ml-2"
+                style="width: 180px"
+              >
+                <span>Manage Columns</span>
+                <v-icon class="ml-2" size="18">mdi-table-column</v-icon>
+              </v-btn>
+            </template>
+            <v-card class="pa-2" max-width="500" v-if="listViewRef">
+              <p class="mb-2 text-subtitle-2">Selected Columns</p>
+              <div class="d-flex flex-wrap">
+                <div
+                  v-for="(item, index) in listViewRef.selectedHeaders"
+                  :key="index"
+                  class="crm-col-box ma-1 pa-2 d-flex align-center justify-space-between"
+                  :style="{ backgroundColor: listViewRef.getColColor(item.title) }"
+                >
+                  <span>{{ item.title }}</span>
+                  <v-icon
+                    v-if="item.key !== 'name'"
+                    color="white"
+                    size="16"
+                    class="ml-1"
+                    style="cursor:pointer"
+                    @click="listViewRef.removeHeaderFromSelected(item)"
+                  >mdi-close-circle</v-icon>
+                </div>
+              </div>
+              <p class="mb-2 mt-3 text-subtitle-2">Available Columns</p>
+              <div class="d-flex flex-wrap">
+                <div
+                  v-for="(item, index) in listViewRef.filteredAvailableHeaders"
+                  :key="index"
+                  class="crm-col-box ma-1 pa-2 d-flex align-center justify-center"
+                  :style="{ backgroundColor: listViewRef.getColColor(item.title) }"
+                  @click="listViewRef.addHeaderInSelected(item)"
+                >
+                  {{ item.title }}
+                </div>
+              </div>
+            </v-card>
+            <v-card class="pa-4" v-else>
+              <p class="text-caption text-medium-emphasis mb-0">Load leads first to manage columns.</p>
+            </v-card>
+          </v-menu>
         </div>
 
         <!-- Right: Connection Controls -->
@@ -179,14 +230,19 @@
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
-        v-if="!isLoading && (activeLeads.length || archivedLeads.length || route.query.leadId)"
+        ref="listViewRef"
+        v-if="hasFetched && (activeLeads.length || archivedLeads.length || convertedLeads.length || route.query.leadId)"
         :active-leads="activeLeads"
         :archived-leads="archivedLeads"
+        :converted-leads="convertedLeads"
         :active-total="activeTotal"
         :archived-total="archivedTotal"
+        :converted-total="convertedTotal"
         :active-page="activePage"
         :archived-page="archivedPage"
+        :converted-page="convertedPage"
         :items-per-page="itemsPerPage"
+        :loading="isLoading"
         :headers="headers"
         :search="search"
         :leadSources="leadSources"
@@ -198,12 +254,14 @@
         @book="onBookLeads"
         @refresh="handleLeadsRefresh"
         @alert-options-saved="onAlertOptionsSaved"
+        @options-refreshed="onOptionsRefreshed"
         @update:activePage="onActivePageChange"
         @update:archivedPage="onArchivedPageChange"
+        @update:convertedPage="onConvertedPageChange"
         @update:itemsPerPage="onItemsPerPageChange"
       />
 
-      <div v-else-if="!isLoading && !activeLeads.length && !archivedLeads.length" class="d-flex justify-center mt-5">
+      <div v-else-if="hasFetched && !activeLeads.length && !archivedLeads.length" class="d-flex justify-center mt-5">
         <p class="mt-7">No leads found.</p>
       </div>
 
@@ -221,6 +279,7 @@
           :staff-list="userList"
           @close="addLeadDrawer = false"
           @success="handleSuccess"
+          @options-refreshed="onOptionsRefreshed"
         />
         <template v-if="!isLoading && leadSources.length > 0 && userList.length > 0">
           <!-- Add New Lead Panel - Right Side -->
@@ -231,6 +290,7 @@
             :staff-list="userList"
             @close="addLeadDrawer = false"
             @success="handleSuccess"
+            @options-refreshed="onOptionsRefreshed"
           />
           <CustomerRelationManagementBulkLeadUploadDialog
             v-model="bulkLeadUploadDialog"
@@ -249,6 +309,7 @@
             :patient-options="bookingPatientOptions"
             :preselected-patient="bookingLeadName"
             :preselected-patient-id="bookingLeadPatientId"
+            @date-change="loadBookingDentists"
             @save="onSaveBookedAppointment"
           />
         </template>
@@ -559,14 +620,6 @@ const businessPortfolios = ref([]);
 const selectedBusinessId = ref(null);
 const selectedPageIds = ref([]);
 const businessPageSearch = ref('');
-const whatsAppDialog = ref(false);
-const whatsAppSaving = ref(false);
-const isWhatsAppConnected = ref(false);
-const whatsappProvider = reactive({
-  provider: 'meta',
-  supportsTemplates: true,
-  requiresTemplateOutside24h: true,
-});
 const whapiDialog = ref(false);
 const whapiMenu = ref(false);
 const confirmWhapiDisconnect = ref(false);
@@ -587,9 +640,7 @@ const whapiActivationPending = ref(false);
 const whapiActivationMessage = ref('');
 const whapiCooldown = ref(0);
 let whapiCooldownTimer = null;
-const isAnyWhatsAppConnected = computed(() =>
-  whatsappProvider.provider === 'whapi' ? whapiStatus.connected : isWhatsAppConnected.value
-);
+const isAnyWhatsAppConnected = computed(() => whapiStatus.connected);
 const whapiStatusLabel = computed(() => {
   const raw = String(whapiStatus.status || '').trim().toLowerCase();
   const hasPhone = !!(whapiStatus.phoneNumber || whapiStatus.displayName);
@@ -663,6 +714,7 @@ const whatsAppStatus = reactive({
 });
 const whatsAppUsage = reactive({ count: 0, limit: 0 });
 const isLoading = ref(true);
+const hasFetched = ref(false);
 const showBookingDrawer = ref(false);
 const bookingLead = ref(null);
 const bookingDateInput = ref(new Date().toISOString().slice(0,10));
@@ -670,6 +722,7 @@ const bookingTime = ref('');
 const bookingDentists = ref([]);
 const bookingInitialPractitioner = ref('');
 const bookingPatientOptions = ref([]);
+const bookingResolvedPatientId = ref(null);
 const pad = (n) => String(n).padStart(2, '0');
 const nextSlotTime = () => {
   const now = new Date();
@@ -688,7 +741,17 @@ const bookingPractitionerOptions = computed(() =>
 const bookingInitialDate = computed(() => bookingDateInput.value);
 const bookingInitialTime = computed(() => bookingTime.value);
 const bookingLeadName = computed(() => bookingLead.value?.name || '');
-const bookingLeadPatientId = computed(() => bookingLead.value?.patientId || null);
+const bookingLeadPatientId = computed(() => bookingResolvedPatientId.value || bookingLead.value?.patientId || null);
+const currentOrgLicense = computed(() => {
+  const orgId = Number(user.value?.currentLoggedInOrgId || 0);
+  const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
+  const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
+  return String(match?.licenseType || 'Trial').trim();
+});
+const canBookAppointments = computed(() => {
+  const type = String(currentOrgLicense.value || '').toLowerCase();
+  return ['soar', 'system'].includes(type);
+});
 watch(bookingPractitionerOptions, (opts) => {
   if (!bookingInitialPractitioner.value && opts.length) {
     bookingInitialPractitioner.value = opts[0];
@@ -703,7 +766,7 @@ const leadStats = computed(() => {
     {
       icon: "https://cdn.lordicon.com/asyunleq.json",
       label: "Total Lead",
-      value: Number(leadStatsData.value.total || 0),
+      value: (activeTotal.value || 0) + (convertedTotal.value || 0),
       valueColor: 'on-surface'
     },
     {
@@ -715,7 +778,7 @@ const leadStats = computed(() => {
     {
       icon: "https://cdn.lordicon.com/qlpudrww.json",
       label: "Converted",
-      value: byStatus("Converted"),
+      value: convertedTotal.value || byStatus("Converted"),
       valueColor: 'primary'
     },
     {
@@ -730,19 +793,29 @@ const leadStats = computed(() => {
       value: byStatus("Lost"),
       valueColor: 'error'
     },
+    {
+      icon: "https://cdn.lordicon.com/zpxybbhl.json",
+      label: "Uploaded",
+      value: byStatus("Uploaded"),
+      valueColor: 'purple'
+    },
   ];
 });
 
+const listViewRef = ref(null);
 const searchInput = ref("");
 const search = ref("");
 let searchTimeout = null;
 
 const activeLeads = ref([]);
 const archivedLeads = ref([]);
+const convertedLeads = ref([]);
 const activeTotal = ref(0);
 const archivedTotal = ref(0);
+const convertedTotal = ref(0);
 const activePage = ref(1);
 const archivedPage = ref(1);
+const convertedPage = ref(1);
 const itemsPerPage = ref(25);
 
 const headers = [
@@ -762,8 +835,14 @@ const headers = [
 const leadSources = ref([]);
 const treatmentSources = ref([]);
 const activeFilters = ref({});
-const activeCampaignFilter = computed(() => activeFilters.value?.campaignId || null);
-const clearCampaignFilter = async () => {
+const activeMetaFilter = computed(() => {
+  const f = activeFilters.value;
+  if (f?.adId) return { type: 'Ad', label: f.adName || f.adId };
+  if (f?.adSetId) return { type: 'Ad Set', label: f.adSetName || f.adSetId };
+  if (f?.campaignId) return { type: 'Campaign', label: f.campaignName || f.campaignId };
+  return null;
+});
+const clearMetaFilter = async () => {
   activeFilters.value = {};
   await fetchLeads({});
 };
@@ -774,44 +853,6 @@ const onLeadsFilterUpdate = async (filters) => {
   await fetchLeads(activeFilters.value)
 };
 
-const loadWhatsAppConfig = async () => {
-  try {
-    const res = await crmStore.getWhatsAppConfig();
-    if (res?.code === 0 && res.data) {
-      const data = res.data;
-      whatsappProvider.provider = data.provider || 'meta';
-      whatsappProvider.supportsTemplates = data.supportsTemplates !== false;
-      whatsappProvider.requiresTemplateOutside24h = data.requiresTemplateOutside24h !== false;
-
-      if (whatsappProvider.provider === 'whapi') {
-        whapiStatus.connected = !!data.hasToken;
-        whapiStatus.channelId = data.channelId || '';
-      } else {
-        whatsAppStatus.phoneNumberId = data.phoneNumberId || '';
-        whatsAppStatus.wabaId = data.wabaId || '';
-        whatsAppStatus.displayPhoneNumber = data.displayPhoneNumber || '';
-        whatsAppStatus.verifiedName = data.verifiedName || '';
-        isWhatsAppConnected.value = !!data.hasToken;
-      }
-    } else {
-      whatsappProvider.provider = 'meta';
-      whatsAppStatus.phoneNumberId = '';
-      whatsAppStatus.wabaId = '';
-      whatsAppStatus.displayPhoneNumber = '';
-      whatsAppStatus.verifiedName = '';
-      isWhatsAppConnected.value = false;
-      whapiStatus.connected = false;
-    }
-  } catch (e) {
-    whatsappProvider.provider = 'meta';
-    whatsAppStatus.phoneNumberId = '';
-    whatsAppStatus.wabaId = '';
-    whatsAppStatus.displayPhoneNumber = '';
-    whatsAppStatus.verifiedName = '';
-    isWhatsAppConnected.value = false;
-    whapiStatus.connected = false;
-  }
-};
 
 const loadWhapiStatus = async () => {
   try {
@@ -1005,77 +1046,6 @@ const loadFacebookSdk = () => {
   })
 }
 
-const connectWhatsAppEmbedded = async () => {
-  const config = useRuntimeConfig()
-  const appId = config.public?.META_APP_ID || config.public?.META_APPID || ''
-  const configId = 913675551081181
-
-  if (!appId || !configId) {
-    mainStore?.setSnackbar?.({ title: 'Meta app config is missing', type: 'error' })
-    return
-  }
-
-  try {
-    whatsAppSaving.value = true
-    const fb = await loadFacebookSdk()
-    fb.init({ appId, xfbml: false, version: 'v24.0' })
-
-    let pending = { wabaId: null, phoneNumberId: null, displayPhoneNumber: null, verifiedName: null }
-    const onMessage = (event) => {
-      if (!event?.origin?.includes('facebook.com')) return
-      const data = event.data || {}
-      if (data?.type !== 'WA_EMBEDDED_SIGNUP') return
-      if (data?.event === 'FINISH' || data?.event === 'FINISH_ONLY_WABA') {
-        pending = {
-          wabaId: data?.waba_id || data?.wabaId || pending.wabaId,
-          phoneNumberId: data?.phone_number_id || data?.phoneNumberId || pending.phoneNumberId,
-          displayPhoneNumber: data?.display_phone_number || data?.displayPhoneNumber || pending.displayPhoneNumber,
-          verifiedName: data?.verified_name || data?.verifiedName || pending.verifiedName,
-        }
-      }
-    }
-    window.addEventListener('message', onMessage)
-
-    const handleLogin = async (response) => {
-      window.removeEventListener('message', onMessage)
-      if (!response?.authResponse) {
-        mainStore?.setSnackbar?.({ title: 'Meta login cancelled', type: 'error' })
-        return
-      }
-      const accessToken = response.authResponse.accessToken || null
-      const code = response.authResponse.code || null
-      const payload = {
-        accessToken,
-        code,
-        wabaId: pending.wabaId,
-        phoneNumberId: pending.phoneNumberId,
-        displayPhoneNumber: pending.displayPhoneNumber,
-        verifiedName: pending.verifiedName,
-      }
-      const res = await crmStore.completeWhatsAppEmbedded(payload)
-      if (res?.code === 0) {
-        await loadWhatsAppConfig()
-        await loadWhatsAppUsage()
-        mainStore?.setSnackbar?.({ title: 'WhatsApp connected', type: 'success' })
-      } else {
-        const msg = res?.error || res?.message || 'Failed to connect WhatsApp'
-        mainStore?.setSnackbar?.({ title: msg, type: 'error' })
-      }
-    }
-
-    fb.login((response) => { handleLogin(response) }, {
-      config_id: configId,
-      response_type: 'code',
-      override_default_response_type: true,
-      scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management',
-    })
-  } catch (e) {
-    const msg = e?.message || 'Failed to connect WhatsApp'
-    mainStore?.setSnackbar?.({ title: msg, type: 'error' })
-  } finally {
-    whatsAppSaving.value = false
-  }
-}
 
 const normalizeMetaMessage = (message) => {
   if (!message) return '';
@@ -1118,6 +1088,7 @@ const handleMetaQuery = async (metaConnected, metaError) => {
   } else if (metaConnected && mainStore?.setSnackbar) {
     mainStore.setSnackbar({ title: 'Meta connected successfully', type: 'success' });
   }
+  if (metaConnected) metaHealthData.value = null;
   if (metaConnected || metaError) clearMetaQuery();
   if (metaConnected && (pagesCount > 0 || tokenOnly)) await loadBusinessPortfolios(true);
 };
@@ -1256,7 +1227,6 @@ onMounted(() => {
   const metaError = route.query.error;
   initLeads(metaConnected);
   checkConnection();
-  loadWhatsAppConfig();
   loadWhatsAppUsage();
   loadWhapiStatus();
   initOptions();
@@ -1295,6 +1265,11 @@ const onAlertOptionsSaved = (options) => {
   alertOptions.value = options
 }
 
+const onOptionsRefreshed = ({ category, options }) => {
+  if (category === 'lead_source') leadSources.value = options
+  else if (category === 'treatment') treatmentSources.value = options
+}
+
 const normalizeDateInput = (value) => {
   if (!value) return bookingDateInput.value;
   if (typeof value === 'string') {
@@ -1326,9 +1301,9 @@ const deriveTimeFromValue = (value) => {
   if (!Number.isNaN(parsed.valueOf())) return `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
   return null;
 };
-const loadBookingDentists = async () => {
+const loadBookingDentists = async (date = bookingDateInput.value || new Date().toISOString().slice(0, 10)) => {
   try {
-    const res = await diaryStore.listDentists(new Date().toISOString().slice(0, 10));
+    const res = await diaryStore.listDentists(normalizeDateInput(date));
     if (res?.code === 0) {
       bookingDentists.value = (res.data || []).map((d) => ({
         id: d.id,
@@ -1357,18 +1332,110 @@ const matchingDentistName = (lead) => {
   }
   return bookingPractitionerOptions.value[0] || '';
 };
-const onBookLeads = (selection) => {
+const splitLeadName = (lead) => {
+  const rawName = String(lead?.name || '').trim();
+  if (!rawName) return { firstName: 'CRM', lastName: 'Lead' };
+  const [firstName, ...rest] = rawName.split(/\s+/);
+  return {
+    firstName: firstName || 'CRM',
+    lastName: rest.join(' ') || '-',
+  };
+};
+const ensureBookingPatientOption = (patient) => {
+  const id = Number(patient?.id || 0);
+  if (!id) return;
+  const name = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim() || patient?.name || bookingLeadName.value || 'CRM Lead';
+  const existing = bookingPatientOptions.value.find((row) => Number(row?.id || 0) === id);
+  if (existing) {
+    existing.name = name;
+    return;
+  }
+  bookingPatientOptions.value.unshift({ id, name });
+};
+const findExistingBookingPatient = async (lead) => {
+  const searchTerms = [lead?.email, lead?.telephone, lead?.name]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  for (const term of searchTerms) {
+    try {
+      const res = await diaryStore.listPatients(term);
+      if (res?.code !== 0 || !Array.isArray(res?.data)) continue;
+      const match = res.data.find((patient) => {
+        const fullName = `${patient?.firstName || ''} ${patient?.lastName || ''}`.trim().toLowerCase();
+        const leadName = String(lead?.name || '').trim().toLowerCase();
+        const sameEmail = String(patient?.email || '').trim().toLowerCase() && String(patient?.email || '').trim().toLowerCase() === String(lead?.email || '').trim().toLowerCase();
+        const samePhone = String(patient?.mobile || '').trim() && String(patient?.mobile || '').trim() === String(lead?.telephone || '').trim();
+        const sameName = leadName && fullName === leadName;
+        return sameEmail || samePhone || sameName;
+      });
+      if (match) return match;
+    } catch {}
+  }
+  return null;
+};
+const ensureLeadPatient = async (lead) => {
+  if (!lead) return null;
+  const existingId = Number(lead?.patientId || 0);
+  if (existingId) {
+    const { firstName, lastName } = splitLeadName(lead);
+    const existing = {
+      id: existingId,
+      firstName,
+      lastName,
+      email: lead?.email || null,
+      mobile: lead?.telephone || null,
+    };
+    ensureBookingPatientOption(existing);
+    return existing;
+  }
+
+  const matched = await findExistingBookingPatient(lead);
+  if (matched?.id) {
+    ensureBookingPatientOption(matched);
+    return matched;
+  }
+
+  const { firstName, lastName } = splitLeadName(lead);
+  const created = await diaryStore.createPatient({
+    firstName,
+    lastName,
+    email: lead?.email || null,
+    mobile: lead?.telephone || null,
+    acquisitionSource: lead?.leadSource?.name || lead?.leadSource || 'CRM Lead',
+    occupation: lead?.occupation || null,
+  });
+  if (created?.code === 0 && created?.data?.id) {
+    ensureBookingPatientOption(created.data);
+    return created.data;
+  }
+  throw new Error(created?.message || 'Unable to create patient for this lead');
+};
+const onBookLeads = async (selection) => {
   const picked = Array.isArray(selection) ? selection : [];
   if (!picked.length) return;
   if (picked.length > 1) {
     mainStore?.setSnackbar?.({ title: 'Select only one lead to book an appointment', type: 'error' });
     return;
   }
-  bookingLead.value = picked[0];
-  bookingDateInput.value = normalizeDateInput(picked[0]?.followUpDate || new Date());
-  bookingTime.value = deriveTimeFromValue(picked[0]?.followUpDate) || nextSlotTime();
-  bookingInitialPractitioner.value = matchingDentistName(picked[0]);
-  showBookingDrawer.value = true;
+  if (!canBookAppointments.value) {
+    mainStore?.setSnackbar?.({ title: 'Upgrade to the Soar plan to book leads into the diary', type: 'warning' });
+    return;
+  }
+  const lead = picked[0];
+  bookingLead.value = lead;
+  bookingResolvedPatientId.value = null;
+  bookingDateInput.value = normalizeDateInput(lead?.followUpDate || new Date());
+  bookingTime.value = deriveTimeFromValue(lead?.followUpDate) || nextSlotTime();
+  await loadBookingDentists(bookingDateInput.value);
+  bookingInitialPractitioner.value = matchingDentistName(lead);
+  try {
+    const patient = await ensureLeadPatient(lead);
+    bookingResolvedPatientId.value = Number(patient?.id || 0) || null;
+    showBookingDrawer.value = true;
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Unable to prepare patient booking', type: 'error' });
+  }
 };
 const onSaveBookedAppointment = async (appt) => {
   if (!bookingLead.value) return;
@@ -1408,6 +1475,7 @@ const onSaveBookedAppointment = async (appt) => {
       } catch (e) {}
       mainStore?.setSnackbar?.({ title: 'Appointment booked and lead converted', type: 'success' });
       bookingLead.value = null;
+      bookingResolvedPatientId.value = null;
       bookingInitialPractitioner.value = bookingPractitionerOptions.value[0] || '';
       fetchLeads(activeFilters.value);
     }
@@ -1460,7 +1528,7 @@ const resolveLeadSource = (source) => {
     if (match) return match;
     return { id: null, name: source.trim() };
   }
-  return { id: 99, name: "Meta Leadgen" };
+  return { id: null, name: "" };
 };
 
 const handleSuccess = async () => {
@@ -1482,7 +1550,7 @@ const mapLeadRow = (l) => ({
   dob: l.dob || null,
   occupation: l.occupation || "",
   location: l.location || "",
-  leadSource: l.leadSource?.name ? l.leadSource : { id: 99, name: l.leadSource || "Meta Leadgen" },
+  leadSource: l.leadSource?.name ? l.leadSource : { id: null, name: l.leadSource || "" },
   metaPage: l.pageName || l.pageId || "",
   leadStatus: l.leadStatus || "New",
   treatment: l.treatment || { id: null, name: "" },
@@ -1496,6 +1564,7 @@ const mapLeadRow = (l) => ({
 const fetchActiveLeads = async (filters = {}) => {
   const payload = {
     ...filters,
+    excludeConverted: true,
     search: search.value || '',
     page: activePage.value,
     pageSize: itemsPerPage.value,
@@ -1531,19 +1600,38 @@ const fetchArchivedLeads = async (filters = {}) => {
   }
 };
 
+const fetchConvertedLeads = async (filters = {}) => {
+  const payload = {
+    ...filters,
+    leadStatus: 'Converted',
+    search: search.value || '',
+    page: convertedPage.value,
+    pageSize: itemsPerPage.value,
+    sortBy: 'inquiryDate',
+    sortDir: 'DESC',
+  };
+  const res = await crmStore.listLeads(payload);
+  if (res && res.code === 0) {
+    const rows = Array.isArray(res.data?.rows) ? res.data.rows : (res.data || []);
+    convertedLeads.value = rows.map(mapLeadRow);
+    convertedTotal.value = Number(res.data?.total ?? convertedLeads.value.length);
+  }
+};
+
 const fetchLeads = async (filters = {}) => {
   isLoading.value = true;
   try {
-    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters)]);
+    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters), fetchConvertedLeads(filters)]);
   } finally {
     isLoading.value = false;
+    hasFetched.value = true;
   }
 };
 
 // Background refresh — does NOT toggle isLoading so the table stays mounted
 const silentRefreshLeads = async (filters = {}) => {
   try {
-    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters)]);
+    await Promise.all([fetchActiveLeads(filters), fetchArchivedLeads(filters), fetchConvertedLeads(filters)]);
   } catch {}
 };
 
@@ -1557,6 +1645,12 @@ const onArchivedPageChange = async (val) => {
   if (archivedPage.value === val) return;
   archivedPage.value = val;
   await fetchArchivedLeads(activeFilters.value);
+};
+
+const onConvertedPageChange = async (val) => {
+  if (convertedPage.value === val) return;
+  convertedPage.value = val;
+  await fetchConvertedLeads(activeFilters.value);
 };
 
 const onItemsPerPageChange = async (val) => {
@@ -1584,11 +1678,13 @@ const initLeads = async (metaConnected = false) => {
       console.error('[CRM] Meta post-connect sync failed', e);
     }
   }
-  // Pre-filter by campaign if navigated from the analytics page
+  // Pre-filter by campaign / ad set / ad if navigated from the analytics page
+  const adId = route.query.adId || null;
+  const adSetId = route.query.adSetId || null;
   const campaignId = route.query.campaignId || null;
-  if (campaignId) {
-    activeFilters.value = { campaignId };
-  }
+  if (adId) activeFilters.value = { adId, adName: route.query.adName || null };
+  else if (adSetId) activeFilters.value = { adSetId, adSetName: route.query.adSetName || null };
+  else if (campaignId) activeFilters.value = { campaignId, campaignName: route.query.campaignName || null };
   await fetchLeads(activeFilters.value)
 
 };
@@ -1607,11 +1703,12 @@ const onReconnectMeta = () => {
 
 const openMetaHealth = async () => {
   metaHealthDialog.value = true;
+  if (metaHealthData.value || metaHealthLoading.value) return;
   metaHealthLoading.value = true;
   try {
     const [healthRes, permsRes] = await Promise.all([
-      crmStore.metaHealth(),
-      crmStore.metaPermissions(),
+      crmStore.metaHealthSilent(),
+      crmStore.metaPermissionsSilent(),
     ]);
     if (healthRes?.code === 0) {
       const permsPayload = permsRes?.code === 0 ? (permsRes.data || null) : null;
@@ -1693,6 +1790,7 @@ const disconnectMeta = async () => {
     disconnecting.value = true;
     const res = await crmStore.disconnectMeta();
     if (res?.code === 0) {
+      metaHealthData.value = null;
       await checkConnection();
       mainStore?.setSnackbar?.({ title: 'Meta disconnected', type: 'success' });
     } else {
@@ -1858,6 +1956,16 @@ watch(isConnected, (val) => {
 .custom-search :deep(input::placeholder) {
   color: #737373;
   opacity: 1;
+}
+
+.crm-col-box {
+  min-width: calc(33.33% - 8px);
+  color: white;
+  border-radius: 6px;
+  font-weight: 400;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 36px;
 }
 
 </style>

@@ -95,7 +95,21 @@ export const Organisation = sequelize.define(
       type: DataTypes.JSONB,
       allowNull: true,
     },
+    autoReplyEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
+    autoReplyConfig: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    whatsappAutoReplyEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+  },
   {
     modelName: "Organisations",
     timestamps: true,

@@ -1,0 +1,11 @@
+title,description,categoryId,roleId,defaultFrequency
+Morning Rounds,Complete morning patient rounds,1,1,Daily
+Equipment Check,Check all medical equipment,1,1,Weekly
+Inventory Review,Review inventory levels,1,1,Monthly
+Staff Meeting,Weekly staff meeting,1,1,Weekly
+Safety Inspection,Perform safety inspection,1,1,Monthly
+Patient Follow-up,Follow up with recent patients,1,1,Daily
+Clean Workspace,Clean and organize workspace,1,1,Daily
+Update Records,Update patient records,1,1,One off
+Training Session,Staff training session,1,1,Monthly
+Supply Order,Order medical supplies,1,1,Fortnightly

@@ -35,7 +35,7 @@
           <v-col cols="12" md="6">
             <label class="field-label">Reports to</label>
             <v-select
-              v-model="data.reportsTo"
+              v-model="reportsTo"
               :items="userList"
               item-title="fullName"
               item-value="id"
@@ -44,7 +44,7 @@
               density="compact"
               variant="solo"
               bg-color="white"
-              @update:modelValue="onSelectChange('reportsTo')"
+              @update:modelValue="onReportsToChange"
             />
           </v-col>
           <v-col cols="12" md="6">
@@ -81,6 +81,7 @@ const { data, rolesList, userList, roleId } = defineProps({
 });
 const initialRoleId = ref(roleId);
 const role = ref(roleId);
+const reportsTo = ref(data.reportsTo);
 const emit = defineEmits(["updateField", "updateRole"]);
 
 const isDirty = ref(false);
@@ -102,7 +103,7 @@ const normalizeData = (obj) => {
 const checkDirty = () => {
   if (!initialized.value) return;
   try {
-    const current = normalizeData({...data, role: role.value});
+    const current = normalizeData({...data, role: role.value, reportsTo: reportsTo.value});
     const originalData = JSON.parse(original.value || '{}');
     const normalizedOriginal = normalizeData(originalData);
     isDirty.value = JSON.stringify(current) !== JSON.stringify(normalizedOriginal);
@@ -118,7 +119,7 @@ const onRoleChange = () => {
   }
 };
 
-const onSelectChange = (key) => {
+const onReportsToChange = () => {
   if (initialized.value) {
     checkDirty();
   }
@@ -126,8 +127,9 @@ const onSelectChange = (key) => {
 
 onMounted(async () => {
   await nextTick();
+  reportsTo.value = data.reportsTo;
   try {
-    const initialData = normalizeData({...data, role: role.value});
+    const initialData = normalizeData({...data, role: role.value, reportsTo: reportsTo.value});
     original.value = JSON.stringify(initialData);
     isDirty.value = false;
     initialized.value = true;
@@ -196,14 +198,14 @@ const onEnter = (e, key) => {
 };
 
 const savePanel = () => {
-  const updated = data;
+  const updated = {...data, reportsTo: reportsTo.value};
   emit("updateField", { sync: true, updated });
   if (role.value !== initialRoleId.value) {
     emit("updateRole", { sync: false, roleId: role.value });
     initialRoleId.value = role.value;
   }
   try { 
-    const savedData = normalizeData({...data, role: role.value});
+    const savedData = normalizeData({...data, role: role.value, reportsTo: reportsTo.value});
     original.value = JSON.stringify(savedData); 
   } catch {}
   isDirty.value = false;

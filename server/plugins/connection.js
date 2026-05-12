@@ -1,5 +1,6 @@
 import "../models";
-import sequelize  from "../utils/db";
+import sequelize from "../utils/db";
+import { seedCrmAutomationDictionary } from "../utils/seedCrmAutomationDictionary";
 export default defineNitroPlugin(async (nitroApp) => {
   try {
     await sequelize.authenticate();

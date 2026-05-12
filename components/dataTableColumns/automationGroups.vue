@@ -6,7 +6,12 @@
         :key="group.key"
         class="avatar-trigger me-n2"
       >
-        <div class="group-avatar" :title="group.title || group.key">
+        <div
+          class="group-avatar"
+          :class="{ 'group-avatar--palette': !!group.avatarColor }"
+          :style="groupAvatarStyle(group)"
+          :title="group.title || group.key"
+        >
           {{ groupInitials(group) }}
         </div>
       </div>
@@ -97,7 +102,28 @@
                 {{ group.description }}
               </div>
             </div>
+            <v-tooltip
+              v-if="isWaGroup(group) && !whatsappEnabled"
+              location="top"
+            >
+              <template #activator="{ props: tp }">
+                <div v-bind="tp" class="d-flex align-center" style="gap:4px;">
+                  <v-switch
+                    inset
+                    density="compact"
+                    hide-details
+                    color="primary"
+                    class="automation-group-switch"
+                    :disabled="true"
+                    :model-value="isGroupEnabled(lead, group)"
+                  />
+                  <v-icon size="14" color="warning">mdi-wifi-off</v-icon>
+                </div>
+              </template>
+              <span>WhatsApp not connected</span>
+            </v-tooltip>
             <v-switch
+              v-else
               inset
               density="compact"
               hide-details
@@ -133,7 +159,14 @@ const props = defineProps({
   saving: { type: Boolean, default: false },
   groupsLoading: { type: Boolean, default: false },
   readonly: { type: Boolean, default: false },
+  whatsappEnabled: { type: Boolean, default: true },
 })
+
+const isWaGroup = (group) => {
+  const key = String(group?.key || '').toLowerCase()
+  const title = String(group?.title || '').toLowerCase()
+  return key.includes('whatsapp') || title.includes('whatsapp')
+}
 
 const menu = ref(false)
 const currentActivator = ref(null)
@@ -149,10 +182,31 @@ const groupInitials = (group) => {
   return letters.toUpperCase()
 }
 
+const contrastTextOnHex = (hex) => {
+  const s = String(hex || '').trim()
+  if (!/^#[0-9A-Fa-f]{6}$/.test(s)) return '#FFFFFF'
+  const r = parseInt(s.slice(1, 3), 16)
+  const g = parseInt(s.slice(3, 5), 16)
+  const b = parseInt(s.slice(5, 7), 16)
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return lum > 0.62 ? '#1E1E1E' : '#FFFFFF'
+}
+
+const groupAvatarStyle = (group) => {
+  const bg = group?.avatarColor
+  if (!bg) return {}
+  return {
+    backgroundColor: bg,
+    color: contrastTextOnHex(bg),
+    borderColor: bg,
+  }
+}
+
 const filteredGroups = computed(() => {
   const q = String(search.value || '').trim().toLowerCase()
-  if (!q) return props.groups || []
-  return (props.groups || []).filter((group) =>
+  const base = (props.groups || []).filter((g) => (g.templateKeys || []).length > 0)
+  if (!q) return base
+  return base.filter((group) =>
     `${group?.title || ''} ${group?.key || ''} ${group?.description || ''}`
       .toLowerCase()
       .includes(q)
@@ -232,6 +286,11 @@ const onTriggerClick = (event, item) => {
   background: #f0f0f0;
   color: #555;
   border-color: #e0e0e0;
+}
+
+.group-avatar--palette {
+  border-width: 1px;
+  border-style: solid;
 }
 
 .automation-list {

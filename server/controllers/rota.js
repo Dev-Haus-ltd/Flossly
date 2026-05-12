@@ -521,7 +521,6 @@ export const deleteRotaShift = async (event) => {
     if (!rotaId || !shiftId)
       throw createError({ message: "rotaId and shiftId are required" });
 
-    // Find the shift belonging to the rota
     const shift = await RotaShift.findOne({
       where: { id: shiftId, rotaId, isDeleted: false },
     });
@@ -529,11 +528,57 @@ export const deleteRotaShift = async (event) => {
     if (!shift)
       throw createError({ message: "Shift not found in the specified rota" });
 
-    // Soft delete
-    shift.isDeleted = true;
-    await shift.save();
+    if (shift.isTemplate) {
+      // Strip the slot assignment so the shift disappears from the grid
+      // but stays in the shift library as a reusable template
+      shift.userId = null;
+      shift.locumUserId = null;
+      shift.surgeryId = null;
+      shift.dentistId = null;
+      shift.nurseId = null;
+      await shift.save();
+    } else {
+      shift.isDeleted = true;
+      await shift.save();
+    }
 
-    return success({ message: "Shift deleted from rota successfully" });
+    return success({ message: "Shift cleared successfully" });
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const deleteShiftAndTemplate = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { rotaId, shiftId } = parseJsonBody(body);
+
+    if (!rotaId || !shiftId)
+      throw createError({ message: "rotaId and shiftId are required" });
+
+    const shift = await RotaShift.findOne({
+      where: { id: shiftId, rotaId, isDeleted: false },
+    });
+
+    if (!shift)
+      throw createError({ message: "Shift not found in the specified rota" });
+
+    const rota = await Rota.findByPk(rotaId, { attributes: ["organisationId"] });
+    if (!rota) throw createError({ message: "Rota not found" });
+
+    const orgRotaIds = (
+      await Rota.findAll({
+        where: { organisationId: rota.organisationId },
+        attributes: ["id"],
+      })
+    ).map((r) => r.id);
+
+    await RotaShift.update(
+      { isDeleted: true },
+      { where: { label: shift.label, rotaId: { [Op.in]: orgRotaIds }, isDeleted: false } }
+    );
+
+    return success({ message: "Shift and template deleted successfully" });
   } catch (err) {
     return error(500, err.message);
   }
@@ -591,14 +636,11 @@ export const updateShift = async (event) => {
         where: {
           rotaId: shift.rotaId,
           id: { [Op.ne]: id },
+          isDeleted: false,
           [Op.or]: conflictConditions,
           [Op.and]: [
-            {
-              [Op.or]: [
-                { startDate: { [Op.lt]: finalEndDate } },
-                { endDate: { [Op.gt]: finalStartDate } }
-              ]
-            }
+            { startDate: { [Op.lt]: finalEndDate } },
+            { endDate: { [Op.gt]: finalStartDate } }
           ]
         }
       });

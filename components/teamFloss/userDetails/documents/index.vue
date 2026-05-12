@@ -240,7 +240,7 @@
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
-    <DocsMyDocsViewFileDialog v-model="viewFileDialog" :doc="selectedDoc" />
+    <DocsMyDocsViewFileDialog v-model="viewFileDialog" :doc="selectedDoc" :isHr="true" />
     <TeamFlossUserDetailsDocumentsUploadDocument
       v-model="isDialogOpen"
       :doc="selectedDoc"
@@ -298,11 +298,17 @@ const matchesSearch = (item) => {
   );
 };
 
+const sortByUploaded = (a, b) => {
+  if (a.status === "Completed" && b.status !== "Completed") return -1;
+  if (a.status !== "Completed" && b.status === "Completed") return 1;
+  return 0;
+};
+
 const filteredRecruitment = computed(() =>
-  recruitmentDocs.value.filter((it) => matchesSearch(it))
+  recruitmentDocs.value.filter((it) => matchesSearch(it)).sort(sortByUploaded)
 );
 const filteredTraining = computed(() =>
-  trainingDocs.value.filter((it) => matchesSearch(it))
+  trainingDocs.value.filter((it) => matchesSearch(it)).sort(sortByUploaded)
 );
 
 function getStatusColor(status) {

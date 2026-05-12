@@ -10,13 +10,30 @@
           <v-tab value="messenger">Messenger</v-tab>
           <v-tab value="instagram">Instagram</v-tab>
         </v-tabs>
-        <v-divider />
+        <v-spacer />
+        <div class="d-flex align-center mr-2">
+        </div>
       </div>
 
       <div class="dms-body">
         <v-card class="dms-list-card" variant="outlined">
           <div class="dms-list-header">
-            <div class="dms-list-title">Conversations</div>
+            <div class="d-flex align-center justify-space-between">
+              <div class="dms-list-title">Conversations</div>
+              <v-btn
+                variant="text"
+                density="compact"
+                size="small"
+                :loading="syncingHistory"
+                :disabled="syncingHistory"
+                class="text-none text-caption"
+                color="primary"
+                @click="syncHistory"
+              >
+                <v-icon size="14" class="mr-1">mdi-refresh</v-icon>
+                Sync history
+              </v-btn>
+            </div>
             <div class="d-inline-flex align-center py-1 dms-toolbar">
               <div style="width: 120px">
                 <v-text-field
@@ -128,10 +145,18 @@
                 @click="selectConversation(conv.id)"
               >
                 <template #prepend>
-                  <v-avatar size="40" class="mr-2">
-                    <img v-if="conv.avatarUrl" :src="conv.avatarUrl" alt="Avatar" @error="(e) => e.target.style.display = 'none'" />
-                    <span v-else>{{ conv.avatarText }}</span>
-                  </v-avatar>
+                  <div class="dm-avatar-wrap mr-2">
+                    <v-avatar size="40">
+                      <img v-if="conv.avatarUrl" :src="conv.avatarUrl" alt="Avatar" @error="(e) => e.target.style.display = 'none'" />
+                      <span v-else>{{ conv.avatarText }}</span>
+                    </v-avatar>
+                    <span
+                      class="dm-platform-dot"
+                      :class="conv.platform === 'instagram' ? 'dm-platform-dot--ig' : 'dm-platform-dot--messenger'"
+                    >
+                      <v-icon size="9" color="white">{{ conv.platform === 'instagram' ? 'mdi-instagram' : 'mdi-facebook-messenger' }}</v-icon>
+                    </span>
+                  </div>
                 </template>
                 <v-list-item-title class="text-body-2 dm-item-title">
                   {{ conv.title }}
@@ -156,16 +181,72 @@
 
         <v-card class="dms-thread-card" variant="outlined">
           <div class="dms-thread-header">
-            <div class="dms-thread-title">
-              {{ activeConversation?.title || "Select a conversation" }}
-            </div>
-            <div class="text-caption text-medium-emphasis">
-              {{ activeConversation ? (activeConversation.platform === 'instagram' ? 'Instagram' : 'Messenger') : 'No conversation selected' }}
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="dms-thread-title">
+                  {{ activeConversation?.title || "Select a conversation" }}
+                </div>
+                <div class="text-caption text-medium-emphasis">
+                  {{ activeConversation ? (activeConversation.platform === 'instagram' ? 'Instagram' : 'Messenger') : 'No conversation selected' }}
+                </div>
+              </div>
+              <div class="d-flex align-center gap-2">
+                <v-chip
+                  v-if="withinMessageWindow && windowTimeRemaining"
+                  size="x-small"
+                  color="warning"
+                  variant="tonal"
+                  class="text-caption"
+                >
+                  <v-icon start size="12">mdi-clock-alert-outline</v-icon>
+                  {{ windowTimeRemaining }}
+                </v-chip>
+                <v-chip
+                  v-else-if="withinMessageWindow && activeConversationId"
+                  size="x-small"
+                  color="success"
+                  variant="tonal"
+                  class="text-caption"
+                >
+                  <v-icon start size="12">mdi-check-circle-outline</v-icon>
+                  Window open
+                </v-chip>
+                <v-chip
+                  v-else-if="activeConversationId && !withinMessageWindow"
+                  size="x-small"
+                  color="error"
+                  variant="tonal"
+                  class="text-caption"
+                >
+                  <v-icon start size="12">mdi-clock-remove-outline</v-icon>
+                  Window closed
+                </v-chip>
+                <template v-if="showConversationAutoReplyToggle">
+                  <v-divider vertical class="mx-1" />
+                  <v-tooltip location="bottom" text="Auto-reply for this conversation">
+                    <template #activator="{ props: tooltipProps }">
+                      <div v-bind="tooltipProps" class="d-flex align-center">
+                        <v-icon size="12" :color="conversationAutoReplyEnabled ? 'success' : 'grey'" class="mr-1">{{ conversationAutoReplyEnabled ? 'mdi-robot' : 'mdi-robot-off-outline' }}</v-icon>
+                        <span class="text-caption text-medium-emphasis mr-1">Auto-reply</span>
+                        <v-switch
+                          v-model="conversationAutoReplyEnabled"
+                          color="success"
+                          density="compact"
+                          hide-details
+                          inset
+                          style="transform: scale(0.7);"
+                          @update:model-value="toggleConversationAutoReply"
+                        />
+                      </div>
+                    </template>
+                  </v-tooltip>
+                </template>
+              </div>
             </div>
           </div>
           <v-divider />
           <div ref="threadBodyRef" class="dms-thread-body" @scroll="onThreadScroll">
-            <CommonChatThread
+            <ChatThread
               :groups="groupedMessages"
               :loading="loadingMessages"
               :empty-message="emptyMessage"
@@ -179,7 +260,7 @@
               <template v-if="lastInboundAgo"> Last received {{ lastInboundAgo }}.</template>
             </span>
           </div>
-          <CommonChatInputBar
+          <ChatInputBar
             v-model="draftMessage"
             :can-send="canSend"
             :disabled="!activeConversationId || !withinMessageWindow"
@@ -190,13 +271,67 @@
         </v-card>
       </div>
     </div>
+
+    <v-dialog v-model="autoReplyConfigDialog" max-width="600" persistent>
+      <v-card>
+        <v-card-title class="d-flex align-center justify-space-between pa-4">
+          <span>Auto-Reply Configuration</span>
+          <v-btn icon variant="text" size="small" @click="autoReplyConfigDialog = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <p class="text-caption text-medium-emphasis mb-4">
+            Provide context about your practice so the bot can respond intelligently to incoming leads. All fields are required to enable auto-reply.
+          </p>
+          <v-textarea
+            v-model="autoReplyConfig.services"
+            label="What services does your business provide?"
+            placeholder="e.g., We provide dental checkups, cleanings, teeth whitening, and orthodontics..."
+            rows="3"
+            class="mb-4"
+          />
+          <v-textarea
+            v-model="autoReplyConfig.cta"
+            label="What is the main CTA you want from the auto-reply?"
+            placeholder="e.g., We encourage new patients to book a consultation by calling us or filling out the form on our website..."
+            rows="3"
+            class="mb-4"
+          />
+          <v-textarea
+            v-model="autoReplyConfig.outOfScopeMessage"
+            label="Out-of-scope message"
+            hint="Shown when the lead asks something the bot can't handle"
+            persistent-hint
+            rows="2"
+            class="mb-4"
+          />
+          <v-textarea
+            v-model="autoReplyConfig.ctaScript"
+            label="CTA reply script (optional)"
+            placeholder="e.g., 1. Ask for their name and best contact number. 2. Let them know a team member will call within 24 hours. 3. If they ask about pricing, explain it depends on their needs and suggest a free consultation..."
+            hint="When a lead replies to your CTA, the bot will follow this script's flow — not word-for-word, but the overall direction"
+            persistent-hint
+            rows="4"
+          />
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-4">
+          <v-spacer />
+          <v-btn variant="text" @click="autoReplyConfigDialog = false">Cancel</v-btn>
+          <v-btn color="primary" :loading="autoReplyConfigLoading" @click="saveAutoReplyConfig">Save Configuration</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-sheet>
 </template>
 
 <script setup>
-import CommonChatThread from "@/components/Common/ChatThread.vue";
-import CommonChatInputBar from "@/components/Common/ChatInputBar.vue";
+import ChatThread from "@/components/Chat/Thread.vue";
+import ChatInputBar from "@/components/Chat/InputBar.vue";
 import { groupChatItems, formatChatTimestamp, buildDayKey, buildDayLabel } from "@/lib/chatThread";
+import { resolveDmStatusIcon, resolveDmStatusColor } from "@/lib/chatShared";
 import { useCrmStore } from "@/stores/crm";
 import { useMainStore } from "@/stores/index";
 import { useRoute } from "vue-router";
@@ -234,8 +369,17 @@ const dmConnectionStatus = ref({
   instagramConnected: false,
 });
 const messageCache = ref(new Map());
-const MESSAGE_CACHE_TTL_MS = 45000;
+const MESSAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const syncingHistory = ref(false);
+const autoReplyEnabled = ref(false);
+const whatsappAutoReplyEnabled = ref(false);
+const autoReplyLoading = ref(false);
+const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "" });
+const autoReplyConfigDialog = ref(false);
+const autoReplyConfigLoading = ref(false);
+const conversationAutoReplyEnabled = ref(true);
 let searchTimer = null;
+let metaEventSource = null;
 
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
@@ -307,7 +451,8 @@ const messageItems = computed(() => {
       message: row.message,
       attachments: row.attachments || null,
       timeLabel: formatChatTimestamp(row.createdAt),
-      statusIcon: row.status,
+      statusIcon: isOutbound ? resolveDmStatusIcon(row?.status) : "",
+      statusColor: isOutbound ? resolveDmStatusColor(row?.status) : "",
       automated: false,
       avatarUrl: isOutbound ? "" : (conv?.avatarUrl || ""),
       avatarText: isOutbound ? "F" : (conv?.avatarText || "C"),
@@ -350,6 +495,42 @@ const lastInboundAgo = computed(() => {
   return `${m}m ago`;
 });
 
+// Show a countdown badge when the messaging window has < 6 hours remaining
+const windowTimeRemaining = computed(() => {
+  if (!lastInboundAt.value || !withinMessageWindow.value) return null;
+  const msLeft = 24 * 60 * 60 * 1000 - (Date.now() - lastInboundAt.value.getTime());
+  if (msLeft <= 0) return null;
+  const hLeft = Math.floor(msLeft / 3600000);
+  const mLeft = Math.floor((msLeft % 3600000) / 60000);
+  if (hLeft >= 6) return null; // plenty of time — don't show
+  if (hLeft > 0) return `${hLeft}h ${mLeft}m left`;
+  return `${mLeft}m left`;
+});
+
+const showConversationAutoReplyToggle = computed(() => {
+  if (!autoReplyEnabled.value) return false;
+  if (!activeConversationId.value) return false;
+  const platform = activeConversation?.value?.platform;
+  return platform === 'messenger' || platform === 'instagram';
+});
+
+const toggleConversationAutoReply = async (newValue) => {
+  if (!activeConversationId.value) return;
+  try {
+    const res = await crmStore.updateConversationAutoReply(activeConversationId.value, { autoReplyEnabled: newValue });
+    if (res?.code === 0) {
+      const idx = conversations.value.findIndex(c => c.id === activeConversationId.value);
+      if (idx !== -1) {
+        conversations.value[idx].autoReplyEnabled = newValue;
+      }
+    } else {
+      conversationAutoReplyEnabled.value = !newValue;
+    }
+  } catch {
+    conversationAutoReplyEnabled.value = !newValue;
+  }
+};
+
 const canSend = computed(() => {
   return (
     !!activeConversationId.value &&
@@ -361,6 +542,105 @@ const canSend = computed(() => {
 
 const clearFilters = () => {
   showUnreadOnly.value = false;
+};
+
+const syncHistory = async () => {
+  if (syncingHistory.value) return;
+  syncingHistory.value = true;
+  mainStore?.setSnackbar?.({ title: "Syncing DM history, this may take a minute…", type: "info" });
+  try {
+    const res = await crmStore.fetchDmHistory({ days: 30 });
+    if (res?.code === 0) {
+      mainStore?.setSnackbar?.({ title: `Synced ${res.data?.conversationsUpserted ?? 0} conversations, ${res.data?.messagesImported ?? 0} messages`, type: "success" });
+      // Refresh missing profiles in the background — don't await so it doesn't block the UI
+      crmStore.refreshAllDmProfiles().then((profileRes) => {
+        if (profileRes?.code === 0 && profileRes.data?.updated > 0) {
+          loadConversations(true);
+        }
+      }).catch(() => {});
+      await loadConversations(true);
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || "Sync failed", type: "error" });
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || "Sync failed", type: "error" });
+  } finally {
+    syncingHistory.value = false;
+  }
+};
+
+const loadAutoReplySettings = async () => {
+  try {
+    const res = await crmStore.getAutoReplySettings();
+    if (res?.code === 0) {
+      autoReplyEnabled.value = !!res.data?.autoReplyEnabled;
+      whatsappAutoReplyEnabled.value = !!res.data?.whatsappAutoReplyEnabled;
+      autoReplyConfig.value = res.data?.autoReplyConfig || { services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "" };
+    }
+  } catch {}
+};
+
+const hasValidAutoReplyConfig = computed(() => {
+  const cfg = autoReplyConfig.value;
+  if (!cfg) return false;
+  if (!cfg.services?.trim()) return false;
+  if (!cfg.cta?.trim()) return false;
+  return true;
+});
+
+const toggleAutoReply = async (newValue) => {
+  if (autoReplyLoading.value) return;
+  if (newValue && !hasValidAutoReplyConfig.value) {
+    mainStore?.setSnackbar?.({ title: "Please configure Q&A before enabling auto-reply", type: "warning" });
+    autoReplyEnabled.value = false;
+    openConfigDialog();
+    return;
+  }
+  autoReplyLoading.value = true;
+  try {
+    const res = await crmStore.updateAutoReplySettings({ autoReplyEnabled: newValue });
+    if (res?.code === 0) {
+      autoReplyEnabled.value = !!res.data?.autoReplyEnabled;
+      mainStore?.setSnackbar?.({ 
+        title: newValue ? "Auto-reply enabled" : "Auto-reply disabled", 
+        type: "success" 
+      });
+    } else {
+      autoReplyEnabled.value = !newValue;
+      mainStore?.setSnackbar?.({ title: res?.message || "Failed to update auto-reply settings", type: "error" });
+    }
+  } catch (e) {
+    autoReplyEnabled.value = !newValue;
+    mainStore?.setSnackbar?.({ title: e?.message || "Failed to update auto-reply settings", type: "error" });
+  } finally {
+    autoReplyLoading.value = false;
+  }
+};
+
+const openConfigDialog = () => {
+  autoReplyConfigDialog.value = true;
+};
+
+const saveAutoReplyConfig = async () => {
+  autoReplyConfigLoading.value = true;
+  try {
+    const res = await crmStore.updateAutoReplySettings({
+      autoReplyEnabled: autoReplyEnabled.value,
+      whatsappAutoReplyEnabled: whatsappAutoReplyEnabled.value,
+      autoReplyConfig: autoReplyConfig.value,
+    });
+    if (res?.code === 0) {
+      autoReplyConfig.value = res.data?.autoReplyConfig || autoReplyConfig.value;
+      mainStore?.setSnackbar?.({ title: "Auto-reply config saved", type: "success" });
+      autoReplyConfigDialog.value = false;
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || "Failed to save config", type: "error" });
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || "Failed to save config", type: "error" });
+  } finally {
+    autoReplyConfigLoading.value = false;
+  }
 };
 
 const readConversationCache = (conversationId) => {
@@ -385,7 +665,32 @@ const selectConversation = (id, options = {}) => {
   if (!forceRefresh && activeConversationId.value === id) return;
   activeConversationId.value = id;
   draftMessage.value = "";
+  const conv = conversations.value.find((c) => c.id === id);
+  conversationAutoReplyEnabled.value = conv?.autoReplyEnabled !== false;
   loadMessages(true, { forceRefresh });
+
+  // Silently refresh profile if name is a raw ID or avatar is missing
+  const needsRefresh = conv && (!conv.avatarUrl || isRawId(conv.title) || conv.title === "Instagram User" || conv.title === "Messenger User");
+  if (needsRefresh) {
+    crmStore.refreshDmProfile({ conversationId: id }).then((res) => {
+      if (res?.code === 0 && res.data?.updated) {
+        const idx = conversations.value.findIndex((c) => c.id === id);
+        if (idx !== -1) {
+          const resolvedTitle = resolveConversationTitle({
+            platform: conversations.value[idx]?.platform,
+            participantName: res.data.participantName,
+            metadataName: conversations.value[idx]?.title,
+            threadId: "",
+          });
+          conversations.value[idx] = {
+            ...conversations.value[idx],
+            title: resolvedTitle,
+            avatarUrl: res.data.participantAvatar || conversations.value[idx].avatarUrl,
+          };
+        }
+      }
+    }).catch(() => {});
+  }
 };
 
 const clearActiveConversation = () => {
@@ -512,23 +817,53 @@ const sendMessage = async () => {
   }
 };
 
+const isRawId = (str) => /^\d{10,}$/.test(String(str || "").trim());
+
+const fallbackParticipantName = (platform) => {
+  if (platform === "instagram") return "Instagram User";
+  if (platform === "messenger") return "Messenger User";
+  return "Unknown";
+};
+
+const resolveConversationTitle = ({ platform, participantName, metadataName, threadId }) => {
+  const candidates = [participantName, metadataName]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean);
+
+  const firstHumanName = candidates.find((name) => !isRawId(name));
+  if (firstHumanName) return firstHumanName;
+
+  const thread = String(threadId || "").trim();
+  if (thread && !isRawId(thread)) return thread;
+  return fallbackParticipantName(String(platform || "").toLowerCase());
+};
+
 const buildConversationRow = (row) => {
-  const name = row?.participantName || row?.metadata?.participantName || row?.threadId || "Unknown";
-  const avatarUrl = row?.participantAvatar || "";
+  const platform = String(row?.platform || "").toLowerCase();
+  const name = resolveConversationTitle({
+    platform,
+    participantName: row?.participantName,
+    metadataName: row?.metadata?.participantName,
+    threadId: row?.threadId,
+  });
+  const avatarUrl = row?.participantAvatar || row?.metadata?.participantAvatar || "";
   const initials = String(name || "")
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase() || "")
     .join("");
+  const rawPreview = row?.metadata?.lastMessagePreview || "";
+  const preview = rawPreview === "[Attachment]" ? "📎 Attachment" : rawPreview;
   return {
     id: row?.id,
     title: name,
-    preview: row?.metadata?.lastMessagePreview || "",
+    preview,
     avatarUrl,
     avatarText: initials || "U",
     platform: row?.platform,
     unreadCount: row?.unreadCount || 0,
+    autoReplyEnabled: row?.autoReplyEnabled !== false,
   };
 };
 
@@ -620,10 +955,45 @@ onMounted(async () => {
 
   await loadConversations(true);
   await loadDmConnectionStatus();
+  await loadAutoReplySettings();
 
   if (convoId) {
     selectConversation(convoId);
   }
+
+  startMetaStream();
+});
+
+const startMetaStream = () => {
+  if (metaEventSource) return;
+  metaEventSource = new EventSource('/api/meta/stream');
+  metaEventSource.addEventListener('dm', async (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.conversationId && data.conversationId === activeConversationId.value) {
+        await loadMessages(true, { forceRefresh: true });
+      }
+      if (data.orgId) {
+        await loadConversations(true);
+      } else {
+        await loadConversations(false);
+      }
+    } catch {}
+  });
+  metaEventSource.onerror = () => {
+    stopMetaStream();
+  };
+};
+
+const stopMetaStream = () => {
+  if (metaEventSource) {
+    metaEventSource.close();
+    metaEventSource = null;
+  }
+};
+
+onUnmounted(() => {
+  stopMetaStream();
 });
 </script>
 
@@ -658,6 +1028,10 @@ onMounted(async () => {
 
 .dms-top-bar {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .dms-tabs {
@@ -777,6 +1151,33 @@ onMounted(async () => {
   justify-content: center;
 }
 
+/* Avatar + platform indicator badge */
+.dm-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.dm-platform-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #fff;
+}
+
+.dm-platform-dot--ig {
+  background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%);
+}
+
+.dm-platform-dot--messenger {
+  background: linear-gradient(135deg, #0084ff 0%, #a033ff 100%);
+}
+
 .dms-empty-state {
   border: 1px solid #dbe4ff;
   background: #f7faff;
@@ -823,7 +1224,6 @@ onMounted(async () => {
   overflow-y: auto;
   min-height: 0;
   padding: 16px 24px;
-  background: #f7f8fb;
 }
 
 /* 24-hour window warning banner */

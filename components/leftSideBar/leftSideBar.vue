@@ -128,6 +128,14 @@
                   >
                     <template #title>
                       <span>{{ child.title }}</span>
+                      <v-chip
+                        v-if="child.beta"
+                        size="x-small"
+                        color="primary"
+                        variant="flat"
+                        class="ml-2 text-capitalize"
+                        style="font-size: 9px; height: 16px; padding: 0 5px;"
+                      >beta</v-chip>
                     </template>
                   </v-list-item>
                 </template>

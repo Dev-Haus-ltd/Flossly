@@ -8,6 +8,14 @@ import {
   UserLeaveHistory,
   UserOrganisation,
   UserPreference,
+  DiaryAppointment,
+  DiaryNote,
+  DiaryPatientForm,
+  MetaPage,
+  MetaUserToken,
+  MetaWhatsAppConfig,
+  WhapiChannelConfig,
+  ChatbotConfig,
 } from "../models";
 import { Op } from "sequelize";
 import DB from "../utils/db";
@@ -590,6 +598,22 @@ export const updateLeaveStatus = async (event) => {
   }
 };
 
+export const deleteLeave = async (event) => {
+  const body = await readBody(event);
+  try {
+    const { id } = parseJsonBody(body);
+    if (!id) return { code: 1, data: "Leave ID is required" };
+    const [, meta] = await DB.query(
+      `DELETE FROM "dev"."UserLeaveHistories" WHERE "id" = :id`,
+      { replacements: { id } }
+    );
+    if (meta?.rowCount === 0) return { code: 1, data: "No Leave found" };
+    return { code: 0, data: "Leave deleted successfully" };
+  } catch (err) {
+    return { code: 1, data: err.message || err };
+  }
+};
+
 export const allusersLeavesHistory = async (event) => {
   const { orgId } = event.context.user;
   try {
@@ -799,16 +823,29 @@ export const deleteUser = async (event) => {
       await transaction.commit();
       return success("User removed from organization successfully");
     } else {
-      const user = await User.findByPk(userId, { transaction });
-      
-      if (!user) {
-        throw createError({
-          statusCode: 404,
-          statusMessage: "User not found",
-        });
+      const userExists = await User.count({ where: { id: userId }, transaction });
+      if (!userExists) {
+        throw createError({ statusCode: 404, statusMessage: "User not found" });
       }
 
-      await user.destroy({ transaction });
+      // Null-out nullable FKs that reference this user
+      await Organisation.update(
+        { managerId: null },
+        { where: { managerId: userId }, transaction }
+      );
+
+      // Explicitly delete records with NOT NULL FKs pointing to Users
+      // (DB constraints lack CASCADE; use model methods so schema is applied automatically)
+      await DiaryAppointment.destroy({ where: { dentistId: userId }, transaction });
+      await DiaryNote.destroy({ where: { dentistId: userId }, transaction });
+      await DiaryPatientForm.destroy({ where: { createdBy: userId }, transaction });
+      await MetaPage.destroy({ where: { userId }, transaction });
+      await MetaUserToken.destroy({ where: { userId }, transaction });
+      await MetaWhatsAppConfig.destroy({ where: { userId }, transaction });
+      await WhapiChannelConfig.destroy({ where: { userId }, transaction });
+      await ChatbotConfig.destroy({ where: { userId }, transaction });
+
+      await User.destroy({ where: { id: userId }, transaction });
       await transaction.commit();
       return success("User deleted successfully");
     }

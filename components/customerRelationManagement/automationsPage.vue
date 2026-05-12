@@ -55,6 +55,37 @@
             Add Automation
           </v-btn>
         </div>
+
+        <!-- AI Automation Generator Input -->
+        <div class="ai-generator-section mt-4">
+          <v-text-field
+            v-model="aiIdea"
+            variant="solo"
+            placeholder="Tell AI your idea (e.g., 'Create follow-up emails for new dental patients')"
+            hide-details
+            density="comfortable"
+            bg-color="#F3F4F6"
+            flat
+            :elevation="0"
+            class="ai-input-field"
+            @keyup.enter="handleAIGenerate"
+          >
+            <template #append-inner>
+              <v-btn
+                color="primary"
+                variant="flat"
+                rounded="lg"
+                class="ai-generate-btn"
+                :loading="generatingAI"
+                :disabled="!aiIdea.trim()"
+                @click="handleAIGenerate"
+              >
+                <v-icon size="18" class="mr-1">mdi-auto-fix</v-icon>
+                Generate with AI
+              </v-btn>
+            </template>
+          </v-text-field>
+        </div>
       </div>
 
       <v-card class="automation-library-card" elevation="0">
@@ -72,7 +103,7 @@
             :allow-group-edit="true"
             :show-preview-action="true"
             :disable-toggle="true"
-            :show-trigger-column="false"
+            :show-trigger-column="true"
             :show-status-column="false"
             @edit-group="openGroupEdit"
             @delete-group="confirmGroupDelete"
@@ -95,6 +126,11 @@
       <CustomerRelationManagementBulkAutomationUploadDialog
         v-model="showBulkUploadDialog"
         @onUpdate="refreshAll"
+      />
+      <CustomerRelationManagementAiAutomationGenerator
+        ref="aiGeneratorRef"
+        v-model="showAIPreview"
+        @success="handleAIAutomationsCreated"
       />
     </ClientOnly>
 
@@ -129,6 +165,7 @@ import CustomerRelationManagementAutomation from '@/components/customerRelationM
 import CustomerRelationManagementAddAutomationGroup from '@/components/customerRelationManagement/addAutomationGroup.vue'
 import CustomerRelationManagementAddAutomation from '@/components/customerRelationManagement/addAutomation.vue'
 import CustomerRelationManagementBulkAutomationUploadDialog from '@/components/customerRelationManagement/bulkAutomationUploadDialog.vue'
+import CustomerRelationManagementAiAutomationGenerator from '@/components/customerRelationManagement/aiAutomationGenerator.vue'
 import CommonFeatureCard from '@/components/Common/featureCard.vue'
 import automationFeatureCardIcon from '@/assets/icons/crm/automation-feature-card.svg'
 
@@ -148,52 +185,30 @@ const showGroupDelete = ref(false)
 const deletingGroup = ref(false)
 const groupToDelete = ref(null)
 const whatsappEnabled = ref(false)
-const whatsappProvider = ref('meta')
-const whatsappRequiresTemplates = ref(true)
+const whatsappRequiresTemplates = ref(false)
+const aiIdea = ref('')
+const showAIPreview = ref(false)
+const generatingAI = ref(false)
+const aiGeneratorRef = ref(null)
 
 const isPrivileged = computed(() => [1, 8].includes(Number(user.value?.roleId)))
-
-const isWhatsAppGroup = (group) => {
-  const key = String(group?.key || '').toLowerCase()
-  const title = String(group?.title || '').toLowerCase()
-  return key.includes('whatsapp') || title.includes('whatsapp')
-}
 
 const loadGroups = async () => {
   const res = await crmStore.listAutomationGroups()
   if (res?.code === 0 && Array.isArray(res.data)) {
-    automationGroups.value = whatsappEnabled.value
-      ? res.data
-      : res.data.filter((group) => !isWhatsAppGroup(group))
+    automationGroups.value = res.data
   }
 }
 
 const loadWhatsAppAvailability = async () => {
   try {
-    const res = await crmStore.getWhatsAppConfig()
-    if (res?.code === 0 && res.data) {
-      const provider = String(res.data.provider || '').toLowerCase()
-      const hasToken = Boolean(res.data.hasToken)
-      if (provider === 'whapi') {
-        const statusRes = await crmStore.getWhapiStatus()
-        const statusRaw = String(statusRes?.data?.status || '').toLowerCase()
-        const stopped = statusRaw === 'stopped' || statusRaw === 'blocked'
-        whatsappEnabled.value = Boolean(statusRes?.data?.connected) && !stopped
-        whatsappProvider.value = 'whapi'
-        whatsappRequiresTemplates.value = false
-        return
-      }
-      if (provider === 'meta') {
-        whatsappEnabled.value = hasToken
-        whatsappProvider.value = 'meta'
-        whatsappRequiresTemplates.value = true
-        return
-      }
-    }
-  } catch {}
-  whatsappEnabled.value = false
-  whatsappProvider.value = 'meta'
-  whatsappRequiresTemplates.value = true
+    const res = await crmStore.getWhapiStatus()
+    const statusRaw = String(res?.data?.status || '').toLowerCase()
+    const stopped = statusRaw === 'stopped' || statusRaw === 'blocked'
+    whatsappEnabled.value = Boolean(res?.data?.connected) && !stopped
+  } catch {
+    whatsappEnabled.value = false
+  }
 }
 
 const refreshAll = async () => {
@@ -204,13 +219,20 @@ const refreshAll = async () => {
   }
 }
 
+const refreshGroupsAndRows = async () => {
+  await loadGroups()
+  if (automationRef.value?.refresh) {
+    await automationRef.value.refresh({ skipGroups: true })
+  }
+}
+
 const handleGroupSaved = async () => {
   editingGroup.value = null
-  await refreshAll()
+  await refreshGroupsAndRows()
 }
 
 const handleAutomationSaved = async () => {
-  await refreshAll()
+  await refreshGroupsAndRows()
 }
 
 const openGroupCreate = () => {
@@ -239,7 +261,11 @@ const deleteGroup = async () => {
     if (res?.code === 0) {
       showGroupDelete.value = false
       groupToDelete.value = null
-      await refreshAll()
+      await refreshGroupsAndRows()
+      mainStore.setSnackbar({
+        title: 'Automation category deleted',
+        type: 'success',
+      })
       return
     }
     mainStore.setSnackbar({
@@ -256,6 +282,25 @@ const deleteGroup = async () => {
   }
 }
 
+const handleAIGenerate = async () => {
+  if (!aiIdea.value.trim()) return
+  generatingAI.value = true
+  try {
+    await aiGeneratorRef.value?.generateAutomations(aiIdea.value.trim())
+  } finally {
+    generatingAI.value = false
+  }
+}
+
+const handleAIAutomationsCreated = async () => {
+  aiIdea.value = ''
+  await refreshAll()
+}
+
+const onAutomationsUpdated = async () => {
+  await refreshAll()
+}
+
 onMounted(async () => {
   if (!isPrivileged.value) {
     mainStore.setSnackbar({
@@ -265,7 +310,16 @@ onMounted(async () => {
     router.push('/crm')
     return
   }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
   await refreshAll()
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('crm-automations-updated', onAutomationsUpdated)
+  }
 })
 </script>
 
@@ -346,5 +400,43 @@ onMounted(async () => {
 
 .library-body {
   padding: 16px;
+}
+
+.ai-generator-section {
+  width: 100%;
+}
+
+.ai-input-field {
+  border-radius: 12px;
+}
+
+.ai-input-field :deep(.v-field) {
+  border-radius: 12px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.ai-generate-btn {
+  padding: 0 24px !important;
+  height: 40px !important;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(0, 97, 255, 0.2);
+  transition: all 0.3s ease;
+}
+
+.ai-generate-btn:hover {
+  box-shadow: 0 4px 12px rgba(0, 97, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.ai-generate-btn:active {
+  transform: translateY(0);
+}
+
+.ai-generate-btn.v-btn--disabled {
+  opacity: 0.5;
+  box-shadow: none;
 }
 </style>

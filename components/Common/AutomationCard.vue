@@ -38,21 +38,37 @@
       </div>
     </div>
     <span class="automation-sub mb-1 d-block">by {{ authorLabel }}</span>
+    <span v-if="createdAt" class="automation-created d-block mb-1">Created {{ formattedDate }}</span>
     <div class="automation-desc clamp-2">{{ description }}</div>
+    <div class="wa-warning-chip mt-2" :style="{ visibility: whatsappWarning ? 'visible' : 'hidden' }">
+      <v-icon size="13" class="mr-1">mdi-wifi-off</v-icon>
+      WhatsApp not connected
+    </div>
     <div class="d-flex align-center justify-space-between mt-3">
       <div class="d-flex align-center text-grey">
         <v-icon size="16" class="mr-1">mdi-format-list-bulleted</v-icon>
         <span class="count">{{ count }}</span>
       </div>
-      <v-switch
-        v-if="showToggle"
-        density="compact"
-        inset
-        hide-details
-        color="primary"
-        :model-value="enabled"
-        @click.stop="$emit('toggle', !enabled)"
-      />
+      <div class="d-flex align-center" style="gap: 6px;">
+        <span
+          v-if="bulkState && bulkState.totalCount > 0"
+          class="bulk-pill"
+          :class="{
+            'bulk-pill--full': isBulkFullyEnabled,
+            'bulk-pill--mixed': isBulkMixed,
+            'bulk-pill--none': !isBulkFullyEnabled && !isBulkMixed,
+          }"
+        >{{ bulkState.enabledCount }}/{{ bulkState.totalCount }}</span>
+        <v-switch
+          v-if="showToggle"
+          density="compact"
+          inset
+          hide-details
+          :color="bulkState ? bulkToggleColor : 'primary'"
+          :model-value="bulkState ? isBulkFullyEnabled : enabled"
+          @click.stop="$emit('toggle', bulkState ? !isBulkFullyEnabled : !enabled)"
+        />
+      </div>
     </div>
   </v-card>
 </template>
@@ -60,6 +76,7 @@
 <script setup>
 import { computed } from 'vue'
 import CommonTruncatedText from '@/components/Common/TruncatedText.vue'
+import { formatDateTime } from '@/lib/dateFormatter'
 
 const props = defineProps({
   title: String,
@@ -83,6 +100,18 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  whatsappWarning: {
+    type: Boolean,
+    default: false,
+  },
+  createdAt: {
+    type: String,
+    default: null,
+  },
+  bulkState: {
+    type: Object,
+    default: null,
+  },
 })
 
 defineEmits(['select', 'toggle', 'edit', 'delete'])
@@ -90,6 +119,20 @@ defineEmits(['select', 'toggle', 'edit', 'delete'])
 const authorLabel = computed(() => {
   const raw = typeof props.author === 'string' ? props.author.trim() : ''
   return raw || 'Flossly'
+})
+
+const formattedDate = computed(() => formatDateTime(props.createdAt))
+
+const isBulkFullyEnabled = computed(() =>
+  !!props.bulkState && props.bulkState.enabledCount > 0 && props.bulkState.enabledCount === props.bulkState.totalCount
+)
+const isBulkMixed = computed(() =>
+  !!props.bulkState && props.bulkState.enabledCount > 0 && props.bulkState.enabledCount < props.bulkState.totalCount
+)
+const bulkToggleColor = computed(() => {
+  if (isBulkFullyEnabled.value) return 'primary'
+  if (isBulkMixed.value) return 'warning'
+  return undefined
 })
 </script>
 
@@ -116,7 +159,19 @@ const authorLabel = computed(() => {
 .automation-title { font-weight:600; font-size:14px; }
 .automation-desc { font-size:12px; color:#636363; }
 .automation-sub { font-size:11px; color:#8b8b8b; }
+.automation-created { font-size:10px; color:#b0b0b0; }
 .count { color:#737373; font-size:14px; }
+.wa-warning-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #c2410c;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+}
 .clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -124,4 +179,18 @@ const authorLabel = computed(() => {
   overflow: hidden;
   min-height: 34px;
 }
+.bulk-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  min-width: 32px;
+  line-height: 1.4;
+}
+.bulk-pill--full  { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+.bulk-pill--mixed { background: #fff8e1; color: #e65100; border: 1px solid #ffe082; }
+.bulk-pill--none  { background: #f5f5f5; color: #757575; border: 1px solid #e0e0e0; }
 </style>

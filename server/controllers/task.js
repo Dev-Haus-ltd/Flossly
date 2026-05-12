@@ -2718,6 +2718,10 @@ export const deleteTaskChecklist = async (event) => {
     if (!checklist) {
       throw createError({ message: "Task checklist not found" });
     }
+    
+    // Store the question to match against UserTaskChecklists
+    const checklistQuestion = checklist.question;
+    
     await TaskChecklist.destroy({
       where: { id: taskChecklistId },
       transaction,
@@ -2729,10 +2733,13 @@ export const deleteTaskChecklist = async (event) => {
         organisationId,
       },
     });
+    
+    // Only delete UserTaskChecklists that match this specific checklist's question
     for (const task of userTasks) {
       await UserTaskChecklist.destroy({
         where: {
           userTaskId: task.id,
+          question: checklistQuestion  // Match by question to ensure we only delete the specific checklist
         },
         transaction,
       });

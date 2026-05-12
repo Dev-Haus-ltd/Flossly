@@ -44,7 +44,8 @@ import requestIp from "request-ip";
 import { HrDocument } from "../models/hrDocuments";
 import path from "path";
 import { uploadBufferFile, deleteLink } from "../utils/storage";
-import { createError, setCookie } from "h3";
+import { sendS3Object } from "../utils/s3";
+import { createError, setCookie, getQuery } from "h3";
 import { success, error } from "../utils/response";
 import {
   buildOnboardingContext,
@@ -143,7 +144,7 @@ export const login = async (event) => {
       orgId = orgIds[0];
     }
     const token = jwt.sign(
-      { userId: user.id, orgId, roleId: user.roleId, purpose: "login", environment: getCurrentEnvironment() },
+      { userId: user.id, orgId, roleId: user.roleId, isAdmin: user.roleId === 17, purpose: "login", environment: getCurrentEnvironment() },
       config.JWT_SECRET
     );
     user.lastLoginDate = new Date()
@@ -173,6 +174,7 @@ export const createShortLivedToken = async (event) => {
         userId: loggedUser.userId,
         orgId: loggedUser.orgId,
         roleId: loggedUser.roleId,
+        isAdmin: loggedUser.roleId === 17,
         purpose: "third_party_redirect",
         environment: getCurrentEnvironment(),
       },
@@ -201,6 +203,7 @@ export const exchangeShortLivedToken = async (event) => {
         userId: payload.userId,
         orgId: payload.orgId,
         roleId: payload.roleId,
+        isAdmin: payload.roleId === 17,
         purpose: "login",
         // IMPORTANT: carry environment through from the short token so downstream services
         // (e.g. /auth/profile, chatbot builder) don't default to the wrong environment.
@@ -474,6 +477,11 @@ export const profile = async (event) => {
     // Check if user is the organisation creator (managerId)
     const currentOrganisation = await Organisation.findByPk(loggedUser.orgId);
     userObj.isOrganisationCreator = currentOrganisation && currentOrganisation.managerId === loggedUser.userId;
+    userObj.crmFeatureAccess = {
+      meta: currentOrganisation?.automationPlaceholders?.crmFeatureAccess?.meta !== false,
+      whatsapp: currentOrganisation?.automationPlaceholders?.crmFeatureAccess?.whatsapp !== false,
+      chatbot: currentOrganisation?.automationPlaceholders?.crmFeatureAccess?.chatbot !== false,
+    };
     
     if (
       userObj.preferences &&
@@ -542,6 +550,7 @@ export const profile = async (event) => {
               key: "onboarding_email_day0",
               to: userObj.email,
               ctx,
+              orgId: loggedUser.orgId,
             });
             await recordOnboardingEventInternal({
               userId: loggedUser.userId,
@@ -871,6 +880,7 @@ export const switchOrgnanisation = async (event) => {
       {
         userId: user.userId,
         roleId: user.roleId,
+        isAdmin: user.roleId === 17,
         orgId,
         purpose: "login",
         // Preserve environment from existing access token when switching orgs.
@@ -1111,6 +1121,8 @@ export const inviteMembers = async (event) => {
             {
               userId: userId,
               orgId: currentOrg,
+              roleId: user.roleId,
+              isAdmin: user.roleId === 17,
               purpose: "org_invitation",
               invitedBy: loggedUser.userId,
               environment: getCurrentEnvironment(),
@@ -1220,6 +1232,7 @@ const inviteNewUsers = async (
         orgTitle: currentOrganisation.name,
         link: el.inviteToken,
         manager: currentUser.fullName,
+        orgId: currentOrganisation.id,
       });
     })
   );
@@ -1284,6 +1297,7 @@ export const acceptInvitation = async (event) => {
         userId: user.id,
         orgId: userOrg.organisationId,
         roleId: user.roleId,
+        isAdmin: user.roleId === 17,
         purpose: "login",
         environment: getCurrentEnvironment(),
       },
@@ -1441,6 +1455,7 @@ export const acceptOrganisationInvitation = async (event) => {
           userId: user.id,
           orgId: orgId,
           roleId: user.roleId,
+          isAdmin: user.roleId === 17,
           purpose: "login",
           environment: getCurrentEnvironment(),
         },
@@ -1638,6 +1653,7 @@ export const resendOrganisationInvitation = async (event) => {
           orgTitle: organisation.name,
           link: invitationLink,
           manager: currentUser.fullName,
+          orgId: organisation.id,
         });
       } else {
         // User belongs to other organizations - use existing user invitation email
@@ -1646,6 +1662,8 @@ export const resendOrganisationInvitation = async (event) => {
           {
             userId: userId,
             orgId: orgId,
+            roleId: existingUser.roleId,
+            isAdmin: existingUser.roleId === 17,
             purpose: "org_invitation",
             invitedBy: loggedUser.userId,
             environment: getCurrentEnvironment(),
@@ -1916,6 +1934,18 @@ export const removeUserDoc = async (event) => {
     userDoc.status = "Pending";
     await userDoc.save();
     return success("Deleted");
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const viewHrDocument = async (event) => {
+  const query = getQuery(event) || {};
+  const id = query.id;
+  try {
+    const doc = await UserHrDocument.findByPk(id);
+    if (!doc) throw createError({ message: "Document not found" });
+    return await sendS3Object(event, doc.link, { filename: doc.name });
   } catch (err) {
     return error(500, err.message);
   }

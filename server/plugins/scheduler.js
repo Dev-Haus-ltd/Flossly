@@ -31,7 +31,6 @@ export default defineNitroPlugin(async (nitroApp) => {
   try {
     const hasLock = await tryAcquireSchedulerLock();
     if (!hasLock) {
-      console.log("Scheduler lock not acquired; skipping cron startup.");
       return;
     }
     // startTaskScheduler();
@@ -40,10 +39,9 @@ export default defineNitroPlugin(async (nitroApp) => {
     startTaskOverDueScheduler();
     startTaskDueReminderScheduler();
     startOnboardingScheduler();
-    startDmQueueScheduler();
+    await startDmQueueScheduler();
     startMetaSyncScheduler();
     startShiftReminderScheduler();
-    console.log("Scheduler Started");
   } catch (error) {
     console.error("Unable to start scheduler", error);
   } finally {

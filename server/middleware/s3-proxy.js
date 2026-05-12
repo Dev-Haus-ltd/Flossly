@@ -8,6 +8,8 @@ const PREFIXES = [
   "/hr-documents/",
   "/leave-documents/",
   "/chatbot-attachments/",
+  "/chat-attachments/",
+  "/meta-creatives/",
 ];
 
 export default defineEventHandler(async (event) => {

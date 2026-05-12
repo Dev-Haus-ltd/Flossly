@@ -49,6 +49,8 @@ export const markWhatsAppOutbound = async (lead, to) => {
       lastOutboundTo: to || existing.lastOutboundTo || null,
     },
   }
+  lead.autoReplyEnabled = false
+  lead.autoReplyDisabledUntil = new Date(Date.now() + 12 * 60 * 60 * 1000)
   await lead.save()
 }
 
@@ -62,10 +64,10 @@ export const logWhatsAppMessage = async ({
   status = "sent",
   providerMessageId = null,
   content = null,
+  attachments = null,
   error = null,
 }) => {
   try {
-    await CrmWhatsAppMessageLog.sync();
     await CrmWhatsAppMessageLog.create({
       organisationId: Number(organisationId),
       leadId: leadId ? Number(leadId) : null,
@@ -76,6 +78,7 @@ export const logWhatsAppMessage = async ({
       status,
       providerMessageId,
       content: content != null ? String(content) : null,
+      attachments: attachments ?? null,
       error,
     });
   } catch {
@@ -93,7 +96,6 @@ export const getMonthlyWhatsAppUsage = async (organisationId, atDate = new Date(
 export const getWhatsAppUsageInWindow = async (organisationId, start, end) => {
   if (!organisationId || !start || !end) return { count: 0, start, end };
   try {
-    await CrmWhatsAppMessageLog.sync();
     const count = await CrmWhatsAppMessageLog.count({
       where: {
         organisationId: Number(organisationId),

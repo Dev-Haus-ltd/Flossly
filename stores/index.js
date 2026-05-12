@@ -6,6 +6,7 @@ import teamIcon from "@/assets/icons/mainDrawerIcons/team.svg";
 import flosslyDocs from '@/assets/icons/mainDrawerIcons/docs.svg'
 import crmIcon from '@/assets/icons/mainDrawerIcons/crm.svg'
 import academyIcon from '@/assets/icons/mainDrawerIcons/academy.svg'
+import settingsIcon from '@/assets/icons/mainDrawerIcons/settings.svg'
 import { DEVELOPER_EMAILS } from '@/composables/useDeveloperAccess';
 
 const LICENSE_TYPES = {
@@ -86,7 +87,6 @@ const createDocsItem = (imgPath) => ({
   featureKey: "docs",
 });
 
-
 export const useMainStore = defineStore("mainStore", {
   state: () => ({
     locale: "en",
@@ -114,6 +114,10 @@ export const useMainStore = defineStore("mainStore", {
       const authStore = useAuthStore();
       
       const isDeveloper = authStore.getIsDeveloper;
+      
+      // Get user data to check roleId
+      const { user } = useUser();
+      const userRoleId = user.value?.roleId;
       
       const menuItems = [
         {
@@ -216,6 +220,7 @@ export const useMainStore = defineStore("mainStore", {
               imgPath: crmIcon,
               to: "/crm/dms",
               featureKey: "crm",
+              beta: true,
             },
             {
               title: "My Automations",
@@ -313,13 +318,29 @@ export const useMainStore = defineStore("mainStore", {
           to: "/support-chat",
           featureKey: "dashboard", // Use dashboard feature key so it's always visible
         });
-      } 
+      }
+
+      // Add Settings menu item for roleId 16 and roleId 1
+      if (userRoleId === 16 || userRoleId === 1) {
+        menuItems.push({
+          title: "Settings",
+          imgPath: settingsIcon,
+          value: "settings",
+          to: "/settings",
+          featureKey: "dashboard", // Use dashboard feature key so it's always visible
+        });
+      }
 
       const filtered = filterMenuByLicense(menuItems, licenseType);
       return filtered;
     },
     getuserOptions() {
       const licenseType = getLicenseTypeFromStorage();
+      
+      // Get user data to check roleId
+      const { user } = useUser();
+      const userRoleId = user.value?.roleId;
+      
       const menuItems = [
         {
           title: "DashBoard",
@@ -403,6 +424,17 @@ export const useMainStore = defineStore("mainStore", {
         // },
       ];
 
+      // Add Settings menu item for roleId 16 and roleId 1
+      if (userRoleId === 16 || userRoleId === 1) {
+        menuItems.push({
+          title: "Settings",
+          imgPath: settingsIcon,
+          value: "settings",
+          to: "/settings",
+          featureKey: "dashboard", // Use dashboard feature key so it's always visible
+        });
+      }
+
       return filterMenuByLicense(menuItems, licenseType);
     },
     getTeamTaskTableHeaders() {
@@ -434,6 +466,12 @@ export const useMainStore = defineStore("mainStore", {
         {
           key: "assignedUser.fullName",
           title: "Assigned User",
+          sortable: true,
+          width: 200,
+        },
+        {
+          key: "dueDate",
+          title: "Due Date",
           sortable: true,
           width: 200,
         },

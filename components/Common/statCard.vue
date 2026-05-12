@@ -7,15 +7,37 @@
           trigger="hover"
           :target="`#stat-card-${uid}`"
           colors="primary:#1e2b80"
-          style="width: 24px; height: 24px"
+          style="width: 24px; height: 24px; flex-shrink: 0"
         >
         </lord-icon>
 
-        <p class="ml-2 ellipsis-text">{{ label }}</p>
+        <CommonTruncatedText
+          :text="label"
+          :max-width="selectItems && selectItems.length ? 100 : 170"
+          text-class="stat-label-text"
+        />
 
       </div>
 
-      <v-tooltip :text="tooltip">
+      <template v-if="selectItems && selectItems.length">
+        <v-select
+          v-model="selectModel"
+          :items="selectItems"
+          density="compact"
+          hide-details
+          class="compact-select ml-2"
+          variant="outlined"
+          style="max-width: 130px"
+        />
+      </template>
+
+      <v-tooltip v-else-if="infoText" :text="infoText" location="bottom" max-width="300">
+        <template #activator="{ props }">
+          <v-icon v-bind="props" size="18" color="#6b7280" style="flex-shrink: 0; cursor: help;">mdi-information-outline</v-icon>
+        </template>
+      </v-tooltip>
+
+      <v-tooltip v-else :text="tooltip">
         <template #activator="{ props }">
           <v-chip
             v-if="!hideChip"
@@ -37,7 +59,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue';
+
+const props = defineProps({
   cols: { type: Number, default: 3 },
   icon: { type: String, required: true },
   label: { type: String, required: true },
@@ -46,6 +70,16 @@ defineProps({
   tooltip: { type: String, default: "Bonus points awarded" },
   hideChip: { type: Boolean, default: false },
   uid: { type: [String, Number], required: true },
+  select: { type: [String, Number], default: null },
+  selectItems: { type: Array, default: () => [] },
+  infoText: { type: String, default: '' },
+});
+
+const emit = defineEmits(['update:select']);
+
+const selectModel = computed({
+  get: () => props.select,
+  set: (value) => emit('update:select', value),
 });
 </script>
 <style scoped lang="scss">
@@ -64,6 +98,13 @@ defineProps({
   img {
     width: 50px;
     height: 50px;
+  }
+
+  :deep(.stat-label-text) {
+    font-size: 14px;
+    color: #1e1e1e;
+    font-weight: 400;
+    margin-left: 8px;
   }
 
   p {
@@ -97,10 +138,38 @@ defineProps({
 ::v-deep(.bonus-chip .v-icon) {
   color: #fea200;
 }
-.ellipsis-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 170px;
+.compact-select {
+  :deep(.v-field) {
+    height: 32px !important;
+    min-height: 32px !important;
+    border-radius: 8px;
+    background-color: #e8f1ff !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 2px !important;
+  }
+  :deep(.v-field__outline) {
+    display: none !important;
+  }
+  :deep(.v-field__input) {
+    display: flex;
+    align-items: center;
+    padding: 0 0 0 8px !important;
+    min-height: 32px !important;
+  }
+  :deep(.v-select__selection-text) {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1f2937;
+  }
+  :deep(.v-field__append-inner) {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 2px !important;
+  }
+  :deep(.v-icon) {
+    font-size: 16px !important;
+    opacity: 0.7;
+  }
 }
 </style>

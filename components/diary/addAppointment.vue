@@ -192,7 +192,7 @@ const props = defineProps({
   preselectedPatient: { type: String, default: '' },
   editAppointment: { type: Object, default: () => null },
 })
-const emit = defineEmits(['update:modelValue','save','add-patient'])
+const emit = defineEmits(['update:modelValue','save','add-patient','date-change'])
 
 const selectedPatientId = ref(null)
 const date = ref('')
@@ -264,6 +264,10 @@ watch(exam, (val) => { if (val) errors.exam = '' })
 watch(status, (val) => { if (val) errors.status = '' })
 watch(duration, (val) => { if (val) errors.duration = '' })
 watch(practitioner, (val) => { if (val) errors.practitioner = '' })
+watch(date, (val) => {
+  if (!val) return
+  emit('date-change', clinicDateToYMD(val))
+})
 
 watch(() => props.modelValue, (open) => {
   if (open) {

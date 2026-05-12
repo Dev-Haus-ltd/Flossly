@@ -69,6 +69,47 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  refreshDmProfile(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/refreshProfile", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  refreshAllDmProfiles(payload = {}) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/refreshAllProfiles", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateConversationAutoReply(conversationId, payload) {
+    return new Promise((resolve, reject) => {
+      Post(`/dms/conversation/${conversationId}/autoReply`, payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateLeadAutoReply(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/updateAutoReply", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  fetchDmHistory(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null || v === "") return;
+      q.append(k, v);
+    });
+    const qs = q.toString();
+    return new Promise((resolve, reject) => {
+      Get(`/meta/fetchDmHistory${qs ? `?${qs}` : ""}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   connectionStatus() {
     return new Promise((resolve, reject) => {
       Get("/meta/connection")
@@ -117,9 +158,12 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  getMetaInsights() {
+  getMetaInsights(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.append(k, v); });
+    const qs = q.toString();
     return new Promise((resolve, reject) => {
-      Get("/meta/getInsights")
+      Get(`/meta/getInsights${qs ? `?${qs}` : ''}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -131,9 +175,12 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  getAllLeadCounts() {
+  getAllLeadCounts(params = {}) {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.append(k, v); });
+    const qs = q.toString();
     return new Promise((resolve, reject) => {
-      Get("/meta/allLeadCounts")
+      Get(`/meta/allLeadCounts${qs ? `?${qs}` : ''}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -199,27 +246,6 @@ export default {
         .catch((err) => reject(err));
     });
   },
-  completeWhatsAppEmbedded(payload) {
-    return new Promise((resolve, reject) => {
-      Post("/meta/whatsappEmbedded", payload)
-        .then((res) => resolve(res))
-        .catch((err) => reject(err));
-    });
-  },
-  getWhatsAppConfig() {
-    return new Promise((resolve, reject) => {
-      Get("/meta/whatsappConfig")
-        .then((res) => resolve(res))
-        .catch((err) => reject(err));
-    });
-  },
-  saveWhatsAppConfig(payload) {
-    return new Promise((resolve, reject) => {
-      Post("/meta/whatsappConfig", payload)
-        .then((res) => resolve(res))
-        .catch((err) => reject(err));
-    });
-  },
   startWhapiConnect(payload = {}) {
     return new Promise((resolve, reject) => {
       Post("/whapi/connect", payload)
@@ -265,13 +291,6 @@ export default {
   extendWhapiChannel(payload = {}) {
     return new Promise((resolve, reject) => {
       Post("/whapi/extend", payload)
-        .then((res) => resolve(res))
-        .catch((err) => reject(err));
-    });
-  },
-  getWhatsAppTemplates() {
-    return new Promise((resolve, reject) => {
-      Get("/meta/whatsappTemplates")
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -409,6 +428,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  updateOption(id, name) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/optionsUpdate", { id, name })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   deleteOption(id) {
     return new Promise((resolve, reject) => {
       Post("/lead/optionsDelete", { id })
@@ -488,9 +514,23 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  generateAutomationsWithAI(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/generateAutomationsWithAI', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   listAutomationGroups() {
     return new Promise((resolve, reject) => {
       Get('/lead/automationGroups')
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  generateAutomationsWithAI(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/lead/generateAutomationsWithAI', payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -505,6 +545,15 @@ export default {
   deleteAutomationGroup(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/automationGroupDelete', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getLeadAutomationLog(leadId, params = {}) {
+    const page = params.page || 1
+    const limit = params.limit || 25
+    return new Promise((resolve, reject) => {
+      Get(`/lead/automationSentLog?leadId=${encodeURIComponent(leadId)}&page=${page}&limit=${limit}`)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -538,9 +587,51 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  uploadLeadWhatsAppMedia(formData) {
+    return new Promise((resolve, reject) => {
+      PostFormData('/lead/whatsappUploadMedia', formData)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  editWhatsAppMessage(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/whapi/editMessage', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteWhatsAppMessage(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/whapi/deleteMessage', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  reactWhatsAppMessage(payload) {
+    return new Promise((resolve, reject) => {
+      Post('/whapi/reactToMessage', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   getLeadPriceAttachmentRecent(payload) {
     return new Promise((resolve, reject) => {
       Post('/lead/priceAttachmentRecent', payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  getAutoReplySettings() {
+    return new Promise((resolve, reject) => {
+      Get("/dms/autoReply")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateAutoReplySettings(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/autoReply", payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

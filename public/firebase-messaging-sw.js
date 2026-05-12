@@ -176,12 +176,14 @@ self.addEventListener('notificationclick', (event) => {
           : '/crm/leads';
         break;
       case 'whatsapp_message':
-        urlToOpen = notificationData.leadId 
-          ? `/crm/leads?leadId=${notificationData.leadId}&tab=communication` 
-          : '/crm/leads';
+        urlToOpen = notificationData.url || (notificationData.leadId
+          ? `/crm/leads?leadId=${notificationData.leadId}&tab=whatsapp`
+          : '/crm/leads');
         break;
       case 'meta_dm':
-        urlToOpen = '/crm/analytics';
+        urlToOpen = notificationData.url || (notificationData.conversationId
+          ? `/crm/dms?conversationId=${notificationData.conversationId}`
+          : '/crm/dms');
         break;
       default:
         urlToOpen = notificationData.url || '/';

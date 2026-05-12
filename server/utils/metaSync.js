@@ -17,6 +17,7 @@ import { MetaUserToken, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsi
 import { decrypt } from './crypto.js'
 import { getRedisClient } from './redis.js'
 import { metaBatch, withRetry } from './metaBatch.js'
+import { downloadUrlToS3 } from './storage.js'
 
 const META_VERSION = 'v24.0'
 
@@ -241,24 +242,101 @@ export const runStructureSync = async (orgId) => {
     }
     await setState(key, { status: 'running', startedAt, progress })
 
-    // ── Wave 5: Creatives (batch, only for ads that have a creative id) ───────
+    const pickCreativeImage = (creative = {}) => {
+      const story = creative?.object_story_spec || {}
+      const linkData = story?.link_data || {}
+      const videoData = story?.video_data || {}
+      const photoData = story?.photo_data || {}
+      const templateData = story?.template_data || {}
+
+      return (
+        creative?.image_url ||          // full-res image upload — best quality
+        videoData?.image_url ||         // full-res video frame
+        photoData?.image_url ||         // full-res photo ad image
+        photoData?.picture ||
+        photoData?.url ||
+        templateData?.picture ||
+        creative?.thumbnail_url ||      // video thumbnail — quality improved via thumbnail_width/height params
+        linkData?.picture ||            // last resort: link preview image (often small/low-res)
+        null
+      )
+    }
+
+    const pickCreativeBody = (creative = {}) => {
+      const story = creative?.object_story_spec || {}
+      const linkData = story?.link_data || {}
+      const videoData = story?.video_data || {}
+      const photoData = story?.photo_data || {}
+      const templateData = story?.template_data || {}
+
+      return (
+        creative?.body ||
+        linkData?.message ||
+        videoData?.message ||
+        photoData?.message ||
+        templateData?.message ||
+        null
+      )
+    }
+
+    // ── Wave 5a: Creatives (batch, only for ads that have a creative id) ────────
     if (creativeIds.size) {
       const ids = Array.from(creativeIds.keys())
       const creativeBatchReqs = ids.map((cid) => ({
         method: 'GET',
-        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url,video_id`,
+        // Include effective_object_story_id for boosted posts — those ads have no
+        // direct image_url; the image lives on the underlying page post instead.
+        // thumbnail_width/height lifts the default low-res video thumbnail to a proper HD frame.
+        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url,video_id,object_story_spec,effective_object_story_id,effective_instagram_story_id&thumbnail_width=1280&thumbnail_height=720`,
       }))
       const creativeBatchRes = await metaBatch(creativeBatchReqs, userToken)
 
+      // ── Wave 5b: For creatives with no direct image, fetch full_picture from the story post ──
+      // Boosted posts / page-post ads store their image on the post, not in the creative spec.
+      const storyRequests = []  // batch sub-requests
+      const storyMeta = []      // parallel array: { creativeIndex, adId }
+      for (let i = 0; i < ids.length; i++) {
+        const cr = creativeBatchRes[i]
+        if (!cr || pickCreativeImage(cr)) continue
+        const storyId = cr.effective_object_story_id || cr.effective_instagram_story_id
+        if (storyId) {
+          storyRequests.push({ method: 'GET', relative_url: `${storyId}?fields=full_picture` })
+          storyMeta.push({ creativeIndex: i, adId: creativeIds.get(ids[i]) })
+        } else {
+          console.warn(`[MetaSync] No image URL and no story ID for creative ${ids[i]}, adId=${creativeIds.get(ids[i])}. Creative payload:`, JSON.stringify(cr))
+        }
+      }
+
+      const storyRes = storyRequests.length ? await metaBatch(storyRequests, userToken) : []
+      // Map story full_picture back to creative index
+      const storyImageByCreativeIndex = new Map()
+      for (let j = 0; j < storyMeta.length; j++) {
+        storyImageByCreativeIndex.set(storyMeta[j].creativeIndex, storyRes[j]?.full_picture || null)
+      }
+
+      // ── Wave 5c: Cache images to S3 and write DB ─────────────────────────────
       for (let i = 0; i < ids.length; i++) {
         const cr = creativeBatchRes[i]
         if (!cr) continue
         const adId = creativeIds.get(ids[i])
+        const metaImageUrl = pickCreativeImage(cr) || storyImageByCreativeIndex.get(i) || null
+
+        console.log(`[MetaSync] Creative ${ids[i]} (adId=${adId}): imageUrl=${metaImageUrl || 'NONE'}`)
+
+        const urlExt = (metaImageUrl?.split('?')[0] || '').match(/\.(jpg|jpeg|png|gif|webp)/i)?.[1]?.toLowerCase() || 'jpg'
+        // Persist to S3 so the URL never expires; fall back to raw Meta URL if upload fails.
+        const cachedImageUrl = metaImageUrl
+          ? await downloadUrlToS3({ url: metaImageUrl, filename: `${orgId}-${adId}.${urlExt}`, baseDir: 'meta-creatives' })
+          : null
+        if (metaImageUrl && !cachedImageUrl) {
+          console.warn(`[MetaSync] S3 cache failed for adId=${adId}, storing raw Meta URL as fallback`)
+        }
+
         await MetaAd.update(
           {
-            imageUrl: cr.image_url || cr.thumbnail_url || null,
-            videoId: cr.video_id || null,
-            body: cr.body || null,
+            imageUrl: cachedImageUrl || metaImageUrl || null,
+            videoId: cr.video_id || cr?.object_story_spec?.video_data?.video_id || null,
+            body: pickCreativeBody(cr),
             platform: cr.instagram_permalink_url ? 'Instagram' : 'Facebook',
           },
           { where: { adId, organisationId: orgId } }
@@ -329,6 +407,7 @@ export const runInsightsSync = async (orgId, days = 1) => {
       clicks: Number(insight.clicks) || 0,
       spend: Math.round(Number(insight.spend || 0) * 100),
       leads: Number(insight.actions?.find((a) => a.action_type === 'lead')?.value) || 0,
+      linkClicks: Number(insight.actions?.find((a) => a.action_type === 'link_click')?.value) || 0,
       reach: Number(insight.reach) || 0,
       frequency: Number(insight.frequency) || 0,
       purchase_roas: Number(insight.purchase_roas?.[0]?.value) || 0,
@@ -383,6 +462,35 @@ export const runInsightsSync = async (orgId, days = 1) => {
       for (let i = 0; i < ads.length; i++) {
         const rows = Array.isArray(results[i]?.data) ? results[i].data : []
         await upsertInsights('ad', ads[i].adId, rows)
+      }
+    }
+
+    // ── Lifetime reach pass ───────────────────────────────────────────────────
+    // Reach is not additive across days — we must query with time_increment=lifetime
+    // to get the true deduplicated reach for the sync window, matching Ads Manager.
+    const lifetimeTimeParams = `time_range[since]=${since}&time_range[until]=${until}`
+
+    const allEntities = [
+      ...campaigns.map((c) => ({ type: 'campaign', id: c.campaignId })),
+      ...adSets.map((s) => ({ type: 'adset', id: s.adSetId })),
+      ...ads.map((a) => ({ type: 'ad', id: a.adId })),
+    ]
+
+    if (allEntities.length) {
+      const lifetimeReqs = allEntities.map((e) => ({
+        method: 'GET',
+        relative_url: `${e.id}/insights?fields=reach&${lifetimeTimeParams}`,
+      }))
+      const lifetimeResults = await metaBatch(lifetimeReqs, userToken)
+
+      for (let i = 0; i < allEntities.length; i++) {
+        const rows = Array.isArray(lifetimeResults[i]?.data) ? lifetimeResults[i].data : []
+        const lifetimeReach = rows.length > 0 ? Number(rows[0]?.reach || 0) : null
+        if (lifetimeReach === null) continue
+        await MetaInsight.update(
+          { lifetimeReach },
+          { where: { organisationId: orgId, entityType: allEntities[i].type, entityId: allEntities[i].id } }
+        )
       }
     }
 

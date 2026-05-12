@@ -3,8 +3,17 @@
     <NuxtPage :key="pageKey" class="bck-org" />
     <CommonLoader />
     <Snackbar />
+    <CommonNetworkStatusBanner />
     <ClientOnly>
-    <div class="floating-buttons" v-if="showFloatingButtons">
+    <div
+      ref="floatingEl"
+      class="floating-buttons"
+      v-if="showFloatingButtons"
+      :style="dragStyle"
+      :class="{ 'floating-buttons--dragging': isDragging }"
+      @pointerdown="onFloatingPointerDown"
+      @click.capture="onFloatingClick"
+    >
       <FloatingButtonsQuickActions
         @create-task="handleCreateTask"
         @add-staff="handleAddStaff"
@@ -533,6 +542,158 @@ const showFloatingButtons = computed(() => {
   return loggedIn.value && !excludedRoutes.includes(route.name);
 });
 
+// Draggable floating buttons
+const floatingEl = ref(null);
+const FLOATING_BUTTONS_STORAGE_KEY = "floating-buttons-pos";
+
+const readSavedFloatingPosition = () => {
+  if (!process.client) return null;
+  try {
+    const raw = window.localStorage.getItem(FLOATING_BUTTONS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (
+      parsed &&
+      Number.isFinite(Number(parsed.x)) &&
+      Number.isFinite(Number(parsed.y))
+    ) {
+      return { x: Number(parsed.x), y: Number(parsed.y) };
+    }
+  } catch (err) {
+  }
+  return null;
+};
+
+const writeSavedFloatingPosition = (position) => {
+  if (!process.client || !position) return;
+  try {
+    window.localStorage.setItem(FLOATING_BUTTONS_STORAGE_KEY, JSON.stringify(position));
+  } catch (err) {
+  }
+};
+
+const clampFloatingPosition = (nextX, nextY) => {
+  if (!process.client) return { x: nextX, y: nextY };
+  const el = floatingEl.value;
+  const width = el?.offsetWidth || 140;
+  const height = el?.offsetHeight || 64;
+  const maxX = Math.max(0, window.innerWidth - width - 8);
+  const maxY = Math.max(0, window.innerHeight - height - 8);
+  return {
+    x: Math.min(Math.max(8, nextX), maxX),
+    y: Math.min(Math.max(8, nextY), maxY),
+  };
+};
+
+const getDefaultFloatingPosition = () => {
+  if (!process.client) return { x: 8, y: 8 };
+  const el = floatingEl.value;
+  const width = el?.offsetWidth || 140;
+  const height = el?.offsetHeight || 64;
+  return clampFloatingPosition(window.innerWidth - width - 20, window.innerHeight - height - 20);
+};
+
+let _dragMoved = false;
+let _pointerStart = null;
+let _dragOffset = null;
+const DRAG_THRESHOLD = 4;
+const floatX = ref(0);
+const floatY = ref(0);
+const isDragging = ref(false);
+const dragStyle = computed(() => `
+  left: ${floatX.value}px;
+  top: ${floatY.value}px;
+`);
+
+const applyFloatingPosition = (position, { persist = true } = {}) => {
+  const next = clampFloatingPosition(position.x, position.y);
+  floatX.value = next.x;
+  floatY.value = next.y;
+  if (persist) {
+    writeSavedFloatingPosition(next);
+  }
+};
+
+const syncFloatingPosition = ({ persistDefault = true } = {}) => {
+  if (!process.client) return;
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      if (!showFloatingButtons.value || !floatingEl.value) return;
+      const saved = readSavedFloatingPosition();
+      const next = saved || getDefaultFloatingPosition();
+      applyFloatingPosition(next, { persist: persistDefault || !!saved });
+    });
+  });
+};
+
+const stopFloatingDrag = () => {
+  if (!process.client) return;
+  window.removeEventListener('pointermove', onFloatingPointerMove);
+  window.removeEventListener('pointerup', onFloatingPointerUp);
+  window.removeEventListener('pointercancel', onFloatingPointerUp);
+};
+
+const onFloatingPointerMove = (event) => {
+  if (!_pointerStart || !_dragOffset) return;
+  const dist = Math.hypot(event.clientX - _pointerStart.x, event.clientY - _pointerStart.y);
+  if (dist >= DRAG_THRESHOLD) _dragMoved = true;
+
+  const clamped = clampFloatingPosition(
+    event.clientX - _dragOffset.x,
+    event.clientY - _dragOffset.y,
+  );
+  floatX.value = clamped.x;
+  floatY.value = clamped.y;
+};
+
+const onFloatingPointerUp = () => {
+  if (!_pointerStart) return;
+  isDragging.value = false;
+  stopFloatingDrag();
+  applyFloatingPosition({ x: floatX.value, y: floatY.value });
+  _pointerStart = null;
+  _dragOffset = null;
+  setTimeout(() => { _dragMoved = false; }, 50);
+};
+
+const onFloatingPointerDown = (event) => {
+  if (!process.client || event.button !== 0) return;
+  const el = floatingEl.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  _pointerStart = { x: event.clientX, y: event.clientY };
+  _dragOffset = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+  _dragMoved = false;
+  isDragging.value = true;
+  window.addEventListener('pointermove', onFloatingPointerMove);
+  window.addEventListener('pointerup', onFloatingPointerUp);
+  window.addEventListener('pointercancel', onFloatingPointerUp);
+};
+
+// Re-clamp with real element dimensions once ClientOnly renders the element
+// (ClientOnly defers rendering past app.vue's onMounted, so floatingEl is null there)
+watch(floatingEl, (el) => {
+  if (!el) return;
+  syncFloatingPosition();
+});
+
+const onFloatingResize = () => {
+  applyFloatingPosition({ x: floatX.value, y: floatY.value });
+};
+
+// Suppress the click that fires after drag-release so menus don't open
+const onFloatingClick = (e) => {
+  if (_dragMoved) {
+    e.preventDefault();
+    e.stopPropagation();
+    _dragMoved = false;
+  }
+};
+
+
+
 const showChatbot = computed(() => {
   const excludedRoutes = ["onboarding", "login", "signup"];
   return loggedIn.value && !excludedRoutes.includes(route.name);
@@ -595,6 +756,13 @@ onMounted(() => {
     getRoles();
   }
   syncOnboardingState();
+  syncFloatingPosition();
+  window.addEventListener('resize', onFloatingResize);
+});
+
+onBeforeUnmount(() => {
+  stopFloatingDrag();
+  window.removeEventListener('resize', onFloatingResize);
 });
 
 watch(loggedIn, (newVal) => {
@@ -612,8 +780,15 @@ watch(
   () => route.path,
   () => {
     syncOnboardingState();
+    syncFloatingPosition({ persistDefault: false });
   }
 );
+
+watch(showFloatingButtons, (visible) => {
+  if (visible) {
+    syncFloatingPosition({ persistDefault: false });
+  }
+});
 </script>
 
 <style lang="scss">
@@ -635,13 +810,28 @@ watch(
 
 .floating-buttons {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
-  display: flex;
+  bottom: auto;
+  right: auto;
+  display: inline-flex;
   flex-direction: row;
   gap: 2px;
-  z-index: 1000;
+  width: max-content;
+  height: max-content;
+  z-index: 9999;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 }
+
+.floating-buttons img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.floating-buttons--dragging {
+  cursor: grabbing;
+}
+
 .video-wrapper {
   position: relative;
   padding-bottom: 56.25%;

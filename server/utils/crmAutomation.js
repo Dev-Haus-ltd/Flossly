@@ -2,11 +2,11 @@ import { crmAutomationDefaults } from "@shared/defaults/crmAutomationDefaults.js
 import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
 import { htmlToPlainText } from "~/lib/format/text.js";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
-import { transporter } from "./nodeMailer.js";
+import { getOrgTransporter, getFromAddress } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
 import { CrmAutomationTemplate, CrmLead, Organisation, CrmLeadAssignee, User } from "../models/index.js";
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
-import { resolveWhatsAppProviderConfig } from "./whatsappProvider.js";
+import { resolveWhapiConfig } from "./whatsappProvider.js";
 import { sendCrmAutomationSentNotification, sendCrmAutomationFailedNotification } from "./fcmNotification.js";
 
 const crmTriggersByKey = new Map(
@@ -14,6 +14,29 @@ const crmTriggersByKey = new Map(
     .map((def) => [def.key, def.trigger])
     .filter((entry) => entry[1])
 );
+
+export const inferTriggerFromName = (name) => {
+  const lower = String(name || '').toLowerCase()
+  if (lower.includes('birthday')) {
+    if (lower.includes('month')) return { type: 'birthday_month_start', offsetDays: 0 }
+    return { type: 'birthday_offset', days: 0 }
+  }
+  if (lower.includes('black friday')) return { type: 'black_friday', offsetDays: 0 }
+  if (lower.includes('anniversary')) return { type: 'practice_anniversary', offsetDays: 0 }
+  const daysAfterMatch = lower.match(/(\d+)\s*days?\s*(after|post|follow)/)
+  if (daysAfterMatch) return { type: 'inquiry_days', days: Number(daysAfterMatch[1]) }
+  const followDaysMatch = lower.match(/follow[- ]?up.*?(\d+)|(\d+)[- ]?day.*?follow/)
+  if (followDaysMatch) {
+    const days = Number(followDaysMatch[1] || followDaysMatch[2])
+    return { type: 'inquiry_days', days: Number.isFinite(days) ? days : 3 }
+  }
+  const dayNumberMatch = lower.match(/\bday\s*(\d+)\b|\b(\d+)\s*day\b/)
+  if (dayNumberMatch) {
+    const days = Number(dayNumberMatch[1] || dayNumberMatch[2])
+    if (Number.isFinite(days)) return { type: 'inquiry_days', days }
+  }
+  return { type: 'inquiry_days', days: 0 }
+}
 
 export const resolveCrmTrigger = (tpl) => {
   if (tpl?.trigger) return tpl.trigger;
@@ -44,7 +67,12 @@ export const buildEffectiveCrmTemplates = (lead, templatesByOrg) => {
   const seen = new Set();
   baseTemplates.forEach((tpl) => {
     const override = overrides[tpl.key];
-    const combined = override ? { ...tpl, ...override, key: tpl.key } : tpl;
+    // Automations require explicit per-lead opt-in. Global template enabled
+    // state is irrelevant for sending — if no override exists for this lead,
+    // treat the automation as disabled regardless of the global flag.
+    const combined = override
+      ? { ...tpl, ...override, key: tpl.key }
+      : { ...tpl, enabled: false };
     effectiveTemplates.push(combined);
     seen.add(tpl.key);
   });
@@ -53,6 +81,13 @@ export const buildEffectiveCrmTemplates = (lead, templatesByOrg) => {
     effectiveTemplates.push({ key, ...override });
   });
   return effectiveTemplates;
+};
+
+const getLeadActivationAnchor = (lead, tpl) => {
+  const rawDate = tpl?.activationDate || tpl?.activatedAt || lead?.rawData?.crmAutomationActivationDates?.[tpl?.key];
+  if (!rawDate) return null;
+  const parsed = new Date(rawDate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
 export const buildCrmEmail = (lead, tpl, org = null) => {
@@ -106,13 +141,23 @@ export const buildCrmWhatsAppTemplatePayload = (lead, tpl) => {
 };
 
 export const sendCrmAutomationEmail = async (lead, subject, html, automationName = null) => {
+  if (lead.autoReplyEnabled !== true) return;
+  if (lead.autoReplyDisabledUntil && new Date() < new Date(lead.autoReplyDisabledUntil)) return;
+  if (lead.autoReplyDisabledUntil && new Date() >= new Date(lead.autoReplyDisabledUntil)) {
+    lead.autoReplyEnabled = true;
+    lead.autoReplyDisabledUntil = null;
+    await lead.save();
+  }
   const wrapped = EMAIL_TEMPLATE.replaceAll("{subject}", subject).replace(
     "{content}",
     html
   );
-  await transporter.sendMail({
+  const orgId = Number(lead?.organisationId);
+  const orgTransporter = await getOrgTransporter(orgId);
+  const orgFrom = getFromAddress(orgId);
+  await orgTransporter.sendMail({
     to: lead.email,
-    from: process.env.MAIL_FROM || "helloflossly@gmail.com",
+    from: orgFrom,
     subject,
     html: wrapped,
   });
@@ -141,63 +186,40 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
 };
 
 export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload = null, automationName = null) => {
+  if (lead.autoReplyEnabled !== true) return;
+  if (lead.autoReplyDisabledUntil && new Date() < new Date(lead.autoReplyDisabledUntil)) return;
+  if (lead.autoReplyDisabledUntil && new Date() >= new Date(lead.autoReplyDisabledUntil)) {
+    lead.autoReplyEnabled = true;
+    lead.autoReplyDisabledUntil = null;
+    await lead.save();
+  }
   const to = normalizeWhatsAppNumber(lead?.telephone);
   if (!to) throw new Error("Missing or invalid phone number");
-  const waConfig = await resolveWhatsAppProviderConfig(lead.organisationId);
-  if (!waConfig?.provider) throw new Error("WhatsApp provider not configured");
-  if (waConfig.provider === "meta" && (!waConfig?.phoneNumberId || !waConfig?.accessToken)) {
-    throw new Error("WhatsApp is not configured");
-  }
-  if (waConfig.provider === "whapi" && !waConfig?.token) {
-    throw new Error("Whapi token is missing");
-  }
-  if (waConfig.provider === "whapi" && !waConfig?.connected) {
-    throw new Error("Whapi channel is not connected");
-  }
+  const whapiConfig = await resolveWhapiConfig(lead.organisationId);
+  if (!whapiConfig?.token) throw new Error("Whapi token is missing");
+  if (!whapiConfig?.connected) throw new Error("Whapi channel is not connected");
   const limitStatus = await isWhatsAppLimitExceeded(lead.organisationId);
   if (limitStatus.exceeded) {
     throw new Error(`WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`);
   }
-  const metaUrl = waConfig.provider === "meta"
-    ? `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
-    : null;
-  const whapiUrl = waConfig.provider === "whapi"
-    ? `${String(waConfig.baseUrl || "").replace(/\/+$/, "")}/messages/text`
-    : null;
+  const whapiUrl = `${String(whapiConfig.baseUrl || "").replace(/\/+$/, "")}/messages/text`;
+  const headers = { Authorization: `Bearer ${whapiConfig.token}`, "Content-Type": "application/json" };
   try {
-    const body =
-      waConfig.provider === "meta"
-        ? (
-          templatePayload
-            ? { messaging_product: "whatsapp", to, type: "template", template: templatePayload }
-            : { messaging_product: "whatsapp", to, type: "text", text: { body: message || "" } }
-        )
-        : { to, body: String(message || "") };
-    const resp = await $fetch(waConfig.provider === "meta" ? metaUrl : whapiUrl, {
+    const resp = await $fetch(whapiUrl, {
       method: "POST",
-      headers: waConfig.provider === "meta"
-        ? {
-            Authorization: `Bearer ${waConfig.accessToken}`,
-            "Content-Type": "application/json",
-          }
-        : {
-            Authorization: `Bearer ${waConfig.token}`,
-            "Content-Type": "application/json",
-          },
-      body,
+      headers,
+      body: { to, body: String(message || "") },
     });
-    const providerMessageId =
-      resp?.messages?.[0]?.id || resp?.message?.id || resp?.id || null;
+    const providerMessageId = resp?.message?.id || resp?.id || null;
     await markWhatsAppOutbound(lead, to);
     await logWhatsAppMessage({
       organisationId: lead.organisationId,
       leadId: lead.id,
       to,
-      type: waConfig.provider === "meta" && templatePayload ? "template" : "text",
-      templateName: waConfig.provider === "meta" ? (templatePayload?.name || null) : null,
+      type: "text",
       status: "sent",
       providerMessageId,
-      content: waConfig.provider === "meta" && templatePayload ? null : String(message || ""),
+      content: String(message || ""),
     });
 
     // Send push notification to lead assignees on success
@@ -226,8 +248,7 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
       organisationId: lead.organisationId,
       leadId: lead.id,
       to,
-      type: waConfig.provider === "meta" && templatePayload ? "template" : "text",
-      templateName: waConfig.provider === "meta" ? (templatePayload?.name || null) : null,
+      type: "text",
       status: "failed",
       error: e?.data?.error?.message || e?.message || "Failed to send",
     });
@@ -243,7 +264,7 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
         await sendCrmAutomationFailedNotification({
           userId,
           lead,
-          automationName: automationName || templatePayload?.name || 'WhatsApp',
+          automationName: automationName || 'WhatsApp',
           channel: 'WhatsApp',
           errorMessage: e?.data?.error?.message || e?.message || "Failed to send"
         });
@@ -267,6 +288,12 @@ export const markCrmSent = async (lead, raw, key) => {
   map[key] = new Date().toISOString();
   lead.rawData = { ...raw, automationSentKeys: map };
   await lead.save();
+  try {
+    await CrmAutomationTemplate.update(
+      { lastSentAt: new Date() },
+      { where: { organisationId: lead.organisationId, key } }
+    );
+  } catch {}
 };
 
 const daysSince = (today, date) => {
@@ -311,9 +338,16 @@ export const shouldSendCrmTemplate = ({ lead, tpl, trigger, today, org }) => {
     return { due: true, sentKey: tpl.key };
   }
   if (trigger.type === "inquiry_days") {
-    if (!lead?.inquiryDate) return { due: false, sentKey: tpl.key };
-    const d = daysSince(today, lead.inquiryDate);
-    return { due: d !== null && d >= trigger.days, sentKey: tpl.key };
+    const anchorDate = getLeadActivationAnchor(lead, tpl) || lead?.inquiryDate;
+    if (!anchorDate) return { due: false, sentKey: tpl.key };
+    const d = daysSince(today, anchorDate);
+    return { due: d !== null && d === trigger.days, sentKey: tpl.key };
+  }
+  if (trigger.type === "activation_days") {
+    const anchorDate = getLeadActivationAnchor(lead, tpl);
+    if (!anchorDate) return { due: false, sentKey: tpl.key };
+    const d = daysSince(today, anchorDate);
+    return { due: d !== null && d === trigger.days, sentKey: tpl.key };
   }
   if (trigger.type === "birthday_offset") {
     if (!lead?.dob) return { due: false, sentKey: `${tpl.key}_${today.getFullYear()}` };
@@ -441,7 +475,7 @@ export const dispatchSendNowAutomationWithOptions = async (orgId, tpl, options =
     options?.forceResend === true ||
     String(options?.forceResend || "").toLowerCase() === "true";
   const org = await Organisation.findByPk(Number(orgId));
-  const waConfig = await resolveWhatsAppProviderConfig(orgId);
+  const waConfig = await resolveWhapiConfig(orgId);
   const batchSize = 500;
   const summary = {
     orgId: Number(orgId),
@@ -479,15 +513,7 @@ export const dispatchSendNowAutomationWithOptions = async (orgId, tpl, options =
             continue;
           }
           const message = buildCrmWhatsAppMessage(lead, tpl, org);
-          const templatePayload =
-            waConfig?.provider === "meta"
-              ? buildCrmWhatsAppTemplatePayload(lead, tpl)
-              : null;
-          if (waConfig?.provider === "meta" && !templatePayload) {
-            summary.skippedMissingRecipient += 1;
-            continue;
-          }
-          await sendCrmAutomationWhatsApp(lead, message, templatePayload, tpl?.name);
+          await sendCrmAutomationWhatsApp(lead, message, null, tpl?.name);
           await markCrmSent(lead, raw, sentKey);
           if (wasAlreadySent && forceResend) summary.resent += 1;
           else summary.sent += 1;
@@ -554,40 +580,48 @@ export const previewSendNowAutomation = async (orgId, tpl) => {
   return summary;
 };
 
-export const sendImmediateCrmAutomationsForLead = async (lead) => {
+export const sendImmediateCrmAutomationsForLead = async (lead, options = {}) => {
+  const includeSendNow = options?.includeSendNow === true;
+  // forceImmediate skips the date check — use when explicitly activating a group for a lead
+  const forceImmediate = options?.forceImmediate === true;
+  const targetKeys = Array.isArray(options?.targetKeys) && options.targetKeys.length
+    ? new Set(options.targetKeys.map((key) => String(key || "").trim()).filter(Boolean))
+    : null;
   const templates = await CrmAutomationTemplate.findAll({
     where: { organisationId: Number(lead.organisationId) },
   });
   if (!templates.length) return;
   const org = await Organisation.findByPk(Number(lead.organisationId));
-  const waConfig = await resolveWhatsAppProviderConfig(lead.organisationId);
+  const waConfig = await resolveWhapiConfig(lead.organisationId);
   const templatesByOrg = buildCrmTemplatesByOrg(templates);
   const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg);
   const today = new Date();
-  const raw = lead.rawData || {};
   for (const tpl of effectiveTemplates) {
+    if (targetKeys && !targetKeys.has(String(tpl?.key || ""))) continue;
     if (!tpl?.enabled) continue;
     const trigger = resolveCrmTrigger(tpl);
-    if (!trigger || trigger.type !== "inquiry_days" || trigger.days !== 0) continue;
-    const { due, sentKey } = shouldSendCrmTemplate({ lead, tpl, trigger, today, org });
-    if (!due || hasCrmSent(raw, sentKey)) continue;
+    if (!trigger) continue;
+    const isImmediate =
+      (trigger.type === "inquiry_days" && trigger.days === 0) ||
+      (trigger.type === "activation_days" && trigger.days === 0) ||
+      (includeSendNow && trigger.type === "send_now");
+    if (!isImmediate) continue;
+    const sentKey = tpl.key;
+    if (hasCrmSent(lead.rawData || {}, sentKey)) continue;
+    if (!forceImmediate) {
+      const { due } = shouldSendCrmTemplate({ lead, tpl, trigger, today, org });
+      if (!due) continue;
+    }
     if (String(tpl?.type || "Email").toLowerCase() === "whatsapp") {
       if (!lead?.telephone) continue;
       const message = buildCrmWhatsAppMessage(lead, tpl, org);
-      const templatePayload =
-        waConfig?.provider === "meta"
-          ? buildCrmWhatsAppTemplatePayload(lead, tpl)
-          : null;
-      if (waConfig?.provider === "meta" && !templatePayload) {
-        throw new Error("WhatsApp template name is required for automation");
-      }
-      await sendCrmAutomationWhatsApp(lead, message, templatePayload, tpl?.name);
-      await markCrmSent(lead, raw, sentKey);
+      await sendCrmAutomationWhatsApp(lead, message, null, tpl?.name);
+      await markCrmSent(lead, lead.rawData || {}, sentKey);
     } else {
       if (!lead?.email) continue;
       const { subject, html } = buildCrmEmail(lead, tpl, org);
       await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
-      await markCrmSent(lead, raw, sentKey);
+      await markCrmSent(lead, lead.rawData || {}, sentKey);
     }
   }
 };

@@ -1,4 +1,4 @@
-import { authStart, authCallback, igAuthStart, igAuthCallback, listLeads, fetchLeadsNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, getWhatsAppConfig, saveWhatsAppConfig, whatsappEmbeddedComplete, fetchWhatsAppTemplates, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, getCampaignLeadCounts, getSyncJobStatus, getVideoSource, getAllLeadCounts, deauthorize, dataDeletion, dataDeletionStatus } from "../../controllers/meta";
+import { authStart, authCallback, igAuthStart, igAuthCallback, listLeads, fetchLeadsNow, fetchDmHistoryNow, subscribePages, webhook, connectionStatus, disconnect, healthCheck, stream, fetchMetaStructureAndBudgets, fetchDailyMetaInsights, listBusinessPortfolios, connectBusinessPages, debugMetaStatus, listMetaPermissions, getMetaInsights, getMetaStructure, getCampaignLeadCounts, deauthorize, dataDeletion, dataDeletionStatus, getSyncJobStatus, getVideoSource, getAllLeadCounts } from "../../controllers/meta";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, 'name')
@@ -15,6 +15,8 @@ export default defineEventHandler(async (event) => {
       return await listLeads(event)
     case 'fetchLeads':
       return await fetchLeadsNow(event)
+    case 'fetchDmHistory':
+      return await fetchDmHistoryNow(event)
     case 'subscribe':
       return await subscribePages(event)
     case 'connection':
@@ -23,13 +25,6 @@ export default defineEventHandler(async (event) => {
       return await healthCheck(event)
     case 'disconnect':
       return await disconnect(event)
-    case 'whatsappConfig':
-      if (getMethod(event) === 'GET') return await getWhatsAppConfig(event)
-      return await saveWhatsAppConfig(event)
-    case 'whatsappEmbedded':
-      return await whatsappEmbeddedComplete(event)
-    case 'whatsappTemplates':
-      return await fetchWhatsAppTemplates(event)
     case 'stream':
       return await stream(event)
     case 'webhook':
@@ -50,6 +45,12 @@ export default defineEventHandler(async (event) => {
       return await debugMetaStatus(event)
     case 'permissions':
       return await listMetaPermissions(event)
+    case 'deauthorize':
+      return await deauthorize(event)
+    case 'dataDeletion':
+      return await dataDeletion(event)
+    case 'dataDeletionStatus':
+      return await dataDeletionStatus(event)
     case 'syncStatus':
       return await getSyncJobStatus(event)
     case 'campaignLeadCounts':
@@ -58,12 +59,6 @@ export default defineEventHandler(async (event) => {
       return await getVideoSource(event)
     case 'allLeadCounts':
       return await getAllLeadCounts(event)
-    case 'deauthorize':
-      return await deauthorize(event)
-    case 'dataDeletion':
-      return await dataDeletion(event)
-    case 'dataDeletionStatus':
-      return await dataDeletionStatus(event)
     default:
       return { code: 0, error: 'Not found' }
   }

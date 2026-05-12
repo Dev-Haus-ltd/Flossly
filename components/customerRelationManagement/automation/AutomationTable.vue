@@ -39,17 +39,12 @@
             @update:model-value="$emit('update:search', $event)"
           >
             <template #append-inner>
-              <img
-                :src="searchicon"
-                alt="search icon"
-                width="14"
-                height="14"
-              />
+              <img :src="searchicon" alt="search icon" width="14" height="14" />
             </template>
           </v-text-field>
         </div>
 
-        <v-menu v-if="hasStatusColumn" :close-on-content-click="false">
+        <v-menu :close-on-content-click="false" transition="fade-transition" offset-y>
           <template #activator="{ props }">
             <v-btn
               v-bind="props"
@@ -59,13 +54,7 @@
               style="width: 110px"
             >
               <span>Filter</span>
-              <img
-                :src="filtericon"
-                alt="filter icon"
-                class="ml-2"
-                width="14"
-                height="14"
-              />
+              <img :src="filtericon" alt="filter icon" class="ml-2" width="14" height="14" />
               <v-badge
                 v-if="activeFilters > 0"
                 :content="activeFilters"
@@ -75,14 +64,28 @@
               />
             </v-btn>
           </template>
-          <v-card class="pa-4" min-width="280">
-            <p class="text-subtitle-2 font-weight-bold mb-3">Filter by Status</p>
+
+          <v-card style="min-width: 280px; border-radius: 12px; padding: 16px">
+            <div class="d-flex align-center justify-space-between mb-1">
+              <span style="font-weight: 500; font-size: 14px">Filter by</span>
+              <v-btn
+                variant="text"
+                density="comfortable"
+                color="primary"
+                style="text-transform: none; font-weight: 500; font-size: 13px"
+                @click="$emit('clearFilters')"
+              >Clear filters</v-btn>
+            </div>
+
+            <v-divider style="background-color: #dbdbdb" class="my-3" />
+
+            <v-label class="mb-1" style="font-size: 14px">Status</v-label>
             <v-checkbox
               :model-value="filterEnabled"
               label="Enabled only"
               density="compact"
               hide-details
-              class="mb-2"
+              class="mb-1"
               @update:model-value="$emit('update:filterEnabled', $event)"
             />
             <v-checkbox
@@ -92,18 +95,53 @@
               hide-details
               @update:model-value="$emit('update:filterDisabled', $event)"
             />
-            <v-divider class="my-3" />
-            <v-btn
-              size="small"
-              variant="text"
-              color="primary"
-              @click="$emit('clearFilters')"
+
+            <v-divider style="background-color: #dbdbdb" class="my-3" />
+
+            <v-label class="mb-1" style="font-size: 14px">Type</v-label>
+            <v-radio-group
+              :model-value="filterType"
+              density="compact"
+              hide-details
+              @update:model-value="$emit('update:filterType', $event)"
             >
-              Clear filters
-            </v-btn>
+              <v-radio label="All" value="all" density="compact" />
+              <v-radio label="Email" value="email" density="compact" />
+              <v-radio label="WhatsApp" value="whatsapp" density="compact" />
+            </v-radio-group>
+
+            <template v-if="hasLastSentColumn">
+              <v-divider style="background-color: #dbdbdb" class="my-3" />
+              <v-label class="mb-1" style="font-size: 14px">Sent Status</v-label>
+              <v-radio-group
+                :model-value="filterSent"
+                density="compact"
+                hide-details
+                @update:model-value="$emit('update:filterSent', $event)"
+              >
+                <v-radio label="All" value="all" density="compact" />
+                <v-radio label="Sent at least once" value="sent" density="compact" />
+                <v-radio label="Never sent" value="never" density="compact" />
+              </v-radio-group>
+            </template>
           </v-card>
         </v-menu>
       </div>
+    </div>
+
+    <div v-if="activeFilterChips.length" class="d-flex align-center flex-wrap mb-3" style="gap: 8px">
+      <v-chip
+        v-for="chip in activeFilterChips"
+        :key="chip.key"
+        size="small"
+        color="primary"
+        variant="elevated"
+        closable
+        @click:close="removeChip(chip)"
+      >{{ chip.label }}</v-chip>
+      <v-chip color="secondary" size="small" variant="text" class="ml-1" @click="$emit('clearFilters')">
+        Clear filters
+      </v-chip>
     </div>
 
     <v-card class="with-border rounded-lg elevation-0">
@@ -115,18 +153,46 @@
         :search="search"
         item-value="key"
         class="automation-data-table full-width-table"
-        :class="{
-          'has-trigger-column': hasTriggerColumn,
-          'has-status-column': hasStatusColumn,
-        }"
-        density="comfortable"
+        :elevation="0"
+        density="compact"
         hover
         :items-per-page="15"
       >
+        <template #headers="{ columns }">
+          <tr>
+            <th
+              v-for="col in columns"
+              :key="col.key"
+              :style="{
+                backgroundColor: '#F6F6F6',
+                fontSize: '12px',
+                fontWeight: '600',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                color: '#4b5563',
+                padding: '0px 10px',
+                height: '40px',
+                width: col.width || undefined,
+                minWidth: col.width || undefined,
+                textAlign: col.align === 'center' ? 'center' : 'left',
+                whiteSpace: 'nowrap',
+              }"
+            >
+              {{ col.title }}
+            </th>
+          </tr>
+        </template>
         <template #item.type="{ item }">
-          <v-chip size="small" variant="tonal" color="primary" class="font-weight-medium">
+          <v-chip
+            size="small"
+            variant="tonal"
+            :color="String(item.type || 'Email').toLowerCase() === 'whatsapp' && !whatsappEnabled ? 'warning' : 'primary'"
+            class="font-weight-medium"
+          >
             <v-icon size="14" class="mr-1">
-              {{ String(item.type || 'Email').toLowerCase() === 'whatsapp' ? 'mdi-whatsapp' : 'mdi-email-outline' }}
+              {{ String(item.type || 'Email').toLowerCase() === 'whatsapp'
+                ? (!whatsappEnabled ? 'mdi-wifi-off' : 'mdi-whatsapp')
+                : 'mdi-email-outline' }}
             </v-icon>
             {{ item.type }}
           </v-chip>
@@ -141,8 +207,29 @@
         <template v-if="hasTriggerColumn" #item.sending="{ item }">
           <div class="d-flex  align-center justify-space-between trigger-cell">
             <div class="d-flex align-center">
-              <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
-              <span class="text-body-2 text-medium-emphasis trigger-text">{{ item.sending }}</span>
+              <v-icon size="16" :color="item.sending ? 'grey-darken-1' : 'warning'" class="mr-2">
+                {{ item.sending ? 'mdi-clock-outline' : 'mdi-alert-circle-outline' }}
+              </v-icon>
+              <v-tooltip v-if="item.bulkHasMixedTrigger && item.bulkTriggerDetails?.length" location="top" max-width="360">
+                <template #activator="{ props }">
+                  <span v-bind="props" class="text-body-2 text-medium-emphasis trigger-text trigger-text--interactive">
+                    {{ item.sending }}
+                  </span>
+                </template>
+                <div class="mixed-trigger-tooltip">
+                  <div class="mixed-trigger-tooltip__title">Selected leads currently have different trigger settings</div>
+                  <div
+                    v-for="detail in item.bulkTriggerDetails"
+                    :key="detail.leadId"
+                    class="mixed-trigger-tooltip__row"
+                  >
+                    <span class="mixed-trigger-tooltip__lead">{{ detail.leadName }}</span>
+                    <span class="mixed-trigger-tooltip__value">{{ detail.triggerLabel }}</span>
+                  </div>
+                </div>
+              </v-tooltip>
+              <span v-else-if="item.sending" class="text-body-2 text-medium-emphasis trigger-text">{{ item.sending }}</span>
+              <span v-else class="text-body-2 trigger-text trigger-text--unset">Set trigger</span>
             </div>
             <v-tooltip location="top">
               <template #activator="{ props }">
@@ -162,7 +249,31 @@
         </template>
 
         <template #item.actions="{ item }">
-          <div class="d-flex align-center justify-center" style="gap: 16px;">
+          <div class="d-flex align-center justify-center" style="gap: 10px;">
+            <v-tooltip v-if="showResendAction && String(item.type || 'Email').toLowerCase() !== 'whatsapp'" location="top">
+              <template #activator="{ props }">
+                <v-progress-circular
+                  v-if="resendingKey === item.key"
+                  v-bind="props"
+                  size="16"
+                  width="2"
+                  indeterminate
+                  color="primary"
+                  class="action-icon-btn"
+                />
+                <v-icon
+                  v-else
+                  v-bind="props"
+                  size="18"
+                  color="primary"
+                  class="action-icon-btn"
+                  :class="{ 'action-icon-disabled': !!resendingKey }"
+                  @click="resendingKey ? null : $emit('resend', item)"
+                >mdi-email-sync-outline</v-icon>
+              </template>
+              <span>{{ item.lastSentAt ? 'Resend' : 'Send now' }}</span>
+            </v-tooltip>
+
             <v-tooltip v-if="showPreviewAction" location="top">
               <template #activator="{ props }">
                 <img
@@ -212,8 +323,29 @@
         </template>
 
         <template v-if="hasStatusColumn" #item.enabled="{ item }">
-          <div class="d-flex align-center justify-center">
+          <div class="d-flex align-center justify-center flex-column" style="gap:4px;">
+            <v-tooltip
+              v-if="String(item.type || 'Email').toLowerCase() === 'whatsapp' && !whatsappEnabled"
+              location="top"
+            >
+              <template #activator="{ props: tp }">
+                <div v-bind="tp" class="d-flex align-center" style="gap:6px;">
+                  <v-switch
+                    v-model="item.enabled"
+                    inset
+                    hide-details
+                    color="success"
+                    density="compact"
+                    :disabled="true"
+                    @update:model-value="$emit('toggleEnabled', item, $event)"
+                  />
+                  <v-icon size="16" color="warning">mdi-wifi-off</v-icon>
+                </div>
+              </template>
+              <span>WhatsApp not connected — automation will not fire</span>
+            </v-tooltip>
             <v-switch
+              v-else
               v-model="item.enabled"
               inset
               hide-details
@@ -224,6 +356,36 @@
               @update:model-value="$emit('toggleEnabled', item, $event)"
             />
           </div>
+        </template>
+
+        <template v-if="hasLastSentColumn" #item.lastSentAt="{ item }">
+          <span v-if="item.lastSentAt" class="text-caption text-medium-emphasis">
+            {{ formatRelativeTime(item.lastSentAt) }}
+          </span>
+          <v-chip v-else size="x-small" variant="tonal" color="grey">Never sent</v-chip>
+        </template>
+
+        <template v-if="hasSentStatusColumn" #item.sentStatus="{ item }">
+          <v-chip
+            v-if="item.lastSentAt"
+            size="x-small"
+            variant="tonal"
+            color="success"
+            class="font-weight-medium"
+          >
+            <v-icon size="11" class="mr-1">mdi-check-circle-outline</v-icon>
+            Sent
+          </v-chip>
+          <v-chip
+            v-else
+            size="x-small"
+            variant="tonal"
+            color="grey"
+            class="font-weight-medium"
+          >
+            <v-icon size="11" class="mr-1">mdi-clock-outline</v-icon>
+            Pending
+          </v-chip>
         </template>
 
         <template #no-data>
@@ -294,21 +456,37 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  filterSent: {
+    type: String,
+    default: 'all',
+  },
+  whatsappEnabled: {
+    type: Boolean,
+    default: true,
+  },
+  showResendAction: {
+    type: Boolean,
+    default: false,
+  },
+  resendingKey: {
+    type: String,
+    default: null,
+  },
+  filterType: {
+    type: String,
+    default: 'all',
+  },
 })
 
 import searchicon from "@/assets/icons/listView/serach-icon.svg"
 import filtericon from "@/assets/icons/listView/filter-icon.svg"
 
-const hasHeaderKey = (key) =>
-  Array.isArray(props.headers) && props.headers.some((h) => h?.key === key)
-
-const hasTriggerColumn = computed(() => hasHeaderKey('sending'))
-const hasStatusColumn = computed(() => hasHeaderKey('enabled'))
-
-defineEmits([
+const emit = defineEmits([
   'update:search',
   'update:filterEnabled',
   'update:filterDisabled',
+  'update:filterSent',
+  'update:filterType',
   'clearFilters',
   'back',
   'openTrigger',
@@ -316,7 +494,48 @@ defineEmits([
   'openEdit',
   'deleteRow',
   'toggleEnabled',
+  'resend',
 ])
+
+const hasHeaderKey = (key) =>
+  Array.isArray(props.headers) && props.headers.some((h) => h?.key === key)
+
+const hasTriggerColumn = computed(() => hasHeaderKey('sending'))
+const hasStatusColumn = computed(() => hasHeaderKey('enabled'))
+const hasLastSentColumn = computed(() => hasHeaderKey('lastSentAt'))
+const hasSentStatusColumn = computed(() => hasHeaderKey('sentStatus'))
+
+const activeFilterChips = computed(() => {
+  const chips = []
+  if (props.filterEnabled) chips.push({ key: 'filterEnabled', label: 'Enabled only' })
+  if (props.filterDisabled) chips.push({ key: 'filterDisabled', label: 'Disabled only' })
+  if (props.filterType && props.filterType !== 'all')
+    chips.push({ key: 'filterType', label: `Type: ${props.filterType === 'whatsapp' ? 'WhatsApp' : 'Email'}` })
+  if (props.filterSent && props.filterSent !== 'all')
+    chips.push({ key: 'filterSent', label: props.filterSent === 'sent' ? 'Sent at least once' : 'Never sent' })
+  return chips
+})
+
+const removeChip = (chip) => {
+  if (chip.key === 'filterEnabled') emit('update:filterEnabled', false)
+  else if (chip.key === 'filterDisabled') emit('update:filterDisabled', false)
+  else if (chip.key === 'filterType') emit('update:filterType', 'all')
+  else if (chip.key === 'filterSent') emit('update:filterSent', 'all')
+}
+
+const formatRelativeTime = (dateStr) => {
+  if (!dateStr) return ''
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 60) return mins <= 1 ? 'Just now' : `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days < 30) return `${days}d ago`
+  const months = Math.floor(days / 30)
+  return `${months}mo ago`
+}
+
 </script>
 
 <style scoped>
@@ -390,42 +609,12 @@ defineEmits([
 
 .full-width-table :deep(table) {
   width: 100% !important;
-  table-layout: fixed;
-}
-
-.full-width-table :deep(th:nth-child(1)) { width: 120px; }
-.full-width-table :deep(th:nth-child(2)) { width: auto; min-width: 260px; }
-
-.full-width-table.has-trigger-column :deep(th:nth-child(3)) { width: 260px; }
-.full-width-table.has-trigger-column.has-status-column :deep(th:nth-child(4)) { width: 140px; }
-.full-width-table.has-trigger-column.has-status-column :deep(th:nth-child(5)) { width: 120px; }
-.full-width-table.has-trigger-column:not(.has-status-column) :deep(th:nth-child(4)) { width: 140px; }
-
-.full-width-table:not(.has-trigger-column).has-status-column :deep(th:nth-child(3)) { width: 140px; }
-.full-width-table:not(.has-trigger-column).has-status-column :deep(th:nth-child(4)) { width: 120px; }
-.full-width-table:not(.has-trigger-column):not(.has-status-column) :deep(th:nth-child(3)) { width: 140px; }
-
-.automation-data-table :deep(thead) {
-  background: #f6f6f6;
-}
-
-.automation-data-table :deep(thead th) {
-  font-weight: 600 !important;
-  font-size: 12px !important;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #4b5563 !important;
-  padding: 8px 12px !important;
-}
-
-.automation-data-table :deep(.v-data-table-header__content) {
-  color: #4b5563;
-  font-weight: 600;
+  table-layout: auto;
 }
 
 .automation-data-table :deep(tbody tr) {
-  transition: background-color 0.2s ease;
-  height: 48px;
+  transition: background-color 0.15s ease;
+  height: 44px;
 }
 
 .automation-data-table :deep(tbody tr:hover) {
@@ -433,8 +622,8 @@ defineEmits([
 }
 
 .automation-data-table :deep(tbody td) {
-  padding: 4px 8px !important;
-  font-size: 14px;
+  padding: 0 10px !important;
+  font-size: 13px;
   vertical-align: middle !important;
   white-space: nowrap;
   overflow: hidden;
@@ -465,6 +654,48 @@ defineEmits([
   text-overflow: ellipsis;
   max-width: 180px;
   display: inline-block;
+}
+
+.trigger-text--interactive {
+  cursor: help;
+  border-bottom: 1px dashed rgba(107, 114, 128, 0.5);
+}
+
+.trigger-text--unset {
+  color: #f59e0b;
+  font-style: italic;
+  font-weight: 500;
+}
+
+.mixed-trigger-tooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 340px;
+}
+
+.mixed-trigger-tooltip__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mixed-trigger-tooltip__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mixed-trigger-tooltip__lead {
+  color: #111827;
+  font-weight: 500;
+}
+
+.mixed-trigger-tooltip__value {
+  color: #6b7280;
+  text-align: right;
 }
 
 .switch-active :deep(.v-selection-control__input) {

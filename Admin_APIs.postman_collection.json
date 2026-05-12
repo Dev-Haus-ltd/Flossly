@@ -1,0 +1,3540 @@
+{
+  "info": {
+    "_postman_id": "admin-api-collection-2026",
+    "name": "Admin APIs",
+    "description": "Admin portal API endpoints for managing users and viewing system data. All endpoints require admin privileges (roleId = 17).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login (Regular - Admin User)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.token) {",
+                  "        pm.cookies.set('accessToken', jsonData.data.token);",
+                  "        pm.environment.set('admin_token', jsonData.data.token);",
+                  "        console.log('\u2705 Admin token saved');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"your-password\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login with admin credentials (roleId = 17). Token will have isAdmin: true flag."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "item": [
+        {
+          "name": "Search Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/searchUsers?limit=10&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "searchUsers"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "john",
+                  "description": "Search by name, email, or phone",
+                  "disabled": true
+                },
+                {
+                  "key": "roleId",
+                  "value": "5",
+                  "description": "Filter by role ID",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "Active",
+                  "description": "Filter by status",
+                  "disabled": true
+                },
+                {
+                  "key": "organisationId",
+                  "value": "10",
+                  "description": "Filter by organization ID",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Results per page"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset"
+                }
+              ]
+            },
+            "description": "Search and filter users with advanced options."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getUserById?userId=123",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getUserById"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "123",
+                  "description": "User ID (required)"
+                }
+              ]
+            },
+            "description": "Get detailed information about a specific user including role, organizations, and login history."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Status (Organisation Specific)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 123,\n  \"organisationId\": 45,\n  \"status\": \"Disabled\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/updateUserStatus",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateUserStatus"
+              ]
+            },
+            "description": "Update a user's status within a specific organisation (UserOrganisations table). This controls whether the user can access that particular organisation. Valid options: Active, Disabled, Invited, Expired."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Login History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getUserLoginHistory?userId=123&limit=20&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getUserLoginHistory"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "123",
+                  "description": "User ID (required)"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Results per page"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset"
+                }
+              ]
+            },
+            "description": "Get login history for a specific user including timestamp and browser agent."
+          },
+          "response": []
+        },
+        {
+          "name": "Resend Invite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 123,\n  \"organisationId\": 10\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/resendInvite",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "resendInvite"
+              ]
+            },
+            "description": "Admin-assisted resend invitation email. Only works for users with status Invited. organisationId is optional."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset User Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 123,\n  \"newPassword\": \"newSecurePassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/resetUserPassword",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "resetUserPassword"
+              ]
+            },
+            "description": "Admin-assisted password reset for any user. No OTP required. Password must be at least 8 characters."
+          },
+          "response": []
+        },
+        {
+          "name": "Search Organisations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/searchOrganisations?search=&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "searchOrganisations"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Search organisations by name with pagination"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Organisation By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getOrganisationById?id=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getOrganisationById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "Get detailed organisation information by ID"
+          },
+          "response": []
+        },
+        {
+          "name": "Search Roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/searchRoles?search=&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "searchRoles"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Search roles by name with pagination"
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints for managing users"
+    },
+    {
+      "name": "Organisation Monitoring",
+      "item": [
+        {
+          "name": "Get Orgs Trials Expiring In X Days",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getOrgsTrialsExpiringInXDays?days=7&limit=50&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getOrgsTrialsExpiringInXDays"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "7",
+                  "description": "Number of days to look ahead (default: 7)"
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Results per page"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset"
+                }
+              ]
+            },
+            "description": "Get organisations with trial subscriptions expiring in X days. Integrates with Stripe to check trial_end dates."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Past Due Orgs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getPastDueOrgs?limit=50&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getPastDueOrgs"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Results per page"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset"
+                }
+              ]
+            },
+            "description": "Get organisations with past_due or unpaid subscription status. Shows amount due and period end date."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Orgs Above Seat Limit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getOrgsAboveSeatLimit?limit=50&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getOrgsAboveSeatLimit"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Results per page"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset"
+                }
+              ]
+            },
+            "description": "Get organisations exceeding their subscription seat limit. Shows seat limit, active users, and overage count."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Orgs By Plan Type",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getOrgsByPlanType",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getOrgsByPlanType"
+              ],
+              "query": [
+                {
+                  "key": "planType",
+                  "value": "basic",
+                  "description": "Filter by plan name (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Results per page (when filtering)",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset (when filtering)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get organisations grouped by subscription plan type. Without planType parameter, returns summary of all plans. With planType, returns filtered list."
+          },
+          "response": []
+        }
+      ],
+      "description": "Monitor organisations subscriptions, trials, and seat limits"
+    },
+    {
+      "name": "Data Export",
+      "item": [
+        {
+          "name": "Export Org Tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/exportOrgTasks?organisationId=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "exportOrgTasks"
+              ],
+              "query": [
+                {
+                  "key": "organisationId",
+                  "value": "10",
+                  "description": "Organisation ID (required)"
+                },
+                {
+                  "key": "format",
+                  "value": "csv",
+                  "description": "Export format: csv or json (default: csv)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Export all tasks for a specific organisation. Returns CSV file download by default, or JSON with format=json parameter."
+          },
+          "response": []
+        },
+        {
+          "name": "Export All Tasks (Super Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/exportAllTasks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "exportAllTasks"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "csv",
+                  "description": "Export format: csv or json (default: csv)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Export ALL tasks from ALL organisations (Super Admin only). Returns CSV file download by default, or JSON with format=json parameter."
+          },
+          "response": []
+        }
+      ],
+      "description": "Export data endpoints for tasks and other entities"
+    },
+    {
+      "name": "System & Statistics",
+      "item": [
+        {
+          "name": "Get All Roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getAllRoles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getAllRoles"
+              ]
+            },
+            "description": "Get all roles in the system."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Usage Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getUsageMetrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getUsageMetrics"
+              ],
+              "query": [
+                {
+                  "key": "organisationId",
+                  "value": "10",
+                  "description": "Filter by specific organisation (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01",
+                  "description": "Filter records from this date (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-12-31",
+                  "description": "Filter records until this date (optional)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get comprehensive usage metrics across all modules: users, storage, documents, leads, tasks, appointments, and notifications. Includes conversion rates and completion rates."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Storage Usage Per Practice",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getStorageUsagePerPractice",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getStorageUsagePerPractice"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "System information and usage metrics endpoints"
+    },
+    {
+      "name": "CRM Automation Library",
+      "item": [
+        {
+          "name": "Get Global Automation Library",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getGlobalAutomationLibrary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getGlobalAutomationLibrary"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Practice Automation Library",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getPracticeAutomationLibrary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getPracticeAutomationLibrary"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Automation Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/toggleAutomationTemplate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "toggleAutomationTemplate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Automations",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "public/samples/automation-sample.csv"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/bulkUploadAutomations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "bulkUploadAutomations"
+              ]
+            },
+            "description": "Bulk upload CRM automations into a target organisation as superadmin using a CSV/XLS/XLSX file upload. Include organisationId and a file field that matches the application template columns."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Automation Template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/downloadAutomationTemplate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "downloadAutomationTemplate"
+              ]
+            },
+            "description": "Download the CRM automation bulk upload sample CSV for admin/superadmin use."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "CRM",
+      "item": [
+        {
+          "name": "Get Organisation CRM Feature Flags",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getOrganisationCrmFeatureFlags?organisationId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "getOrganisationCrmFeatureFlags"],
+              "query": [{ "key": "organisationId", "value": "1" }]
+            },
+            "description": "Get organisation-level CRM feature access flags for Meta, WhatsApp, and Chatbot."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Organisation CRM Feature Flags",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"meta\": true,\n  \"whatsapp\": false,\n  \"chatbot\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateOrganisationCrmFeatureFlags",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "updateOrganisationCrmFeatureFlags"]
+            },
+            "description": "Allow or restrict CRM Meta, WhatsApp, and Chatbot features for a specific organisation."
+          },
+          "response": []
+        },
+        {
+          "name": "List CRM Treatments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listCrmTreatments?organisationId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "listCrmTreatments"],
+              "query": [{ "key": "organisationId", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get CRM Treatment By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getCrmTreatmentById?organisationId=1&id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "getCrmTreatmentById"],
+              "query": [{ "key": "organisationId", "value": "1" }, { "key": "id", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create CRM Treatment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"name\": \"Composite Bonding\",\n  \"ordering\": 1,\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createCrmTreatment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "createCrmTreatment"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update CRM Treatment",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1,\n  \"name\": \"Composite Bonding Updated\",\n  \"ordering\": 2,\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateCrmTreatment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "updateCrmTreatment"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete CRM Treatment",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteCrmTreatment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deleteCrmTreatment"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Lead Sources",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listLeadSources?organisationId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "listLeadSources"],
+              "query": [{ "key": "organisationId", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Lead Source By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getLeadSourceById?organisationId=1&id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "getLeadSourceById"],
+              "query": [{ "key": "organisationId", "value": "1" }, { "key": "id", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Lead Source",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"name\": \"Google Ads\",\n  \"ordering\": 1,\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createLeadSource",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "createLeadSource"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Lead Source",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1,\n  \"name\": \"Google Ads Updated\",\n  \"ordering\": 2,\n  \"active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateLeadSource",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "updateLeadSource"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Lead Source",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteLeadSource",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deleteLeadSource"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List CRM Alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listCrmAlerts?organisationId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "listCrmAlerts"],
+              "query": [{ "key": "organisationId", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get CRM Alert By Key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getCrmAlertByKey?organisationId=1&key=hot",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "getCrmAlertByKey"],
+              "query": [{ "key": "organisationId", "value": "1" }, { "key": "key", "value": "hot" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create CRM Alert",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"key\": \"vip\",\n  \"label\": \"VIP lead\",\n  \"emoji\": \"⭐\",\n  \"color\": \"warning\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createCrmAlert",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "createCrmAlert"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update CRM Alert",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"currentKey\": \"vip\",\n  \"key\": \"vip\",\n  \"label\": \"VIP lead updated\",\n  \"emoji\": \"⭐\",\n  \"color\": \"error\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateCrmAlert",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "updateCrmAlert"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete CRM Alert",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"key\": \"vip\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteCrmAlert",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deleteCrmAlert"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin CRM endpoints for treatments, lead sources, and alerts"
+    },
+    {
+      "name": "CRM Leads",
+      "item": [
+        {
+          "name": "Download Lead Template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/downloadLeadTemplate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "downloadLeadTemplate"]
+            },
+            "description": "Download the CRM leads bulk upload sample CSV for admin/superadmin use."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Leads",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "public/samples/lead-sample.csv"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/bulkUploadLeads",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "bulkUploadLeads"]
+            },
+            "description": "Bulk upload CRM leads into a target organisation as superadmin using a CSV/XLS/XLSX file upload. Include organisationId and a file field that matches the lead sample columns."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin CRM lead bulk upload endpoints"
+    },
+    {
+      "name": "CRM Scripts Pool",
+      "item": [
+        {
+          "name": "List Scripts Pool",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listScriptsPool",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "listScriptsPool"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Script Pool Item By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getScriptPoolItemById?id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "getScriptPoolItemById"],
+              "query": [{ "key": "id", "value": "1" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Script Pool Item",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"new_patient_intro\",\n  \"title\": \"New Patient Intro\",\n  \"content\": \"Hello [Practice Name], thank you for contacting us.\",\n  \"sortOrder\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createScriptPoolItem",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "createScriptPoolItem"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Script Pool Item",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"key\": \"new_patient_intro\",\n  \"title\": \"New Patient Intro Updated\",\n  \"content\": \"Hello [Practice Name], thank you for getting in touch.\",\n  \"sortOrder\": 11\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateScriptPoolItem",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "updateScriptPoolItem"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Script Pool Item",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteScriptPoolItem",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deleteScriptPoolItem"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin CRUD endpoints for global CRM Scripts Pool dictionary items"
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Broadcast Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"System Maintenance\",\n  \"message\": \"The system will be under maintenance\",\n  \"priority\": \"high\",\n  \"data\": {}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/broadcastNotification",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "broadcastNotification"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Notification Delivery Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getNotificationDeliveryStats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getNotificationDeliveryStats"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Referral Scheme & Flossly Points",
+      "item": [
+        {
+          "name": "Deduct Points (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 123,\n  \"points\": 50,\n  \"reason\": \"Fraudulent activity detected - refund processed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deductPoints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "deductPoints"
+              ]
+            },
+            "description": "Deduct points from a user (Admin only)"
+          },
+          "response": []
+        },
+        {
+          "name": "Award Points (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 123,\n  \"points\": 100,\n  \"reason\": \"Exceptional performance\",\n  \"rewardPointId\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/awardPoints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "awardPoints"
+              ]
+            },
+            "description": "Award bonus points to a user (Admin only)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Reward Points",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/points/rewardPoints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "points",
+                "rewardPoints"
+              ]
+            },
+            "description": "Get all reward points definitions"
+          },
+          "response": []
+        },
+        {
+          "name": "Add Reward Points",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Complete CPD Course\",\n  \"description\": \"Reward for completing CPD\",\n  \"type\": \"CPD\",\n  \"points\": 100\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/points/addRewardPoints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "points",
+                "addRewardPoints"
+              ]
+            },
+            "description": "Add new reward point definition"
+          },
+          "response": []
+        },
+        {
+          "name": "Points Issued By Admin (Reporting)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/pointsIssuedByAdmin?startDate=2026-01-01&endDate=2026-12-31",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "pointsIssuedByAdmin"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-12-31"
+                }
+              ]
+            },
+            "description": "Get reporting on points issued by admin users"
+          },
+          "response": []
+        },
+        {
+          "name": "Points Totals By Practice (Reporting)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/pointsTotalsByPractice?sortBy=totalPoints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "pointsTotalsByPractice"
+              ],
+              "query": [
+                {
+                  "key": "sortBy",
+                  "value": "totalPoints"
+                }
+              ]
+            },
+            "description": "Get points totals by practice/organisation"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Task Pool",
+      "item": [
+        {
+          "name": "Get Task Pool (Super Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getTaskPool?limit=100&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getTaskPool"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Results per page (default: 100)"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset (default: 0)"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "5",
+                  "description": "Filter by category ID (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "roleId",
+                  "value": "3",
+                  "description": "Filter by role ID (optional)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "View global task pool (Super Admin). Shows all template/predefined tasks that can be assigned to users across all practices."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Task By ID (Super Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getTaskById?id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getTaskById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Task ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific task by ID with full details including category, role, organisation, and creator information. Returns 404 if task not found."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Tasks (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "CSV file with columns: title, description, categoryId, roleId, defaultFrequency"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/bulkUploadTasks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "bulkUploadTasks"
+              ]
+            },
+            "description": "Upload multiple tasks from CSV file. Creates tasks in the task pool WITHOUT user assignment. Requires categoryId to specify the task category."
+          },
+          "response": [],
+          "body": {
+            "formdata": [
+              {
+                "description": "CSV file with columns: title, description, categoryId, roleId, defaultFrequency"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Download Task Template (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/downloadTaskTemplate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "downloadTaskTemplate"
+              ]
+            },
+            "description": "Download CSV template for bulk task upload. Template does NOT include user column."
+          },
+          "response": []
+        }
+      ],
+      "description": "Manage global task pool and bulk task uploads"
+    },
+    {
+      "name": "Task Checklists",
+      "item": [
+        {
+          "name": "Get All Checklists",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getChecklists?limit=100&offset=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getChecklists"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Results per page (default: 100)"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset (default: 0)"
+                },
+                {
+                  "key": "taskId",
+                  "value": "123",
+                  "description": "Filter by task ID (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "fire",
+                  "description": "Search in question or category (optional)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get all task checklist items with optional filtering by task ID or search term."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Checklist By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getChecklistById?id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getChecklistById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Checklist item ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific checklist item by ID with associated task details."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Checklist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"taskId\": 123,\n  \"question\": \"Check fire alarm\",\n  \"category\": \"Safety\",\n  \"fieldOneTitle\": \"Comments / Notes\",\n  \"fieldOneValue\": \"Last checked on 2026-01-15\",\n  \"fieldTwoTitle\": null,\n  \"fieldTwoValue\": null,\n  \"showRadio\": true,\n  \"showTime\": false,\n  \"showDate\": false,\n  \"radioValue\": \"N/A\",\n  \"timeValue\": null,\n  \"dateValue\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/createChecklist",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createChecklist"
+              ]
+            },
+            "description": "Create a new checklist item for a task. Required fields: taskId, question."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Checklist",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"question\": \"Check fire alarm (updated)\",\n  \"category\": \"Safety\",\n  \"fieldOneTitle\": \"Comments / Notes\",\n  \"fieldOneValue\": \"Updated comment\",\n  \"showRadio\": true,\n  \"radioValue\": \"Yes\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/updateChecklist",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateChecklist"
+              ]
+            },
+            "description": "Update an existing checklist item. Only provided fields will be updated."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Checklist",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/deleteChecklist",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "deleteChecklist"
+              ]
+            },
+            "description": "Delete a checklist item by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Checklists",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "public/samples/checklist-sample.csv",
+                  "description": "CSV file with format: taskTitle,itemTitle,showRadio,defaultComment"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/bulkUploadChecklists",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "bulkUploadChecklists"
+              ]
+            },
+            "description": "Upload multiple checklist items from CSV file. Automatically creates tasks if they don't exist (as system tasks). Groups checklist items by taskTitle. Use downloadChecklistTemplate to get sample CSV format."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Checklist Template",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/downloadChecklistTemplate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "downloadChecklistTemplate"
+              ]
+            },
+            "description": "Download CSV template for bulk checklist upload with sample data."
+          },
+          "response": []
+        }
+      ],
+      "description": "Manage task checklists with CRUD operations and bulk upload functionality"
+    },
+    {
+      "name": "Task Categories",
+      "item": [
+        {
+          "name": "Get All Task Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getTaskCategories?includeSubcategories=true&includeTaskCount=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getTaskCategories"
+              ],
+              "query": [
+                {
+                  "key": "includeSubcategories",
+                  "value": "true",
+                  "description": "Include subcategories (default: true)"
+                },
+                {
+                  "key": "includeTaskCount",
+                  "value": "true",
+                  "description": "Include task count (default: true)"
+                }
+              ]
+            },
+            "description": "Get all system task categories (parent categories only). System categories have organisationId = NULL and isDeleted = false."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Task Category By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getTaskCategoryById?id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getTaskCategoryById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Category ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific task category by ID with its subcategories and parent (if subcategory)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Task Subcategories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getTaskSubcategories?parentId=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getTaskSubcategories"
+              ],
+              "query": [
+                {
+                  "key": "parentId",
+                  "value": "1",
+                  "description": "Parent category ID (required)"
+                }
+              ]
+            },
+            "description": "Get all subcategories for a specific parent category."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Task Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Category\",\n  \"description\": \"Category description\",\n  \"color\": \"#3498db\",\n  \"parentId\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/createTaskCategory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createTaskCategory"
+              ]
+            },
+            "description": "Create a new task category or subcategory. Set parentId to create a subcategory, or null for parent category. Name must be unique at the same level."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Task Category",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"name\": \"Updated Category Name\",\n  \"description\": \"Updated description\",\n  \"color\": \"#e74c3c\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/updateTaskCategory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateTaskCategory"
+              ]
+            },
+            "description": "Update an existing task category. Only provided fields will be updated. Name must be unique at the same level."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Task Category",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/deleteTaskCategory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "deleteTaskCategory"
+              ]
+            },
+            "description": "Soft delete a task category (sets isDeleted = true). Cannot delete if category has tasks or subcategories assigned."
+          },
+          "response": []
+        }
+      ],
+      "description": "Manage system task categories and subcategories. Only shows categories where organisationId is NULL and isDeleted is false."
+    },
+    {
+      "name": "Default Priorities & Statuses",
+      "item": [
+        {
+          "name": "Get Default Priorities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getDefaultPriorities",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getDefaultPriorities"
+              ]
+            },
+            "description": "Get all default priorities. These are the master priorities that all organisations inherit."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Default Statuses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/getDefaultStatuses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getDefaultStatuses"
+              ]
+            },
+            "description": "Get all default statuses. These are the master statuses that all organisations inherit."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Default Priority",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"custom_priority\",\n  \"name\": \"Custom Priority\",\n  \"color\": \"#FF5722\",\n  \"sortOrder\": 5\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/createDefaultPriority",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createDefaultPriority"
+              ]
+            },
+            "description": "Create a new default priority. This will be available for all organisations to use."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Default Priority",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"name\": \"Critical\",\n  \"color\": \"#FF0000\",\n  \"sortOrder\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/updateDefaultPriority",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateDefaultPriority"
+              ]
+            },
+            "description": "Update a default priority. Changes cascade to ALL organisation priorities with the same key."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Default Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"custom_status\",\n  \"name\": \"Custom Status\",\n  \"color\": \"#9C27B0\",\n  \"description\": \"A custom status for special cases\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/createDefaultStatus",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createDefaultStatus"
+              ]
+            },
+            "description": "Create a new default status. This will be available for all organisations to use."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Default Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"name\": \"To Do\",\n  \"color\": \"#808080\",\n  \"description\": \"Task pending completion\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/updateDefaultStatus",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateDefaultStatus"
+              ]
+            },
+            "description": "Update a default status. Changes cascade to ALL organisation statuses with the same key."
+          },
+          "response": []
+        }
+      ],
+      "description": "Manage default priorities and statuses that cascade to all organisations"
+    },
+    {
+      "name": "User Preferences / License Management",
+      "item": [
+        {
+          "name": "Get User By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getUserById?userId=123",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getUserById"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "123",
+                  "description": "The ID of the user to retrieve"
+                }
+              ]
+            },
+            "description": "Get detailed user information by ID. Returns user details (excluding password), role, all organisations, and last 20 login history records."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Organisation By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getOrganisationById?id=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getOrganisationById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "The ID of the organisation to retrieve"
+                }
+              ]
+            },
+            "description": "Get detailed organisation information by ID. Returns organisation details and related data."
+          },
+          "response": []
+        },
+        {
+          "name": "Extend Organisation Trial",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"extensionDays\": 30\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/extendOrganisationTrial",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "extendOrganisationTrial"
+              ]
+            },
+            "description": "Extend the trial period for all users with Trial license in a specific organisation by specified number of days"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User License",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 123,\n  \"organisationId\": 1,\n  \"licenseType\": \"Glide\",\n  \"renewalDate\": \"2027-03-30T00:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateUserLicense",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateUserLicense"
+              ]
+            },
+            "description": "Manually update a user's license type and renewal date. Valid license types: System, Trial, Drift, Glide, Soar"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Organisation Info",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"updates\": {\n    \"name\": \"Updated Practice Name\",\n    \"address\": \"123 Main Street\",\n    \"postalCode\": \"SW1A 1AA\",\n    \"contact\": \"+44 20 1234 5678\",\n    \"type\": \"Dental\",\n    \"status\": \"Active\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateOrganisationInfo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateOrganisationInfo"
+              ]
+            },
+            "description": "Update general information of an organisation. Allowed fields: name, address, description, postalCode, surgeryCount, teamCount, currentApp, contact, type, managerId, logo, cqcInspectionDate, status, practiceAnniversaryDate, automationPlaceholders"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Info",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 123,\n  \"updates\": {\n    \"fullName\": \"John Updated Doe\",\n    \"email\": \"john.updated@example.com\",\n    \"phone\": \"+44 7700 900000\",\n    \"address\": \"456 New Street, London\",\n    \"status\": \"Active\",\n    \"gender\": \"Male\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateUserInfo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateUserInfo"
+              ]
+            },
+            "description": "Update general information of a user. Allowed fields: fullName, email, dob, phone, photo, address, status, gender, nextOfKin, nextOfKinContact, requiredCpdHours, roleId"
+          }
+        }
+      ],
+      "description": "Manage user licenses and trial periods"
+    },
+    {
+      "name": "Rota Management",
+      "item": [
+        {
+          "name": "List Organisation Rotas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listOrgsRotas?organisationId=1&limit=100&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "listOrgsRotas"
+              ],
+              "query": [
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "description": "Organisation ID (required)"
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Results per page (default: 100)"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset (default: 0)"
+                },
+                {
+                  "key": "includeShifts",
+                  "value": "false",
+                  "description": "Include shift count (default: false)",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all rotas for a specific organisation. Returns rotas with shift counts."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Rota By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getRotaById?id=1&organisationId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getRotaById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Rota ID (required)"
+                },
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "description": "Organisation ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific rota by ID with all associated shifts and users."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Rota",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 1,\n  \"name\": \"Week 1 Rota\",\n  \"startDate\": \"2026-04-01\",\n  \"endDate\": \"2026-04-07\",\n  \"duration\": 7,\n  \"notes\": \"Spring week rota\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createRota",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createRota"
+              ]
+            },
+            "description": "Create a new rota for an organisation. Checks for date conflicts with existing rotas."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Rota",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1,\n  \"name\": \"Updated Week 1 Rota\",\n  \"startDate\": \"2026-04-01\",\n  \"endDate\": \"2026-04-07\",\n  \"notes\": \"Updated notes\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateRota",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateRota"
+              ]
+            },
+            "description": "Update an existing rota. Only provided fields will be updated."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Rota",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteRota",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "deleteRota"
+              ]
+            },
+            "description": "Soft delete a rota and all its associated shifts."
+          },
+          "response": []
+        },
+        {
+          "name": "Publish Rota",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/publishRota",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "publishRota"
+              ]
+            },
+            "description": "Publish a rota to make it visible to staff. Sets isPublished to true and records publishedDate."
+          },
+          "response": []
+        },
+        {
+          "name": "Unpublish Rota",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/unpublishRota",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "unpublishRota"
+              ]
+            },
+            "description": "Unpublish a rota to hide it from staff. Sets isPublished to false."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin CRUD endpoints for managing rotas within organisations"
+    },
+    {
+      "name": "Rota Shifts Management",
+      "item": [
+        {
+          "name": "List Rota Shifts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listRotaShifts?rotaId=1&organisationId=1&limit=500&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "listRotaShifts"
+              ],
+              "query": [
+                {
+                  "key": "rotaId",
+                  "value": "1",
+                  "description": "Rota ID (required)"
+                },
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "description": "Organisation ID (required)"
+                },
+                {
+                  "key": "limit",
+                  "value": "500",
+                  "description": "Results per page (default: 500)"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset (default: 0)"
+                }
+              ]
+            },
+            "description": "List all shifts for a specific rota with associated staff details."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Rota Shift By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getRotaShiftById?id=1&organisationId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getRotaShiftById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Shift ID (required)"
+                },
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "description": "Organisation ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific shift by ID with all associated staff and rota details."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Rota Shift",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rotaId\": 1,\n  \"organisationId\": 1,\n  \"dentistId\": 10,\n  \"nurseId\": 11,\n  \"surgeryId\": 1,\n  \"label\": \"Morning Shift\",\n  \"color\": \"#3498db\",\n  \"startDate\": \"2026-04-01T09:00:00\",\n  \"endDate\": \"2026-04-01T17:00:00\",\n  \"breakTime\": 60,\n  \"notes\": \"Regular morning shift\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createRotaShift",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createRotaShift"
+              ]
+            },
+            "description": "Create a new shift for a rota. Checks for conflicts with other shifts. Use forceCreate=true to override cross-org conflict warnings."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Rota Shift",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1,\n  \"dentistId\": 10,\n  \"nurseId\": 12,\n  \"label\": \"Updated Morning Shift\",\n  \"startDate\": \"2026-04-01T09:00:00\",\n  \"endDate\": \"2026-04-01T17:30:00\",\n  \"breakTime\": 45\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateRotaShift",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateRotaShift"
+              ]
+            },
+            "description": "Update an existing shift. Only provided fields will be updated. Use forceCreate=true to override cross-org conflict warnings."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Rota Shift",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteRotaShift",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "deleteRotaShift"
+              ]
+            },
+            "description": "Soft delete a rota shift."
+          },
+          "response": []
+        },
+        {
+          "name": "Start Rota Shift",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/startRotaShift",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "startRotaShift"
+              ]
+            },
+            "description": "Mark a shift as started. Sets startedAt timestamp to current time."
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Rota Shift",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/completeRotaShift",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "completeRotaShift"
+              ]
+            },
+            "description": "Mark a shift as completed. Sets completedAt timestamp to current time. Shift must have startedAt set first."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin CRUD endpoints for managing rota shifts"
+    },
+    {
+      "name": "Document Management",
+      "item": [
+        {
+          "name": "List Organisation Document Folders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listOrgDocumentFolders?organisationId=1&limit=100&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "listOrgDocumentFolders"
+              ],
+              "query": [
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "description": "Organisation ID (required)"
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "List all document folders in an organisation with document counts."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document Folder By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getOrgDocumentFolderById?id=1&organisationId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getOrgDocumentFolderById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Folder ID (required)"
+                },
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "description": "Organisation ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific document folder by ID with all its documents."
+          },
+          "response": []
+        },
+        {
+          "name": "List Organisation Documents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listOrgDocuments?organisationId=1&folderId=1&userId=1&search=&limit=100&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "listOrgDocuments"
+              ],
+              "query": [
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "description": "Organisation ID (required)"
+                },
+                {
+                  "key": "folderId",
+                  "value": "1",
+                  "description": "Filter by folder ID (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "userId",
+                  "value": "1",
+                  "description": "Filter by user ID (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search by name or tags (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "List all documents in an organisation with optional filters."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getOrgDocumentById?id=1&organisationId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getOrgDocumentById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Document ID (required)"
+                },
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "description": "Organisation ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific document by ID."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin endpoints to fetch files and folders in an organisation"
+    },
+    {
+      "name": "HR Documents (Recruitment/Onboarding)",
+      "item": [
+        {
+          "name": "List HR Document Templates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listHrDocuments?type=Recruitment&limit=100&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "listHrDocuments"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "Recruitment",
+                  "description": "Filter by type: Recruitment, Training, Flossly (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "List all HR document templates (master list for Recruitment, Training, Flossly)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get HR Document By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getHrDocumentById?id=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getHrDocumentById"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "HR Document ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific HR document template by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Create HR Document Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Employment Contract\",\n  \"type\": \"Recruitment\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/createHrDocument",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "createHrDocument"
+              ]
+            },
+            "description": "Create a new HR document template. Types: Recruitment, Training, Flossly."
+          },
+          "response": []
+        },
+        {
+          "name": "Update HR Document Template",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"name\": \"Updated Document Name\",\n  \"type\": \"Training\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateHrDocument",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateHrDocument"
+              ]
+            },
+            "description": "Update an existing HR document template."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete HR Document Template",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deleteHrDocument",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "deleteHrDocument"
+              ]
+            },
+            "description": "Delete an HR document template."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User HR Document Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/getUserHrDocumentStatus?userId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "getUserHrDocumentStatus"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "1",
+                  "description": "User ID (required)"
+                }
+              ]
+            },
+            "description": "Get a specific user's HR document completion status with summary stats."
+          },
+          "response": []
+        },
+        {
+          "name": "List Org Users HR Document Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listOrgUsersHrDocumentStatus?organisationId=1&type=Recruitment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "listOrgUsersHrDocumentStatus"
+              ],
+              "query": [
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "description": "Organisation ID (required)"
+                },
+                {
+                  "key": "type",
+                  "value": "Recruitment",
+                  "description": "Filter by type: Recruitment, Training, Flossly (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "List all users' HR document completion status for an organisation with per-user stats."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User HR Document",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"status\": \"Completed\",\n  \"link\": \"https://example.com/document.pdf\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/updateUserHrDocument",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "updateUserHrDocument"
+              ]
+            },
+            "description": "Update (mark complete/incomplete) a user's HR document status."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin endpoints for managing HR document templates and tracking user recruitment/onboarding document completion"
+    },
+    {
+      "name": "Leave Management",
+      "item": [
+        {
+          "name": "List Leave Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/listLeaveRequests?organisationId=1&status=Pending&limit=100&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "listLeaveRequests"
+              ],
+              "query": [
+                {
+                  "key": "organisationId",
+                  "value": "1",
+                  "description": "Organisation ID (required)"
+                },
+                {
+                  "key": "status",
+                  "value": "Pending",
+                  "description": "Filter by status: Pending, Approved, Rejected, Cancelled (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "userId",
+                  "value": "1",
+                  "description": "Filter by user ID (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Results per page (default: 100)"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset (default: 0)"
+                }
+              ]
+            },
+            "description": "List all leave requests for an organisation with optional filters"
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Leave",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/approveLeave",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "approveLeave"
+              ]
+            },
+            "description": "Approve a pending leave request"
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Leave",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/rejectLeave",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "rejectLeave"
+              ]
+            },
+            "description": "Reject a pending leave request"
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin endpoints for managing leave approvals"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Cookie will be automatically sent with requests"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.response.code === 401 || pm.response.code === 403) {",
+          "    console.log('\u26a0\ufe0f Authentication error. Please login again.');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

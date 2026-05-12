@@ -139,17 +139,12 @@
 
             <!-- Lead Source -->
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Lead Source</label>
-              <v-select
+              <CustomerRelationManagementManagedSelectField
                 v-model="form.leadSource"
-                :items="leadSources"
-                item-title="name"
-                item-value="id"
-                return-object
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
+                label="Lead Source"
+                :options="leadSources"
+                category="lead_source"
+                @options-updated="emit('options-refreshed', { category: 'lead_source', options: $event })"
               />
             </v-col>
 
@@ -168,17 +163,12 @@
 
             <!-- Treatment -->
             <v-col cols="6">
-              <label class="mb-1 fld-lbl">Treatment</label>
-              <v-select
+              <CustomerRelationManagementManagedSelectField
                 v-model="form.treatment"
-                :items="treatmentSources"
-                item-title="name"
-                item-value="id"
-                return-object
-                variant="solo"
-                density="compact"
-                class="mb-1 input-bordered"
-                flat
+                label="Treatment"
+                :options="treatmentSources"
+                category="treatment"
+                @options-updated="emit('options-refreshed', { category: 'treatment', options: $event })"
               />
             </v-col>
 
@@ -359,7 +349,7 @@ const props = defineProps({
   staffList: Array,
 });
 
-const emit = defineEmits(["close", "success", "update:modelValue"]);
+const emit = defineEmits(["close", "success", "update:modelValue", "options-refreshed"]);
 const formRef = ref(null);
 const saving = ref(false);
 const hasAttemptedSubmit = ref(false);
@@ -425,7 +415,7 @@ const phoneProps = {
 };
 
 // Dropdown lists
-const leadStatuses = ["New", "Contacted", "Converted", "Lost"];
+const leadStatuses = ["New", "Contacted", "Converted", "Lost", "Uploaded"];
 const contactMethods = ["Email", "Phone", "SMS", "In-Person"];
 
 // Date menus
@@ -585,7 +575,19 @@ const onSubmit = async () => {
   const phoneValid = validatePhone();
   const validation = await formRef.value.validate();
   if (!validation.valid || !phoneValid || dobError.value) {
-    mainStore.setSnackbar({ title: "Please fix the highlighted fields before saving", type: "error" });
+const fieldErrors = [
+      ...validation.errors
+        .filter((e) => !e.errorMessages?.some((m) => m.toLowerCase().includes('phone')))
+        .map((e) => e.errorMessages?.[0])
+        .filter(Boolean),
+      ...(!phoneValid ? [phoneError.value] : []),
+      ...(dobError.value ? ["Date of birth cannot be in the future"] : []),
+    ];
+    const msg =
+      fieldErrors.length === 1
+        ? fieldErrors[0]
+        : "Please fix the highlighted fields before saving";
+    mainStore.setSnackbar({ title: msg, type: "error" });
     return;
   }
   try {
@@ -654,6 +656,7 @@ const onSubmit = async () => {
   min-width: 88px;
   max-width: 88px;
   flex: 0 0 88px;
+  cursor: pointer;
 }
 .crm-phone-input :deep(.v-phone-input__phone__input.v-input) {
   flex: 1 1 auto;
@@ -661,6 +664,11 @@ const onSubmit = async () => {
 }
 .crm-phone-input :deep(.v-phone-input__country__input .v-field) {
   border-right: 1px solid #dfdfdf !important;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.crm-phone-input :deep(.v-phone-input__country__input:hover .v-field) {
+  background-color: #f0f4ff !important;
 }
 .crm-phone-input :deep(.v-phone-input__phone__input .v-field__input) {
   padding-left: 10px;

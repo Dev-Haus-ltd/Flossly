@@ -2,6 +2,7 @@ import { resolve } from "pathe";
 import vuetify from "vite-plugin-vuetify";
 
 export default defineNuxtConfig({
+  compatibilityDate: "2026-04-14",
   alias: {
     "@shared": resolve(__dirname, "shared"),
   },
@@ -90,8 +91,13 @@ export default defineNuxtConfig({
     MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
     // Google Cloud Speech-to-Text credentials
     GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-    // OpenAI API key for summarization
+    // AI / LLM Configuration
+    AI_LLM_PROVIDER: process.env.NUXT_AI_LLM_PROVIDER || process.env.AI_LLM_PROVIDER || "openai",
     OPENAI_API_KEY: process.env.NUXT_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+    AI_OPENAI_MODEL: process.env.NUXT_AI_OPENAI_MODEL || process.env.AI_OPENAI_MODEL || "gpt-4o-mini",
+    ANTHROPIC_API_KEY: process.env.NUXT_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY,
+    AI_ANTHROPIC_MODEL: process.env.NUXT_AI_ANTHROPIC_MODEL || process.env.AI_ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+    CLAUDE_API_KEY: process.env.NUXT_CLAUDE_API_KEY || process.env.CLAUDE_API_KEY,
 
     // Redis connection URL for centralized session management
     REDIS_URL: process.env.REDIS_URL,
@@ -105,7 +111,7 @@ export default defineNuxtConfig({
     DB_PORT: process.env.NUXT_DB_PORT || process.env.DB_PORT,
     DB_SCHEMA: process.env.NUXT_DB_SCHEMA || process.env.DB_SCHEMA,
   },
-  modules: [ 
+  modules: [
     async (options, nuxt) => {
       nuxt.hooks.hook("vite:extendConfig", (config) =>
         // @ts-ignore
@@ -114,14 +120,70 @@ export default defineNuxtConfig({
     },
     "@pinia/nuxt",
     "nuxt-scheduler",
+    "@vite-pwa/nuxt",
     // "vue-social-sharing/nuxt"
   ],
+  pwa: {
+    registerType: "autoUpdate",
+    manifest: {
+      name: "Flossly",
+      short_name: "Flossly",
+      description: "Dental practice management software",
+      theme_color: "#0061FB",
+      background_color: "#ffffff",
+      display: "standalone",
+      orientation: "portrait",
+      scope: "/",
+      start_url: "/",
+      icons: [
+        {
+          src: "/pwa-64x64.png",
+          sizes: "64x64",
+          type: "image/png",
+        },
+        {
+          src: "/pwa-192x192.png",
+          sizes: "192x192",
+          type: "image/png",
+        },
+        {
+          src: "/pwa-512x512.png",
+          sizes: "512x512",
+          type: "image/png",
+        },
+        {
+          src: "/pwa-maskable-512x512.png",
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "maskable",
+        },
+      ],
+    },
+    workbox: {
+      navigateFallback: null,
+      maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
+      globPatterns: ["**/*.{js,css,html,png,svg,ico,woff,woff2}"],
+      runtimeCaching: [
+        {
+          urlPattern: /^\/api\/.*/i,
+          handler: "NetworkOnly",
+        },
+      ],
+    },
+    client: {
+      installPrompt: true,
+    },
+    devOptions: {
+      enabled: false,
+    },
+  },
   build: {
     transpile: ["v-phone-input"],
   },
   css: [
     "vuetify/lib/styles/main.sass",
     "@/assets/css/fonts.css",
+    "@/assets/css/global.css",
     "v-phone-input/styles",
     "flag-icons/css/flag-icons.min.css",
   ],
@@ -138,17 +200,20 @@ export default defineNuxtConfig({
       meta: [
         { charset: "utf-8" },
         { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { name: "theme-color", content: "#0061FB" },
         {
           hid: "description",
           name: "description",
           content: process.env.npm_package_description || "",
         },
       ],
-       link: [
-      // Favicon
-      { rel: "icon", type: "image/png", href: "/Logoicon2.svg" },
-
-      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" }
+      link: [
+        // Favicon
+        { rel: "icon", type: "image/png", href: "/Logoicon2.svg" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon-180x180.png" },
+      { rel: "apple-touch-icon", sizes: "152x152", href: "/apple-touch-icon-152x152.png" },
+      { rel: "apple-touch-icon", sizes: "120x120", href: "/apple-touch-icon-120x120.png" },
+      { rel: "apple-touch-icon", sizes: "76x76", href: "/apple-touch-icon-76x76.png" },
     ],
       script: [
         { src: "https://js.stripe.com/v3/", defer: true },
@@ -213,9 +278,23 @@ export default defineNuxtConfig({
   pinia: {
     autoImports: ["defineStore", "acceptHMRUpdate"],
   },
+  nitro: {
+    externals: {
+      inline: ['xlsx', '@anthropic-ai/sdk'],
+    },
+  },
+  vue: {
+    compilerOptions: {
+      // Treat registered web components as custom elements during SSR/component resolution.
+      isCustomElement: (tag) =>
+        tag === "emoji-picker" ||
+        tag === "lord-icon" ||
+        tag === "lottie-player",
+    },
+  },
   vite: {
     ssr: {
-      noExternal: ["vuetify", "v-phone-input"], // add the vuetify vite plugin
+      noExternal: ["vuetify", "v-phone-input", "@anthropic-ai/sdk"], // add the vuetify vite plugin
     },
   },
   devServer: {

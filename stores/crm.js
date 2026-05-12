@@ -14,6 +14,13 @@ export const useCrmStore = defineStore("crmStore", {
     metaCampaignLeadCounts: {},
     metaAdSetLeadCounts: {},
     metaAdLeadCounts: {},
+    // Automation cache — single source of truth shared by listView column and lead dialog
+    automationGroupRows: [],
+    automationGroupsLoading: false,
+    automationCacheOrgId: null,
+    automationRowsCache: {},   // { [leadId]: CrmAutomation[] } raw API rows, unfiltered
+    automationLoadingIds: {},  // { [leadId]: true } tracks in-flight per-lead fetches
+    automationDirtyLeadIds: {}, // { [leadId]: true } leads whose automations changed since dialog opened
   }),
   getters: {
     metaStats(state) {
@@ -51,6 +58,63 @@ export const useCrmStore = defineStore("crmStore", {
     },
   },
   actions: {
+    _getCurrentOrgId() {
+      const { user } = useUser();
+      return Number(user.value?.currentLoggedInOrgId || 0);
+    },
+    _resetAutomationState() {
+      this.automationGroupRows = [];
+      this.automationGroupsLoading = false;
+      this.automationRowsCache = {};
+      this.automationLoadingIds = {};
+      this.automationDirtyLeadIds = {};
+    },
+    _ensureAutomationOrgScope() {
+      const currentOrgId = this._getCurrentOrgId();
+      if (!currentOrgId) return;
+      if (Number(this.automationCacheOrgId || 0) === currentOrgId) return;
+      this._resetAutomationState();
+      this.automationCacheOrgId = currentOrgId;
+    },
+    _normalizeAutomationLeadIds(leadIds = []) {
+      return [...new Set((Array.isArray(leadIds) ? leadIds : [leadIds])
+        .map((id) => Number(id || 0))
+        .filter(Boolean))];
+    },
+    _clearAutomationLeadCaches(leadIds = []) {
+      const ids = this._normalizeAutomationLeadIds(leadIds);
+      if (!ids.length) {
+        this.automationRowsCache = {};
+        this.automationLoadingIds = {};
+        this.automationDirtyLeadIds = {};
+        return;
+      }
+      ids.forEach((id) => {
+        delete this.automationRowsCache[id];
+        delete this.automationLoadingIds[id];
+        delete this.automationDirtyLeadIds[id];
+      });
+    },
+    _notifyAutomationUpdate({ groupsChanged = false, leadIds = [] } = {}) {
+      this._ensureAutomationOrgScope();
+      const normalizedLeadIds = this._normalizeAutomationLeadIds(leadIds);
+      this._clearAutomationLeadCaches(groupsChanged ? [] : normalizedLeadIds);
+      if (groupsChanged) {
+        this.automationGroupRows = [];
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('crm-automations-updated', {
+          detail: {
+            groupsChanged,
+            leadIds: normalizedLeadIds,
+            refreshedAt: Date.now(),
+          },
+        }));
+        if (groupsChanged) {
+          window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
+        }
+      }
+    },
     _isCurrentAnalyticsOrg(orgId) {
       if (!orgId) return true;
       const { user } = useUser();
@@ -73,8 +137,8 @@ export const useCrmStore = defineStore("crmStore", {
       }
       return res;
     },
-    async getAllLeadCounts(orgId = null) {
-      const res = await this._wrap(() => crmService.getAllLeadCounts());
+    async getAllLeadCounts(orgId = null, params = {}) {
+      const res = await this._wrap(() => crmService.getAllLeadCounts(params));
       if (res?.code === 0 && res.data && this._isCurrentAnalyticsOrg(orgId)) {
         this.metaCampaignLeadCounts = res.data.byCampaign || {};
         this.metaAdSetLeadCounts = res.data.byAdSet || {};
@@ -100,6 +164,12 @@ export const useCrmStore = defineStore("crmStore", {
     markDmRead(payload) { return this._wrap(() => crmService.markDmRead(payload)); },
     processDmQueue(payload = {}) { return this._wrap(() => crmService.processDmQueue(payload)); },
     getDmConnectionStatus() { return this._wrap(() => crmService.getDmConnectionStatus()); },
+    // Fire-and-forget — don't wrap with _wrap so it doesn't block the loading state
+    refreshDmProfile(payload) { return crmService.refreshDmProfile(payload); },
+    refreshAllDmProfiles(payload = {}) { return this._wrap(() => crmService.refreshAllDmProfiles(payload)); },
+    updateConversationAutoReply(conversationId, payload) { return this._wrap(() => crmService.updateConversationAutoReply(conversationId, payload)); },
+    updateLeadAutoReply(payload) { return this._wrap(() => crmService.updateLeadAutoReply(payload)); },
+    fetchDmHistory(params = {}) { return this._wrap(() => crmService.fetchDmHistory(params)); },
     connectionStatus() { return this._wrap(() => crmService.connectionStatus()); },
     fetchLeadsNow(params = {}) { return this._wrap(() => crmService.fetchLeadsNow(params)); },
     async fetchMetaStructure(orgId = null) {
@@ -122,8 +192,8 @@ export const useCrmStore = defineStore("crmStore", {
       if (res?.code === 0) await this.getMetaInsights(orgId);
       return res;
     },
-    async getMetaInsights(orgId = null) {
-      const res = await this._wrap(() => crmService.getMetaInsights());
+    async getMetaInsights(orgId = null, params = {}) {
+      const res = await this._wrap(() => crmService.getMetaInsights(params));
       if (res?.code === 0 && this._isCurrentAnalyticsOrg(orgId)) {
         this.metaInsights = res.data || [];
       }
@@ -133,15 +203,15 @@ export const useCrmStore = defineStore("crmStore", {
     disconnectMeta() { return this._wrap(() => crmService.disconnectMeta()); },
     metaHealth() { return this._wrap(() => crmService.metaHealth()); },
     metaPermissions() { return this._wrap(() => crmService.metaPermissions()); },
+    metaHealthSilent() { return crmService.metaHealth(); },
+    metaPermissionsSilent() { return crmService.metaPermissions(); },
     listMetaBusinesses() { return this._wrap(() => crmService.listMetaBusinesses()); },
     connectMetaPages(payload) { return this._wrap(() => crmService.connectMetaPages(payload)); },
-    completeWhatsAppEmbedded(payload) { return this._wrap(() => crmService.completeWhatsAppEmbedded(payload)); },
-    getWhatsAppConfig() { return this._wrap(() => crmService.getWhatsAppConfig()); },
-    saveWhatsAppConfig(payload) { return this._wrap(() => crmService.saveWhatsAppConfig(payload)); },
-    getWhatsAppTemplates() { return this._wrap(() => crmService.getWhatsAppTemplates()); },
     startWhapiConnect(payload = {}) { return this._wrap(() => crmService.startWhapiConnect(payload)); },
     getWhapiQr() { return this._wrap(() => crmService.getWhapiQr()); },
+    getWhapiQrSilent() { return crmService.getWhapiQr(); },
     getWhapiStatus() { return this._wrap(() => crmService.getWhapiStatus()); },
+    getWhapiStatusSilent() { return crmService.getWhapiStatus(); },
     getWhapiChannels() { return this._wrap(() => crmService.getWhapiChannels()); },
     disconnectWhapi(payload = {}) { return this._wrap(() => crmService.disconnectWhapi(payload)); },
     deleteWhapiChannel() { return this._wrap(() => crmService.deleteWhapiChannel()); },
@@ -176,33 +246,140 @@ export const useCrmStore = defineStore("crmStore", {
 
     // Automation
     listAutomation(leadId) { return this._wrap(() => crmService.listAutomation(leadId)); },
-    saveAutomation(payload) { return this._wrap(() => crmService.saveAutomation(payload)); },
-    saveAutomationBatch(payload) { return this._wrap(() => crmService.saveAutomationBatch(payload)); },
+    listAutomationSilent(leadId) { return crmService.listAutomation(leadId); },
+    async saveAutomation(payload) {
+      const res = await this._wrap(() => crmService.saveAutomation(payload));
+      if (res?.code === 0) {
+        this._notifyAutomationUpdate({
+          groupsChanged: !payload?.leadId,
+          leadIds: payload?.leadId ? [payload.leadId] : [],
+        });
+      }
+      return res;
+    },
+    async saveAutomationBatch(payload) {
+      const res = await this._wrap(() => crmService.saveAutomationBatch(payload));
+      if (res?.code === 0) {
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+        const leadIds = items.map((item) => item?.leadId);
+        const groupsChanged = items.some((item) => !item?.leadId);
+        this._notifyAutomationUpdate({ groupsChanged, leadIds });
+      }
+      return res;
+    },
     getAutomationSendNowStatus(params = {}) { return crmService.getAutomationSendNowStatus(params); },
-    resetAutomationOverride(payload) { return this._wrap(() => crmService.resetAutomationOverride(payload)); },
-    deleteAutomation(payload) { return this._wrap(() => crmService.deleteAutomation(payload)); },
-    bulkUploadAutomations(payload) { return this._wrap(() => crmService.bulkUploadAutomations(payload)); },
+    async resetAutomationOverride(payload) {
+      const res = await this._wrap(() => crmService.resetAutomationOverride(payload));
+      if (res?.code === 0) {
+        this._notifyAutomationUpdate({
+          leadIds: payload?.leadId ? [payload.leadId] : [],
+        });
+      }
+      return res;
+    },
+    async deleteAutomation(payload) {
+      const res = await this._wrap(() => crmService.deleteAutomation(payload));
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
+      return res;
+    },
+    async bulkUploadAutomations(payload) {
+      const res = await this._wrap(() => crmService.bulkUploadAutomations(payload));
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
+      return res;
+    },
+    async generateAutomationsWithAI(payload) {
+      const res = await this._wrap(() => crmService.generateAutomationsWithAI(payload));
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
+      return res;
+    },
     listAutomationGroups() { return this._wrap(() => crmService.listAutomationGroups()); },
+    listAutomationGroupsSilent() { return crmService.listAutomationGroups(); },
     async saveAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.saveAutomationGroup(payload));
-      if (res?.code === 0 && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
-      }
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
       return res;
     },
     async deleteAutomationGroup(payload) {
       const res = await this._wrap(() => crmService.deleteAutomationGroup(payload));
-      if (res?.code === 0 && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
-      }
+      if (res?.code === 0) this._notifyAutomationUpdate({ groupsChanged: true });
       return res;
     },
+
+    // Automation cache actions
+    async fetchAutomationGroups({ force = false, silent = false } = {}) {
+      this._ensureAutomationOrgScope();
+      if (!force && (this.automationGroupRows.length || this.automationGroupsLoading)) return;
+      this.automationGroupsLoading = true;
+      try {
+        const res = await (silent
+          ? this.listAutomationGroupsSilent()
+          : this.listAutomationGroups());
+        if (res?.code === 0 && Array.isArray(res.data)) {
+          this.automationGroupRows = res.data;
+        }
+      } finally {
+        this.automationGroupsLoading = false;
+      }
+    },
+    async fetchLeadAutomations(leadId, { force = false, silent = false } = {}) {
+      this._ensureAutomationOrgScope();
+      const id = Number(leadId);
+      if (!id) return;
+      if (!force && this.automationRowsCache[id] !== undefined) return;
+      if (this.automationLoadingIds[id]) return;
+      this.automationLoadingIds[id] = true;
+      try {
+        const res = await (silent
+          ? this.listAutomationSilent(id)
+          : this.listAutomation(id));
+        const items = Array.isArray(res?.data) ? res.data : [];
+        this.automationRowsCache[id] = items;
+      } catch {
+        this.automationRowsCache[id] = [];
+      } finally {
+        delete this.automationLoadingIds[id];
+      }
+    },
+    syncLeadAutomations(leadId, rows = []) {
+      this._ensureAutomationOrgScope();
+      const id = Number(leadId);
+      if (!id) return;
+      this.automationRowsCache[id] = Array.isArray(rows) ? rows : [];
+    },
+    setLeadAutomationsOptimistic(leadId, rows) {
+      this._ensureAutomationOrgScope();
+      this.automationRowsCache[Number(leadId)] = rows;
+    },
+    markLeadAutomationsDirty(leadId) {
+      this._ensureAutomationOrgScope();
+      this.automationDirtyLeadIds[Number(leadId)] = true;
+    },
+    async invalidateLeadAutomationsIfDirty(leadId) {
+      this._ensureAutomationOrgScope();
+      const id = Number(leadId);
+      if (!id || !this.automationDirtyLeadIds[id]) return;
+      this._clearAutomationLeadCaches([id]);
+      await this.fetchLeadAutomations(id, { force: true });
+    },
+    async invalidateLeadAutomations(leadId) {
+      this._ensureAutomationOrgScope();
+      const id = Number(leadId);
+      if (!id) return;
+      this._clearAutomationLeadCaches([id]);
+      await this.fetchLeadAutomations(id, { force: true });
+    },
+
+    getLeadAutomationLog(leadId, params = {}) { return this._wrap(() => crmService.getLeadAutomationLog(leadId, params)); },
 
     // Mail
     sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },
     sendLeadWhatsApp(payload) { return this._wrap(() => crmService.sendLeadWhatsApp(payload)); },
     getWhatsAppUsage() { return this._wrap(() => crmService.getWhatsAppUsage()); },
     uploadLeadAttachment(formData) { return this._wrap(() => crmService.uploadLeadAttachment(formData)); },
+    uploadLeadWhatsAppMedia(formData) { return this._wrap(() => crmService.uploadLeadWhatsAppMedia(formData)); },
+    editWhatsAppMessage(payload) { return this._wrap(() => crmService.editWhatsAppMessage(payload)); },
+    deleteWhatsAppMessage(payload) { return this._wrap(() => crmService.deleteWhatsAppMessage(payload)); },
+    reactWhatsAppMessage(payload) { return this._wrap(() => crmService.reactWhatsAppMessage(payload)); },
     getLeadPriceAttachmentRecent(payload) { return this._wrap(() => crmService.getLeadPriceAttachmentRecent(payload)); },
 
     // Web Forms
@@ -213,5 +390,7 @@ export const useCrmStore = defineStore("crmStore", {
     restoreForms(payload) { return this._wrap(() => webFormService.restoreForms(payload)); },
     deleteForm(payload) { return this._wrap(() => webFormService.deleteForm(payload)); },
     getAvailableFields() { return this._wrap(() => webFormService.getAvailableFields()); },
+    getAutoReplySettings() { return this._wrap(() => crmService.getAutoReplySettings()); },
+    updateAutoReplySettings(payload) { return this._wrap(() => crmService.updateAutoReplySettings(payload)); },
   },
 });

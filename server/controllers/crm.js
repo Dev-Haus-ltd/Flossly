@@ -1,18 +1,19 @@
 import { Op } from 'sequelize'
 import { parsePhoneNumber } from 'awesome-phonenumber'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, CrmAutomationDictionaryGroup, CrmAutomationDictionaryTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
-import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation } from '../utils/crmAutomation.js'
+import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
 import { renderLeadTokens } from '../utils/templateTokens'
-import { resolveWhatsAppProviderConfig } from '../utils/whatsappProvider'
+import { resolveWhapiConfig } from '../utils/whatsappProvider'
 import { uploadBufferFile } from '../utils/storage'
+import { getS3Object } from '../utils/s3'
 import DB from '../utils/db'
 import { parseJsonBody } from "../utils/body";
 
@@ -26,6 +27,7 @@ const parseDateValue = (value) => {
   if (!isNaN(d.getTime())) return d;
   return null;
 };
+
 
 const makeSendNowJobKey = (orgId, jobId) => `${Number(orgId)}:${String(jobId || '')}`
 
@@ -195,6 +197,7 @@ const normalizeAutomationTrigger = (trigger) => {
     case 'send_now':
       return { type }
     case 'inquiry_days':
+    case 'activation_days':
     case 'birthday_offset':
       return { type, days: safeNumber(trigger.days, 0) }
     case 'birthday_month_start':
@@ -258,6 +261,26 @@ const validateAutomationPayload = (payload) => {
 }
 
 const seedAutomationGroups = async (orgId) => {
+  // Prefer dictionary tables; fall back to JS defaults if dictionary not yet seeded
+  const dictGroups = await CrmAutomationDictionaryGroup.findAll({
+    where: { status: 'active' },
+    order: [['ordering', 'ASC']],
+  })
+  const dictTemplates = dictGroups.length
+    ? await CrmAutomationDictionaryTemplate.findAll({
+        where: { status: 'active' },
+        order: [['groupKey', 'ASC'], ['ordering', 'ASC']],
+      })
+    : []
+  const canonicalGroups = dictGroups.length
+    ? dictGroups.map((g) => ({
+        key: g.key,
+        title: g.title,
+        description: g.description,
+        templateKeys: dictTemplates.filter((t) => t.groupKey === g.key).map((t) => t.key),
+      }))
+    : crmAutomationGroups
+
   const rows = await CrmAutomationGroup.findAll({
     where: { organisationId: Number(orgId) },
     order: [['ordering', 'ASC'], ['createdAt', 'ASC']],
@@ -267,7 +290,7 @@ const seedAutomationGroups = async (orgId) => {
 
   if (!rows.length) {
     const fresh = await CrmAutomationGroup.bulkCreate(
-      crmAutomationGroups.map((group, idx) => ({
+      canonicalGroups.map((group, idx) => ({
         organisationId: Number(orgId),
         key: group.key,
         title: group.title,
@@ -277,23 +300,23 @@ const seedAutomationGroups = async (orgId) => {
         source: 'system',
       }))
     )
-    return fresh
-  }
-
-  for (let idx = 0; idx < crmAutomationGroups.length; idx += 1) {
-    const group = crmAutomationGroups[idx]
-    if (byKey.has(group.key)) continue
-    const row = await CrmAutomationGroup.create({
-      organisationId: Number(orgId),
-      key: group.key,
-      title: group.title,
-      description: group.description || null,
-      enabled: false,
-      ordering: rows.length + created.length,
-      source: 'system',
-    })
-    created.push(row)
-    byKey.set(group.key, row)
+    fresh.forEach((g) => byKey.set(g.key, g))
+  } else {
+    for (let idx = 0; idx < canonicalGroups.length; idx++) {
+      const group = canonicalGroups[idx]
+      if (byKey.has(group.key)) continue
+      const row = await CrmAutomationGroup.create({
+        organisationId: Number(orgId),
+        key: group.key,
+        title: group.title,
+        description: group.description || null,
+        enabled: false,
+        ordering: rows.length + created.length,
+        source: 'system',
+      })
+      created.push(row)
+      byKey.set(group.key, row)
+    }
   }
 
   const groupIdByKey = new Map([...byKey.entries()].map(([key, g]) => [key, g.id]))
@@ -302,18 +325,13 @@ const seedAutomationGroups = async (orgId) => {
   })
   const existingSet = new Set(existingMappings.map((m) => `${m.groupId}:${m.templateKey}`))
   const toCreate = []
-  crmAutomationGroups.forEach((group) => {
+  canonicalGroups.forEach((group) => {
     const groupId = groupIdByKey.get(group.key)
     if (!groupId) return
     ;(group.templateKeys || []).forEach((templateKey, idx) => {
       const key = `${groupId}:${templateKey}`
       if (existingSet.has(key)) return
-      toCreate.push({
-        organisationId: Number(orgId),
-        groupId,
-        templateKey,
-        ordering: idx,
-      })
+      toCreate.push({ organisationId: Number(orgId), groupId, templateKey, ordering: idx })
     })
   })
   if (toCreate.length) await CrmAutomationGroupTemplate.bulkCreate(toCreate)
@@ -365,10 +383,17 @@ export const listLeads = async (event) => {
     // Optional equals filters
     if (q.leadStatus) {
       const key = String(q.leadStatus).toLowerCase()
-      const map = { new: 'New', converted: 'Converted', contacted: 'Contacted', lost: 'Lost' }
+      const map = { new: 'New', converted: 'Converted', contacted: 'Contacted', lost: 'Lost', uploaded: 'Uploaded' }
       const value = map[key] || q.leadStatus
       // Use exact match against our canonical stored value
       where.leadStatus = value
+    }
+
+    if (String(q.excludeConverted || '').toLowerCase() === 'true') {
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        { [Op.not]: { leadStatus: 'Converted' } },
+      ]
     }
 
     // Map option ids to names for leadSource/treatment if provided
@@ -407,6 +432,12 @@ export const listLeads = async (event) => {
     if (q.campaignId) {
       where.campaignId = q.campaignId
     }
+    if (q.adSetId) {
+      where.adSetId = q.adSetId
+    }
+    if (q.adId) {
+      where.adId = q.adId
+    }
 
     // Exact lead lookup for route-driven dialog opening
     const exactLeadId = Number(q.id || q.leadId || 0)
@@ -432,6 +463,17 @@ export const listLeads = async (event) => {
       'followUpDate',
     ])
     const orderKey = sortable.has(sortBy) ? sortBy : 'createdAt'
+
+    const now = new Date()
+    await CrmLead.update(
+      { autoReplyEnabled: true, autoReplyDisabledUntil: null },
+      {
+        where: {
+          organisationId: Number(logged.orgId),
+          autoReplyDisabledUntil: { [Op.lt]: now },
+        },
+      }
+    )
 
     const queryOptions = {
       where,
@@ -510,10 +552,8 @@ export const listLeads = async (event) => {
 }
 
 export const createLead = async (event) => {
-  console.log('[CRM] createLead API called - checking if endpoint is hit')
   try {
     const logged = event.context.user
-    console.log('[CRM] User context:', logged)
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']
@@ -562,10 +602,6 @@ export const createLead = async (event) => {
       })
       created.setDataValue('preferredContact', payload.contactMethod)
     }
-    try {
-      await sendImmediateCrmAutomationsForLead(created)
-    } catch (e) {}
-    
     // Send FCM push notification to assigned users
     try {
       if (assignedUsers.length) {
@@ -586,7 +622,6 @@ export const createLead = async (event) => {
     // Send FCM push notification to all org users
     try {
       const leadSource = created.leadSource || 'Manual'
-      console.log('[CRM] Processing lead notification:', { leadId: created.id, leadSource, orgId: logged.orgId })
       const orgUsers = await UserOrganisation.findAll({
         where: {
           organisationId: logged.orgId,
@@ -595,7 +630,6 @@ export const createLead = async (event) => {
         attributes: ['userId'],
       })
       const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
-      console.log('[CRM] Found org users for notification:', { userIdsCount: userIds.length, userIds })
       if (userIds.length) {
         await sendNotificationToMultipleUsers({
           userIds,
@@ -612,12 +646,15 @@ export const createLead = async (event) => {
           },
           priority: 'high',
         })
-        console.log('[CRM] Lead notification sent successfully')
-      } else {
-        console.log('[CRM] No org users found for notification')
       }
     } catch (notifyErr) {
       console.error('[CRM] Lead creation notification failed:', notifyErr?.message, notifyErr?.stack);
+    }
+
+    try {
+      await sendImmediateCrmAutomationsForLead(created)
+    } catch (automationErr) {
+      console.error('[CRM] Immediate automation dispatch failed:', automationErr?.message || automationErr)
     }
     
     return success(created)
@@ -700,19 +737,31 @@ export const deleteLeads = async (event) => {
 export const bulkUploadLeads = async (event) => {
   try {
     const { orgId } = event.context.user || {}
-    const body = await readBody(event)
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const admin = event.context.admin || null
+    const preParsedPayload = event.context.adminBulkLeadPayload || null
+    const body = preParsedPayload ? null : await readBody(event)
+    const payload = preParsedPayload || (typeof body === 'string' ? parseJsonBody(body) : body)
     const leads = payload?.leads || []
-    if (!orgId) return error(401, 'Unauthenticated')
-    if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
+    const requestedOrganisationId = Number(payload?.organisationId || payload?.orgId || 0)
+    const organisationId = Number(admin ? (requestedOrganisationId || orgId) : orgId)
 
-    const organisationId = Number(orgId)
+    if (!organisationId) {
+      return admin ? error(400, 'organisationId is required') : error(401, 'Unauthenticated')
+    }
+
+    if (admin) {
+      const organisation = await Organisation.findByPk(organisationId, { attributes: ['id'] })
+      if (!organisation) return error(404, 'Organisation not found')
+    }
+
+    if (!Array.isArray(leads) || !leads.length) return error(400, 'leads required')
     const statusMap = new Map([
       ['new', 'New'],
       ['converted', 'Converted'],
       ['contacted', 'Contacted'],
       ['lost', 'Lost'],
       ['archived', 'Archived'],
+      ['uploaded', 'Uploaded'],
     ])
 
     const candidateUserIds = [...new Set(leads.map((l) => Number(l.assignedUserId)).filter(Boolean))]
@@ -727,47 +776,35 @@ export const bulkUploadLeads = async (event) => {
     const results = []
     const validLeads = []
     const seenEmails = new Set()
+    const enabledTemplates = await CrmAutomationTemplate.findAll({
+      where: { organisationId, enabled: true },
+      attributes: ['key'],
+    })
+    const bulkImportAutomationOverrides = Object.fromEntries(
+      enabledTemplates
+        .map((tpl) => String(tpl?.key || '').trim())
+        .filter(Boolean)
+        .map((key) => [key, { key, enabled: false }])
+    )
 
     leads.forEach((raw, index) => {
-      const errors = []
       const name = (raw?.name || '').trim()
       const email = (raw?.email || '').trim()
       const telephone = (raw?.telephone || '').trim()
-      const leadSource = raw?.leadSource?.trim?.() || 'Manual'
+      const leadSource = raw?.leadSource?.trim?.() || null
       const treatment = raw?.treatment?.trim?.() || null
-      const rawStatus = raw?.leadStatus?.trim?.() || 'New'
+      const rawStatus = raw?.leadStatus?.trim?.() || 'Uploaded'
       const status = statusMap.get(rawStatus.toLowerCase())
-      const assignedUserId = raw?.assignedUserId ? Number(raw.assignedUserId) : null
+      const assignedUserIdRaw = raw?.assignedUserId ? Number(raw.assignedUserId) : null
+      const assignedUserId = assignedUserIdRaw && allowedUserIds.has(assignedUserIdRaw)
+        ? assignedUserIdRaw
+        : null
       const inquiryDate = parseDateValue(raw?.inquiryDate)
       const followUpDate = parseDateValue(raw?.followUpDate)
       const comments = raw?.comments || null
-
-      if (!name) errors.push('Name is required')
-      if (!email) errors.push('Email is required')
-      else {
+      if (email) {
         const emailKey = email.toLowerCase()
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(email)) errors.push('Invalid email format')
-        if (seenEmails.has(emailKey)) errors.push('Duplicate email in upload')
-        else seenEmails.add(emailKey)
-      }
-      if (!telephone) errors.push('Telephone is required')
-      if (!status) errors.push('Invalid lead status')
-      if (assignedUserId && !allowedUserIds.has(assignedUserId)) {
-        errors.push('Assigned user is not part of this organisation')
-      }
-      if (raw?.inquiryDate && !inquiryDate) errors.push('Invalid inquiry date')
-      if (raw?.followUpDate && !followUpDate) errors.push('Invalid follow-up date')
-
-      if (errors.length) {
-        results.push({
-          index,
-          name,
-          email,
-          status: 'failed',
-          message: errors.join('; '),
-        })
-        return
+        if (!seenEmails.has(emailKey)) seenEmails.add(emailKey)
       }
 
       validLeads.push({
@@ -778,12 +815,21 @@ export const bulkUploadLeads = async (event) => {
           email,
           telephone,
           leadSource,
-          leadStatus: status || 'New',
-          softDeleted: (status || 'New') === 'Archived',
+          leadStatus: status || 'Uploaded',
+          softDeleted: (status || 'Uploaded') === 'Archived',
           treatment,
-          inquiryDate: inquiryDate || new Date(),
-          followUpDate: followUpDate || null,
+          inquiryDate: raw?.inquiryDate ? inquiryDate : new Date(),
+          followUpDate,
           comments,
+          rawData: {
+            ...(raw?.rawData && typeof raw.rawData === 'object' ? raw.rawData : {}),
+            bulkImported: true,
+            bulkImportedAt: new Date().toISOString(),
+            crmAutomationOverrides: {
+              ...(raw?.rawData?.crmAutomationOverrides || {}),
+              ...bulkImportAutomationOverrides,
+            },
+          },
         },
         assignedUserId,
       })
@@ -857,19 +903,26 @@ export const bulkUploadLeads = async (event) => {
 export const bulkUploadAutomations = async (event) => {
   try {
     const { orgId } = event.context.user || {}
-    const body = await readBody(event)
-    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const admin = event.context.admin || null
+    const preParsedPayload = event.context.adminBulkAutomationPayload || null
+    const body = preParsedPayload ? null : await readBody(event)
+    const payload = preParsedPayload || (typeof body === 'string' ? parseJsonBody(body) : body)
     const items = Array.isArray(payload?.items) ? payload.items : []
-    if (!orgId) return error(401, 'Unauthenticated')
-    if (!items.length) return error(400, 'items required')
+    const requestedOrganisationId = Number(payload?.organisationId || payload?.orgId || 0)
+    const organisationId = Number(admin ? (requestedOrganisationId || orgId) : orgId)
 
-    const organisationId = Number(orgId)
+    if (!organisationId) {
+      return admin ? error(400, 'organisationId is required') : error(401, 'Unauthenticated')
+    }
+
+    if (admin) {
+      const organisation = await Organisation.findByPk(organisationId, { attributes: ['id'] })
+      if (!organisation) return error(404, 'Organisation not found')
+    }
+
+    if (!items.length) return error(400, 'items required')
     const results = []
     const defaultKeySet = new Set((crmAutomationDefaults || []).map((d) => d.key))
-
-    try { await CrmAutomationGroup.sync() } catch {}
-    try { await CrmAutomationTemplate.sync() } catch {}
-    try { await CrmAutomationGroupTemplate.sync() } catch {}
 
     const existingTemplates = await CrmAutomationTemplate.findAll({
       where: { organisationId },
@@ -953,7 +1006,8 @@ export const bulkUploadAutomations = async (event) => {
           usedKeys,
         })
 
-        const trigger = { type: 'inquiry_days', days: 0 }
+        const rawTrigger = raw.trigger && raw.trigger.type ? raw.trigger : null;
+        const trigger = rawTrigger || inferTriggerFromName(name);
         const sending = formatCrmTriggerPreview(trigger)
         const subject = type === 'Email' ? (subjectRaw || name) : ''
         const template = plainTextToHtml(contentRaw)
@@ -1022,7 +1076,8 @@ export const listOptions = async (event) => {
           { name: 'New', color: '#1BA34C' },
           { name: 'Converted', color: '#0D47A1' },
           { name: 'Contacted', color: '#F39C12' },
-          { name: 'Lost', color: '#E53935' }
+          { name: 'Lost', color: '#E53935' },
+          { name: 'Uploaded', color: '#8B5CF6' }
         ]
       }
       const items = (defaults[category] || []).map((n, i) =>
@@ -1064,6 +1119,21 @@ export const deleteOption = async (event) => {
     if (!id) return error(400, 'id required')
     await CrmOption.destroy({ where: { id, organisationId: Number(orgId) } })
     return success('deleted')
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const updateOption = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { id, name } = payload || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    if (!id || !name?.trim()) return error(400, 'id and name required')
+    await CrmOption.update({ name: name.trim() }, { where: { id, organisationId: Number(orgId) } })
+    return success({ id, name: name.trim() })
   } catch (e) {
     return error(500, e.message)
   }
@@ -1334,6 +1404,49 @@ export const uploadLeadAttachment = async (event) => {
   }
 }
 
+export const uploadLeadWhatsAppMedia = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user || {}
+    if (!orgId || !userId) return error(401, 'Unauthenticated')
+
+    const formData = await readMultipartFormData(event)
+    if (!formData || !formData.length) return error(400, 'No file uploaded')
+
+    const fileData = formData.find((item) => item.name === 'file')
+    if (!fileData) return error(400, 'Missing file')
+
+    const originalName = fileData.filename || 'file'
+    const fileExt = originalName.includes('.') ? originalName.slice(originalName.lastIndexOf('.')) : ''
+    const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}${fileExt}`
+    const mimeType = fileData.type || 'application/octet-stream'
+
+    const s3Path = await uploadBufferFile({
+      data: fileData.data,
+      filename: uniqueFileName,
+      contentType: mimeType,
+      baseDir: 'chat-attachments',
+    })
+
+    const attachmentType = mimeType.startsWith('image/')
+      ? 'image'
+      : mimeType.startsWith('video/')
+        ? 'video'
+        : mimeType.startsWith('audio/')
+          ? 'audio'
+          : 'document'
+
+    return success({
+      url: s3Path,
+      name: originalName,
+      mimeType,
+      type: attachmentType,
+      size: fileData.data?.length || null,
+    })
+  } catch (e) {
+    return error(500, e.message || 'Failed to upload media')
+  }
+}
+
 export const getLeadPriceAttachmentRecent = async (event) => {
   try {
     const { orgId } = event.context.user || {}
@@ -1384,9 +1497,6 @@ export const listAutomationGroups = async (event) => {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
 
-    try { await CrmAutomationGroup.sync() } catch {}
-    try { await CrmAutomationGroupTemplate.sync() } catch {}
-
     const groups = await seedAutomationGroups(orgId)
     const mappings = await CrmAutomationGroupTemplate.findAll({
       where: { organisationId: Number(orgId) },
@@ -1420,8 +1530,6 @@ export const saveAutomationGroup = async (event) => {
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const { id, key, title, description, enabled } = payload || {}
-
-    try { await CrmAutomationGroup.sync() } catch {}
 
     if (!title && !key) return error(400, 'title or key required')
 
@@ -1482,12 +1590,19 @@ export const deleteAutomationGroup = async (event) => {
     })
     if (!group) return error(404, 'Group not found')
 
-    await CrmAutomationGroupTemplate.destroy({
-      where: { organisationId: Number(orgId), groupId: group.id },
+    await DB.transaction(async (transaction) => {
+      await CrmAutomationGroupTemplate.destroy({
+        where: { organisationId: Number(orgId), groupId: group.id },
+        transaction,
+      })
+      await CrmAutomationGroup.destroy({
+        where: { organisationId: Number(orgId), id: group.id },
+        transaction,
+      })
     })
-    await group.destroy()
     return success('deleted')
   } catch (e) {
+    console.error('[deleteAutomationGroup]', e?.message || e)
     return error(500, e.message)
   }
 }
@@ -1502,17 +1617,17 @@ export const listAutomation = async (event) => {
     const dbRows = rows.map((tpl) => (typeof tpl?.toJSON === 'function' ? tpl.toJSON() : tpl))
     const dbMap = new Map(dbRows.map((r) => [r.key, r]))
     let overrides = {}
+    let sentKeys = {}
     if (leadId) {
       const lead = await CrmLead.findOne({ where: { organisationId: Number(orgId), id: leadId } })
       if (!lead) return error(404, 'Lead not found')
       overrides = lead?.rawData?.crmAutomationOverrides || {}
+      sentKeys = lead?.rawData?.automationSentKeys || {}
     }
 
     let groupMappings = []
     let groups = []
     try {
-      await CrmAutomationGroup.sync()
-      await CrmAutomationGroupTemplate.sync()
       groupMappings = await CrmAutomationGroupTemplate.findAll({
         where: { organisationId: Number(orgId) },
       })
@@ -1534,8 +1649,14 @@ export const listAutomation = async (event) => {
 
     crmAutomationDefaults.forEach((def) => {
       const saved = dbMap.get(def.key) || {}
+      const hasLeadOverride = leadId && !!overrides[def.key]
       const override = overrides[def.key] || {}
-      const combined = { ...def, ...saved, ...override, key: def.key }
+      // When viewing for a specific lead with no per-lead override, the global
+      // template enabled state must not bleed through — new leads start disabled.
+      const effectiveOverride = leadId && !hasLeadOverride
+        ? { ...override, enabled: false }
+        : override
+      const combined = { ...def, ...saved, ...effectiveOverride, key: def.key }
       if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(def.key)
       if (!saved?.type) combined.type = def.type
       if (!saved?.sending) combined.sending = def.sending
@@ -1548,8 +1669,15 @@ export const listAutomation = async (event) => {
 
     dbRows.forEach((row) => {
       if (seen.has(row.key)) return
+      const hasLeadOverride = leadId && !!overrides[row.key]
       const override = overrides[row.key]
-      const combined = override ? { ...row, ...override, key: row.key } : row
+      // When viewing for a specific lead with no per-lead override, default to
+      // disabled — global template enabled must not auto-enrol new leads.
+      const combined = hasLeadOverride
+        ? { ...row, ...override, key: row.key }
+        : leadId
+          ? { ...row, enabled: false }
+          : row
       if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(row.key)
       merged.push(combined)
       seen.add(row.key)
@@ -1561,6 +1689,18 @@ export const listAutomation = async (event) => {
       if (!combined.groupKey) combined.groupKey = groupKeyByTemplate.get(key)
       merged.push(combined)
     })
+
+    if (leadId) {
+      merged.forEach((item) => {
+        const direct = sentKeys[item.key]
+        if (direct) {
+          item.lastSentAt = direct
+        } else {
+          const compound = Object.entries(sentKeys).find(([k]) => k.startsWith(item.key + '_'))
+          item.lastSentAt = compound ? compound[1] : null
+        }
+      })
+    }
 
     return success(merged)
   } catch (e) {
@@ -1594,6 +1734,20 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     if (!lead) throw new Error('Lead not found')
     const raw = lead.rawData || {}
     const overrides = { ...(raw.crmAutomationOverrides || {}) }
+    const activationDates = { ...(raw.crmAutomationActivationDates || {}) }
+    const existingOverride = overrides[key] || {}
+    const existingTemplate = await CrmAutomationTemplate.findOne({
+      where: { organisationId: Number(orgId), key },
+      transaction,
+    })
+    const defaultTemplate = crmAutomationDefaults.find((item) => item.key === key) || null
+    const previousEnabled =
+      existingOverride?.enabled !== undefined
+        ? !!existingOverride.enabled
+        : existingTemplate?.enabled !== undefined
+          ? !!existingTemplate.enabled
+          : !!defaultTemplate?.enabled
+    const becameEnabled = !!enabled && !previousEnabled
     overrides[key] = {
       key,
       type,
@@ -1606,14 +1760,34 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
       whatsappTemplateLanguage: whatsappTemplateLanguage || '',
       trigger: trigger ?? null,
     }
-    lead.rawData = { ...raw, crmAutomationOverrides: overrides }
+    if (becameEnabled) {
+      const activatedAt = new Date().toISOString()
+      activationDates[key] = activatedAt
+      overrides[key].activationDate = activatedAt
+    } else if (!!enabled && activationDates[key]) {
+      overrides[key].activationDate = activationDates[key]
+    } else if (!enabled) {
+      delete activationDates[key]
+    }
+
+    const sentKeys = { ...(raw.automationSentKeys || {}) }
+    if (becameEnabled) {
+      Object.keys(sentKeys).forEach((sentKey) => {
+        if (sentKey === key || sentKey.startsWith(`${key}_`)) delete sentKeys[sentKey]
+      })
+    }
+
+    lead.rawData = {
+      ...raw,
+      automationSentKeys: sentKeys,
+      crmAutomationOverrides: overrides,
+      crmAutomationActivationDates: activationDates,
+    }
     await lead.save({ transaction })
-    return overrides[key]
+    return { ...overrides[key], __dispatchImmediate: becameEnabled }
   }
 
   if (groupKey) {
-    try { await CrmAutomationGroup.sync() } catch {}
-    try { await CrmAutomationGroupTemplate.sync() } catch {}
     const group = await CrmAutomationGroup.findOne({
       where: { organisationId: Number(orgId), key: String(groupKey) },
       transaction,
@@ -1670,10 +1844,12 @@ export const saveAutomation = async (event) => {
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const result = await applyAutomationSave({ orgId, payload })
+    const shouldDispatchImmediate = result?.__dispatchImmediate === true
     const out =
       result && typeof result.toJSON === 'function'
         ? result.toJSON()
         : { ...(result || {}) }
+    delete out.__dispatchImmediate
     if (payload?.trigger?.type === 'send_now' && payload?.enabled && !payload?.leadId) {
       const waitForSendNow =
         payload?.awaitSendNow === true ||
@@ -1711,6 +1887,22 @@ export const saveAutomation = async (event) => {
           })
       }
     }
+    if (payload?.leadId && payload?.enabled && shouldDispatchImmediate) {
+      try {
+        const lead = await CrmLead.findOne({
+          where: { organisationId: Number(orgId), id: Number(payload.leadId) },
+        })
+        if (lead) {
+          await sendImmediateCrmAutomationsForLead(lead, {
+            includeSendNow: true,
+            forceImmediate: true,
+            targetKeys: [payload.key],
+          })
+        }
+      } catch (automationErr) {
+        console.error('[CRM] Lead automation activation dispatch failed:', automationErr?.message || automationErr)
+      }
+    }
     return success(out)
   } catch (e) {
     return error(500, e.message)
@@ -1730,20 +1922,44 @@ export const saveAutomationBatch = async (event) => {
     try {
       const results = []
       const sendNowItems = []
+      const immediateDispatchByLead = new Map()
       for (const item of items) {
         const res = await applyAutomationSave({ orgId, payload: item, transaction })
         results.push(res)
         if (item?.trigger?.type === 'send_now' && item?.enabled && !item?.leadId) {
           sendNowItems.push(res)
         }
+        if (item?.leadId && item?.enabled && res?.__dispatchImmediate) {
+          const leadKey = Number(item.leadId)
+          const keys = immediateDispatchByLead.get(leadKey) || new Set()
+          keys.add(String(item.key || ''))
+          immediateDispatchByLead.set(leadKey, keys)
+        }
       }
       await transaction.commit()
+      for (const [leadId, keys] of immediateDispatchByLead.entries()) {
+        try {
+          const lead = await CrmLead.findOne({
+            where: { organisationId: Number(orgId), id: leadId },
+          })
+          if (lead) {
+            await sendImmediateCrmAutomationsForLead(lead, {
+              includeSendNow: true,
+              forceImmediate: true,
+              targetKeys: [...keys],
+            })
+          }
+        } catch (automationErr) {
+          console.error('[CRM] Batch lead automation activation dispatch failed:', automationErr?.message || automationErr)
+        }
+      }
       const sendNowJobs = []
       for (const tpl of sendNowItems) {
         const out =
           tpl && typeof tpl.toJSON === 'function'
             ? tpl.toJSON()
             : { ...(tpl || {}) }
+        delete out.__dispatchImmediate
         const job = createSendNowJob({ orgId, key: out?.key })
         sendNowJobs.push({
           key: out?.key || '',
@@ -1758,7 +1974,18 @@ export const saveAutomationBatch = async (event) => {
             failSendNowJob({ orgId, jobId: job.jobId, err: e })
           })
       }
-      return success({ items: results, updated: results.length, sendNowJobs })
+      return success({
+        items: results.map((item) => {
+          const normalized =
+            item && typeof item.toJSON === 'function'
+              ? item.toJSON()
+              : { ...(item || {}) }
+          delete normalized.__dispatchImmediate
+          return normalized
+        }),
+        updated: results.length,
+        sendNowJobs,
+      })
     } catch (e) {
       await transaction.rollback()
       return error(500, e.message)
@@ -1811,13 +2038,20 @@ export const resetAutomationOverride = async (event) => {
 
     const raw = lead.rawData || {}
     const overrides = { ...(raw.crmAutomationOverrides || {}) }
-    if (overrides[key]) {
-      delete overrides[key]
+    const activationDates = { ...(raw.crmAutomationActivationDates || {}) }
+    if (overrides[key] || activationDates[key]) {
+      if (overrides[key]) delete overrides[key]
       const nextRaw = { ...raw }
+      if (activationDates[key]) delete activationDates[key]
       if (Object.keys(overrides).length) {
         nextRaw.crmAutomationOverrides = overrides
       } else {
         delete nextRaw.crmAutomationOverrides
+      }
+      if (Object.keys(activationDates).length) {
+        nextRaw.crmAutomationActivationDates = activationDates
+      } else {
+        delete nextRaw.crmAutomationActivationDates
       }
       lead.rawData = nextRaw
       await lead.save()
@@ -1842,9 +2076,6 @@ export const deleteAutomation = async (event) => {
     if (defaultKeys.has(key)) {
       return error(400, 'Default automations cannot be deleted')
     }
-
-    try { await CrmAutomationTemplate.sync() } catch {}
-    try { await CrmAutomationGroupTemplate.sync() } catch {}
 
     await CrmAutomationGroupTemplate.destroy({
       where: { organisationId: Number(orgId), templateKey: key },
@@ -1911,28 +2142,33 @@ export const sendLeadMail = async (event) => {
       html: safeHtml,
       senderName: fullName,
       attachments: normalizedAttachments,
+      orgId: Number(orgId),
     })
 
-    if (String(key || '') === 'manual_sendPrice') {
-      const selectionKey = buildLeadSelectionKey(leadIds)
-      const attachmentMeta = normalizedAttachments[0] || null
-      const priceLink = String(metadata?.priceLink || '').trim()
-      const sentAt = new Date().toISOString()
-      for (const lead of leads) {
-        const raw = getLeadRawData(lead)
+    const sentAt = new Date().toISOString()
+    const isSendPrice = String(key || '') === 'manual_sendPrice'
+    const selectionKey = isSendPrice ? buildLeadSelectionKey(leadIds) : null
+    const attachmentMeta = isSendPrice ? (normalizedAttachments[0] || null) : null
+    const priceLink = isSendPrice ? String(metadata?.priceLink || '').trim() : null
+
+    for (const lead of leads) {
+      const raw = getLeadRawData(lead)
+      const updatedRaw = { ...raw }
+
+      const log = Array.isArray(raw.manualSentLog) ? [...raw.manualSentLog] : []
+      log.push({ type: 'Email', subject: safeSubject, sentAt })
+      updatedRaw.manualSentLog = log
+
+      if (isSendPrice) {
         const manual = raw.manualSendAssets && typeof raw.manualSendAssets === 'object'
           ? raw.manualSendAssets
           : {}
-        manual.sendPriceRecent = {
-          attachment: attachmentMeta,
-          priceLink,
-          subject: safeSubject,
-          selectionKey,
-          updatedAt: sentAt,
-        }
-        lead.rawData = { ...raw, manualSendAssets: manual }
-        await lead.save()
+        manual.sendPriceRecent = { attachment: attachmentMeta, priceLink, subject: safeSubject, selectionKey, updatedAt: sentAt }
+        updatedRaw.manualSendAssets = manual
       }
+
+      lead.rawData = updatedRaw
+      await lead.save()
     }
 
     return success({ sent: result.sent })
@@ -1941,48 +2177,46 @@ export const sendLeadMail = async (event) => {
   }
 }
 
-// Send WhatsApp message to selected leads
+// Send WhatsApp message to selected leads via Whapi
 export const sendLeadWhatsApp = async (event) => {
   try {
     const { orgId } = event.context.user || {}
     if (!orgId) return error(401, 'Unauthenticated')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
-    const { leadIds = [], template, message } = payload || {}
-    if (!Array.isArray(leadIds) || !leadIds.length) return error(400, 'leadIds required')
+    const { leadIds = [], recipients = [], message, attachments = [] } = payload || {}
+    const normalizedRecipients = Array.isArray(recipients)
+      ? recipients
+          .map((item) => ({
+            id: item?.id ? Number(item.id) : null,
+            name: String(item?.name || item?.fullName || '').trim(),
+            email: String(item?.email || '').trim(),
+            telephone: String(item?.telephone || item?.phone || item?.mobile || '').trim(),
+          }))
+          .filter((item) => item.telephone)
+      : []
+    if ((!Array.isArray(leadIds) || !leadIds.length) && !normalizedRecipients.length) return error(400, 'leadIds or recipients required')
     const messageText = String(message || '').trim()
-    const hasTemplate = !!template
-    if (!hasTemplate && !messageText) return error(400, 'template or message required for WhatsApp outbound')
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0
+    if (!messageText && !hasAttachments) return error(400, 'message or attachments required')
 
-    const waConfig = await resolveWhatsAppProviderConfig(orgId)
-    if (!waConfig?.provider) {
-      return error(400, 'WhatsApp provider not configured')
-    }
-    if (waConfig.provider === 'meta' && (!waConfig.phoneNumberId || !waConfig.accessToken)) {
-      return error(400, 'WhatsApp is not configured')
-    }
-    if (waConfig.provider === 'whapi' && !waConfig.token) {
-      return error(400, 'Whapi token is missing')
-    }
+    const whapiConfig = await resolveWhapiConfig(orgId)
+    if (!whapiConfig?.token) return error(400, 'Whapi channel not configured or token missing')
 
     const limitStatus = await isWhatsAppLimitExceeded(orgId, event.context.user?.userId)
     if (limitStatus.exceeded) {
       return error(402, `WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`)
     }
 
-    const useTemplate = waConfig.provider === 'meta' && hasTemplate
-
-    const leads = await CrmLead.findAll({
-      where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false },
-    })
+    const leads = Array.isArray(leadIds) && leadIds.length
+      ? await CrmLead.findAll({
+          where: { id: { [Op.in]: leadIds }, organisationId: Number(orgId), softDeleted: false },
+        })
+      : normalizedRecipients
     if (!leads.length) return error(404, 'No leads found')
 
-    const metaUrl = waConfig.provider === 'meta'
-      ? `https://graph.facebook.com/v24.0/${waConfig.phoneNumberId}/messages`
-      : null
-    const whapiUrl = waConfig.provider === 'whapi'
-      ? `${String(waConfig.baseUrl || '').replace(/\/+$/, '')}/messages/text`
-      : null
+    const whapiBase = String(whapiConfig.baseUrl || '').replace(/\/+$/, '')
+    const headers = { Authorization: `Bearer ${whapiConfig.token}`, 'Content-Type': 'application/json' }
     let sent = 0
     let failed = 0
     let skipped = 0
@@ -1993,12 +2227,8 @@ export const sendLeadWhatsApp = async (event) => {
       if (!to) {
         skipped += 1
         await logWhatsAppMessage({
-          organisationId: orgId,
-          leadId: lead.id,
-          to: lead.telephone || null,
-          type: useTemplate ? 'template' : 'text',
-          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
-          status: 'skipped',
+          organisationId: orgId, leadId: lead.id || null,
+          to: lead.telephone || null, type: 'text', status: 'skipped',
           error: 'Missing or invalid phone number',
         })
         failures.push({ leadId: lead.id, error: 'Missing or invalid phone number' })
@@ -2008,86 +2238,81 @@ export const sendLeadWhatsApp = async (event) => {
       const leadName = lead?.name || lead?.fullName || lead?.email || 'there'
       const senderName = event.context.user?.fullName || event.context.user?.name || 'Team'
       const resolvedText = renderLeadTokens(messageText, {
-        name: leadName,
-        email: lead?.email || '',
-        telephone: lead?.telephone || '',
-        yourName: senderName,
+        name: leadName, email: lead?.email || '', telephone: lead?.telephone || '', yourName: senderName,
       })
 
-      if (waConfig.provider === 'whapi' && !messageText) {
-        failed += 1
-        await logWhatsAppMessage({
-          organisationId: orgId,
-          leadId: lead.id,
-          to,
-          type: 'text',
-          status: 'failed',
-          error: 'Whapi requires a text message',
-        })
-        failures.push({
-          leadId: lead.id,
-          error: 'Whapi requires a text message',
-        })
-        continue
-      }
-
-      const bodyPayload = waConfig.provider === 'meta'
-        ? {
-            messaging_product: 'whatsapp',
-            to,
-            type: useTemplate ? 'template' : 'text',
-            ...(useTemplate
-              ? { template }
-              : { text: { body: String(resolvedText || '') } }),
-          }
-        : { to, body: String(resolvedText || '') }
-
       try {
-        const resp = await $fetch(waConfig.provider === 'meta' ? metaUrl : whapiUrl, {
-          method: 'POST',
-          headers: waConfig.provider === 'meta'
-            ? {
-                Authorization: `Bearer ${waConfig.accessToken}`,
-                'Content-Type': 'application/json',
-              }
-            : {
-                Authorization: `Bearer ${waConfig.token}`,
-                'Content-Type': 'application/json',
-              },
-          body: bodyPayload,
-        })
-        const providerMessageId =
-          resp?.messages?.[0]?.id ||
-          resp?.message?.id ||
-          resp?.id ||
-          null
-        await markWhatsAppOutbound(lead, to)
+        // If attachments present, fold text as caption on the first one (single WA message)
+        const withAttachments = hasAttachments
+
+        if (resolvedText && !withAttachments) {
+          const resp = await $fetch(`${whapiBase}/messages/text`, {
+            method: 'POST', headers, body: { to, body: resolvedText },
+          })
+          const providerMessageId = resp?.message?.id || resp?.id || null
+if (typeof lead?.save === 'function') await markWhatsAppOutbound(lead, to)
         await logWhatsAppMessage({
-          organisationId: orgId,
-          leadId: lead.id,
-          to,
-          type: useTemplate ? 'template' : 'text',
-          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
-          status: 'sent',
-          providerMessageId,
-          content: useTemplate ? null : String(resolvedText || ''),
+          organisationId: orgId, leadId: lead.id || null, to,
+          type: 'text', status: 'sent', providerMessageId, content: resolvedText,
         })
         sent += 1
+      }
+
+        if (hasAttachments) {
+          for (let attIdx = 0; attIdx < attachments.length; attIdx++) {
+            const att = attachments[attIdx]
+            const mime = String(att?.mimeType || '').toLowerCase()
+            const name = att?.name || null
+            const type =
+              att?.type ||
+              (mime.startsWith('image/') ? 'image' :
+                mime.startsWith('video/') ? 'video' :
+                  mime.startsWith('audio/') ? 'audio' : 'document')
+            const endpoint = type === 'image' ? 'image' : type === 'video' ? 'video' : type === 'audio' ? 'audio' : 'document'
+            // Caption only on first attachment
+            const caption = (attIdx === 0 && resolvedText) ? resolvedText : null
+
+            // Prefer base64 data URI from S3 (avoids needing a public URL)
+            const s3Key = String(att?.url || '').replace(/^\/+/, '')
+            let mediaValue = att?.url || ''
+            try {
+              const s3Obj = await getS3Object(s3Key)
+              const chunks = []
+              for await (const chunk of s3Obj.body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+              mediaValue = `data:${mime || 'application/octet-stream'};base64,${Buffer.concat(chunks).toString('base64')}`
+            } catch {
+              // fall back to stored URL
+            }
+
+            const resp = await $fetch(`${whapiBase}/messages/${endpoint}`, {
+              method: 'POST', headers,
+              body: { to, media: mediaValue, ...(caption ? { caption } : {}), ...(endpoint === 'document' && name ? { filename: name } : {}) },
+            })
+            const providerMessageId = resp?.message?.id || resp?.id || null
+            if (typeof lead?.save === 'function') await markWhatsAppOutbound(lead, to)
+            await logWhatsAppMessage({
+              organisationId: orgId, leadId: lead.id || null, to,
+              type, status: 'sent', providerMessageId,
+              content: caption || name || null,
+              attachments: [{ ...att }],
+            })
+            sent += 1
+          }
+        }
       } catch (e) {
         failed += 1
         await logWhatsAppMessage({
-          organisationId: orgId,
-          leadId: lead.id,
-          to,
-          type: useTemplate ? 'template' : 'text',
-          templateName: useTemplate ? (template?.name || template?.namespace || null) : null,
-          status: 'failed',
+          organisationId: orgId, leadId: lead.id || null, to,
+          type: 'text', status: 'failed',
           error: e?.data?.error?.message || e?.message || 'Failed to send',
         })
-        failures.push({
-          leadId: lead.id,
-          error: e?.data?.error?.message || e?.message || 'Failed to send',
-        })
+        failures.push({ leadId: lead.id || null, error: e?.data?.error?.message || e?.message || 'Failed to send' })
+      }
+
+      if (lead && typeof lead.save === 'function') {
+        lead.autoReplyEnabled = false
+        lead.autoReplyDisabledUntil = new Date(Date.now() + 12 * 60 * 60 * 1000)
+        await lead.save()
       }
     }
 
@@ -2103,6 +2328,92 @@ export const getWhatsAppUsage = async (event) => {
     if (!orgId) return error(401, 'Unauthenticated')
     const usage = await isWhatsAppLimitExceeded(orgId, userId)
     return success({ count: usage.count, limit: usage.limit })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const getLeadAutomationLog = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const { leadId, page = 1, limit = 25 } = getQuery(event)
+    if (!leadId) return error(400, 'leadId required')
+
+    const lead = await CrmLead.findOne({ where: { id: leadId, organisationId: orgId } })
+    if (!lead) return error(404, 'Lead not found')
+
+    const sentKeys = lead.rawData?.automationSentKeys || {}
+    const manualLog = Array.isArray(lead.rawData?.manualSentLog) ? lead.rawData.manualSentLog : []
+
+    if (!Object.keys(sentKeys).length && !manualLog.length) return success({ rows: [], total: 0 })
+
+    const allRows = []
+
+    if (Object.keys(sentKeys).length) {
+      const templates = await CrmAutomationTemplate.findAll({
+        where: { organisationId: orgId },
+        attributes: ['key', 'name', 'type'],
+      })
+      const templateMap = new Map(templates.map((t) => [t.key, t]))
+      const defaultMap = new Map(crmAutomationDefaults.map((d) => [d.key, d]))
+
+      Object.entries(sentKeys).forEach(([key, sentAt]) => {
+        const tpl = templateMap.get(key)
+        const def = defaultMap.get(key)
+        allRows.push({
+          key,
+          name: tpl?.name || def?.name || key,
+          type: tpl?.type || def?.type || 'Email',
+          sentAt,
+          source: 'automation',
+        })
+      })
+    }
+
+    manualLog.forEach((entry) => {
+      allRows.push({
+        key: '',
+        name: entry.subject || 'Manual Send',
+        type: entry.type || 'Email',
+        sentAt: entry.sentAt,
+        source: 'manual',
+      })
+    })
+
+    allRows.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))
+
+    const total = allRows.length
+    const pageNum = Math.max(1, Number(page))
+    const limitNum = Math.min(100, Math.max(1, Number(limit)))
+    const rows = allRows.slice((pageNum - 1) * limitNum, pageNum * limitNum)
+
+    return success({ rows, total })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const updateLeadAutoReply = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { leadId, autoReplyEnabled } = payload || {}
+    if (!leadId) return error(400, 'leadId required')
+    if (typeof autoReplyEnabled !== 'boolean') return error(400, 'autoReplyEnabled must be boolean')
+
+    const lead = await CrmLead.findOne({ where: { id: Number(leadId), organisationId: Number(orgId), softDeleted: false } })
+    if (!lead) return error(404, 'Lead not found')
+
+    lead.autoReplyEnabled = autoReplyEnabled
+    if (autoReplyEnabled) {
+      lead.autoReplyDisabledUntil = null
+    }
+    await lead.save()
+
+    return success({ id: lead.id, autoReplyEnabled: lead.autoReplyEnabled })
   } catch (e) {
     return error(500, e.message)
   }
