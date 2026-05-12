@@ -1780,7 +1780,76 @@ export const webhook = async (event) => {
               platformHint,
             }))
             if (!senderId || !recipientId) continue
-            if (msgEvent?.message?.is_echo) continue
+            if (msgEvent?.message?.is_echo) {
+              // Capture messages sent from the native Instagram/Messenger app.
+              // Echo events fire when the page itself sends — sender = page, recipient = user.
+              const echoMid = msgEvent?.message?.mid || null
+              const echoText = String(msgEvent?.message?.text || '').trim()
+              const echoAttachments = normalizeWebhookAttachments(msgEvent?.message?.attachments || null)
+              if (!echoText && !echoAttachments.length) continue
+
+              // Find the account by senderId (page/account ID in echoes).
+              const echoAccount = await CrmDmAccount.findOne({
+                where: { accountId: senderId, status: 'Active' },
+                order: [['updatedAt', 'DESC']],
+              })
+              if (!echoAccount) continue
+
+              const echoOrgId = echoAccount.organisationId
+              const echoPlatform = echoAccount.platform
+              const echoThreadId = recipientId
+              const echoTimestamp = msgEvent?.timestamp ? new Date(msgEvent.timestamp) : new Date()
+
+              // Skip if Flossly already tracked this message (our own outbound send).
+              if (echoMid) {
+                const existing = await CrmDmMessage.findOne({
+                  where: { organisationId: echoOrgId, platformMessageId: echoMid },
+                })
+                if (existing) continue
+              }
+
+              let echoConversation = await CrmDmConversation.findOne({
+                where: { organisationId: echoOrgId, platform: echoPlatform, threadId: echoThreadId },
+              })
+              if (!echoConversation) {
+                echoConversation = await CrmDmConversation.create({
+                  organisationId: echoOrgId,
+                  platform: echoPlatform,
+                  accountId: echoAccount.accountId,
+                  threadId: echoThreadId,
+                  participantName: echoThreadId,
+                  lastMessageAt: echoTimestamp,
+                  unreadCount: 0,
+                  metadata: { recipientId: senderId },
+                })
+              }
+
+              const echoPreview = deriveAttachmentPreview(echoAttachments, echoText) || ''
+              await CrmDmMessage.create({
+                organisationId: echoOrgId,
+                conversationId: echoConversation.id,
+                platform: echoPlatform,
+                platformMessageId: echoMid,
+                direction: 'outbound',
+                senderName: 'Flossly',
+                message: echoText || null,
+                attachments: echoAttachments.length ? echoAttachments : null,
+                status: 'sent',
+                metadata: msgEvent,
+                createdAt: echoTimestamp,
+                updatedAt: echoTimestamp,
+              })
+
+              echoConversation.lastMessageAt = echoTimestamp
+              echoConversation.metadata = {
+                ...(echoConversation.metadata || {}),
+                lastMessagePreview: echoPreview.slice(0, 120),
+              }
+              await echoConversation.save()
+
+              broadcastMetaEvent('dm', { orgId: echoOrgId, conversationId: echoConversation.id, platform: echoPlatform })
+              continue
+            }
 
             const directMatches = await CrmDmAccount.findAll({
               where: { accountId: recipientId, status: 'Active' },
@@ -1883,13 +1952,14 @@ export const webhook = async (event) => {
                   lastInboundAt: timestamp.toISOString(),
                 },
               })
-            } else if (!conversation.participantName || !conversation.participantAvatar || !conversation?.metadata?.assignedUserId) {
+            } else if (!conversation.participantName || !conversation.participantAvatar || !conversation?.metadata?.assignedUserId || /^\d{10,}$/.test(String(conversation.participantName || '').trim())) {
               const profile = await resolveDmParticipantProfile({
                 platform,
                 senderId,
                 accessToken,
               })
-              const nextName = conversation.participantName || profile?.name || senderId
+              const currentNameIsRaw = /^\d{10,}$/.test(String(conversation.participantName || '').trim())
+              const nextName = (!conversation.participantName || currentNameIsRaw) ? (profile?.name || conversation.participantName || senderId) : conversation.participantName
               const nextAvatar = conversation.participantAvatar || profile?.avatar || null
               conversation.participantName = nextName
               conversation.participantAvatar = nextAvatar
