@@ -74,11 +74,64 @@
         >
           <v-tabs v-model="rightTab" color="primary" density="compact" class="border-b">
             <v-tab value="editor">Configure</v-tab>
+            <v-tab value="settings">Settings</v-tab>
             <v-tab value="preview">Preview</v-tab>
           </v-tabs>
 
           <v-window v-model="rightTab">
             <v-window-item value="editor">
+              <div class="pa-5">
+                <p class="configure-section-title mb-6">Field Configure</p>
+
+                <label class="configure-lbl d-block mb-2">Form Name</label>
+                <v-text-field
+                  v-model="formName"
+                  variant="outlined"
+                  density="comfortable"
+                  hide-details
+                  class="mb-6 configure-label-input"
+                  placeholder="Form name..."
+                />
+
+                <label class="configure-lbl d-block mb-2">Brand Colour</label>
+                <div class="d-flex flex-wrap mb-3" style="gap: 8px;">
+                  <div
+                    v-for="swatch in settingsPresetColors"
+                    :key="swatch"
+                    class="settings-swatch"
+                    :style="{ background: swatch, outline: formColor === swatch ? '2px solid #111' : '2px solid transparent' }"
+                    @click="formColor = swatch"
+                  />
+                </div>
+                <div class="d-flex align-center" style="gap: 10px;">
+                  <div class="settings-swatch" :style="{ background: formColor, outline: '2px solid #e5e7eb', cursor: 'default', flexShrink: 0 }" />
+                  <v-text-field
+                    :model-value="formColor"
+                    variant="outlined"
+                    density="compact"
+                    hide-details
+                    placeholder="#0061FB"
+                    style="font-family: monospace; font-size: 13px;"
+                    @update:model-value="onSettingsHexInput"
+                  />
+                  <input
+                    type="color"
+                    :value="formColor"
+                    class="settings-color-btn"
+                    title="Open colour picker"
+                    @input="formColor = $event.target.value"
+                  />
+                </div>
+
+                <div class="mt-4 pa-3 rounded-lg" style="background:#f9fafb; border:1px solid #e5e7eb;">
+                  <p class="text-caption text-medium-emphasis mb-0">
+                    <v-icon size="14" class="mr-1">mdi-information-outline</v-icon>
+                    Applied to the form header and submit button on the public page.
+                  </p>
+                </div>
+              </div>
+            </v-window-item>
+            <v-window-item value="settings">
               <CustomerRelationManagementFormsFormBuilderFieldEditor
                 :field="selectedField"
                 @update="updateField"
@@ -88,6 +141,7 @@
               <CustomerRelationManagementFormsFormPreviewPanel
                 :form-name="formName"
                 :fields="canvasFields"
+                :color="formColor"
               />
             </v-window-item>
           </v-window>
@@ -136,6 +190,15 @@ const mainStore = useMainStore()
 const bridge = inject('crm-builder-bridge', null)
 
 const formName = ref(props.form?.name || 'New Form')
+const formColor = ref(props.form?.color || '#0061FB')
+const settingsPresetColors = [
+  '#0061FB', '#10B981', '#F59E0B', '#EF4444',
+  '#8B5CF6', '#EC4899', '#0EA5E9', '#14B8A6',
+  '#F97316', '#6366F1', '#374151', '#111827',
+]
+const onSettingsHexInput = (val) => {
+  if (/^#[0-9A-Fa-f]{6}$/.test(val)) formColor.value = val
+}
 const canvasFields = ref(JSON.parse(JSON.stringify(props.form?.fields || [])))
 const availableFields = ref([])
 const selectedFieldKey = ref(null)
@@ -153,7 +216,7 @@ let cleanSnapshot = ''
 
 const isDirty = computed(() => {
   if (!cleanSnapshot) return false
-  return JSON.stringify({ name: formName.value, fields: canvasFields.value }) !== cleanSnapshot
+  return JSON.stringify({ name: formName.value, color: formColor.value, fields: canvasFields.value }) !== cleanSnapshot
 })
 
 const canvasKeys = computed(() => canvasFields.value.map((f) => f.key))
@@ -195,13 +258,13 @@ const doSave = async () => {
   try {
     let res
     if (formId.value) {
-      res = await crmStore.updateForm({ id: formId.value, name, fields: canvasFields.value })
+      res = await crmStore.updateForm({ id: formId.value, name, color: formColor.value, fields: canvasFields.value })
     } else {
-      res = await crmStore.createForm({ name, fields: canvasFields.value })
+      res = await crmStore.createForm({ name, color: formColor.value, fields: canvasFields.value })
     }
     if (res?.code === 0) {
       if (res.data?.id) formId.value = res.data.id
-      cleanSnapshot = JSON.stringify({ name: formName.value, fields: canvasFields.value })
+      cleanSnapshot = JSON.stringify({ name: formName.value, color: formColor.value, fields: canvasFields.value })
       mainStore.setSnackbar({ title: 'Form saved', type: 'success' })
       emit('saved')
       return res.data
@@ -288,6 +351,26 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.configure-section-title {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 130%;
+  color: #111827;
+}
+
+.configure-lbl {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 130%;
+  color: #111827;
+}
+
+.configure-label-input :deep(.v-field) {
+  border-radius: 10px;
+}
+
 .settings-swatch {
   width: 22px;
   height: 22px;
