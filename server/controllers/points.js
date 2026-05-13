@@ -14,6 +14,7 @@ import DB from "../utils/db";
 import { sendFeedBack } from "../utils/emailNotifications";
 import bcrypt from "bcrypt";
 import { parseJsonBody } from "../utils/body";
+import { TRIAL_DAYS } from "@shared/defaults/commercialPolicy.js";
 export const getPointHistory = async (event) => {
   try {
     const { userId } = event.context.user;
@@ -182,7 +183,7 @@ export const referPractice = async (event) => {
      * 3. Trial License (PER ORG)
      --------------------------*/
     const trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 15);
+    trialEndDate.setDate(trialEndDate.getDate() + TRIAL_DAYS);
 
     await UserPreference.create(
       {

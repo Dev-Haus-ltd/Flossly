@@ -4,6 +4,7 @@ import {
   UserOrganisation,
   Verification,
   UserPreference,
+  UserSubscription,
   Role,
   Task,
   OrganisationStatus,
@@ -35,6 +36,8 @@ import {
   accountCreationNotification,
   sendOtpForPasswordReset,
   sendOrganisationCreatedInternalNotification,
+  sendMagicLinkEmail,
+  sendTrialEndingSoonEmail,
 } from "../utils/emailNotifications";
 import {
   sendSystemPortalReadyNotification,
@@ -53,6 +56,7 @@ import {
   buildOnboardingInAppMessages,
   sendOnboardingEmail,
 } from "../utils/onboardingCampaign.js";
+import { getPendingEventNotifications } from "../utils/notificationService.js";
 import {
   CLIENT_ONBOARDING_KEYS,
   ensureOnboardingStartEvent,
@@ -64,6 +68,10 @@ import {
   recordOnboardingEvent as recordOnboardingEventInternal,
 } from "../utils/onboardingService";
 import { parseJsonBody } from "../utils/body";
+import { getCurrentUsage } from "../utils/requireUsageAllowed.js";
+import { getEntitlements } from "../config/entitlements.js";
+import { SETUP_TOTAL_STEPS } from "@shared/defaults/setup.js";
+import { TRIAL_DAYS } from "@shared/defaults/commercialPolicy.js";
 
 const config = useRuntimeConfig();
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
@@ -116,20 +124,6 @@ export const login = async (event) => {
 
     const activeOrgs = orgs;
 
-    const userPreference = await UserPreference.findOne({
-      where: { 
-        userId: user.id,
-        organisationId: user.lastLoginOrganisationId || activeOrgs[0].organisationId,
-       },
-    });
-      if (
-        userPreference &&
-        userPreference.licenseType !== "System" &&
-        new Date(userPreference.licenseRenewalDate) < new Date()
-      ) {
-        return error(401, "License Expired");
-      }
-
     let orgId;
     if (user.lastLoginOrganisationId) {
       const lastOrg = activeOrgs.find(
@@ -144,8 +138,19 @@ export const login = async (event) => {
       const orgIds = activeOrgs.map((o) => o.organisationId).sort();
       orgId = orgIds[0];
     }
+
+    const loginOrg = await Organisation.findByPk(orgId);
+    if (
+      loginOrg &&
+      loginOrg.licenseType !== 'System' &&
+      loginOrg.licenseRenewalDate &&
+      new Date(loginOrg.licenseRenewalDate) < new Date()
+    ) {
+      return error(401, 'License Expired');
+    }
+
     const token = jwt.sign(
-      { userId: user.id, orgId, roleId: user.roleId, isAdmin: user.roleId === 17, purpose: "login", environment: getCurrentEnvironment() },
+      { userId: user.id, orgId, roleId: user.roleId, licenseType: loginOrg?.licenseType ?? 'Lite', isAdmin: user.roleId === 17, purpose: "login", environment: getCurrentEnvironment() },
       config.JWT_SECRET
     );
     user.lastLoginDate = new Date()
@@ -156,6 +161,124 @@ export const login = async (event) => {
     return success(token);
   } catch (err) {
     return error(500, err.message || "Login failed");
+  }
+};
+
+export const sendMagicLink = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { email } = parseJsonBody(body);
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) return error(400, 'Email required');
+
+    const user = await User.findOne({ where: { email: { [Op.iLike]: normalizedEmail } } });
+    if (!user) return success('If that email is registered, a login link has been sent');
+
+    const orgs = await UserOrganisation.findAll({ where: { userId: user.id, status: 'Active' } });
+    if (!orgs.length) return error(403, 'No active organisation found');
+
+    const orgId = user.lastLoginOrganisationId || orgs.map((o) => o.organisationId).sort()[0];
+    const token = jwt.sign(
+      { userId: user.id, orgId, roleId: user.roleId, purpose: 'magic_login' },
+      config.JWT_SECRET,
+      { expiresIn: '30m' }
+    );
+    const link = `${config.public.BASE_URL}/magic/${token}`;
+    await sendMagicLinkEmail({ email: normalizedEmail, fullName: user.fullName, link, orgId });
+    return success('Login link sent');
+  } catch (err) {
+    return error(500, err.message || 'Failed to send magic link');
+  }
+};
+
+export const verifyMagicLink = async (event) => {
+  try {
+    const body = await readBody(event);
+    const { token } = parseJsonBody(body);
+    if (!token) return error(400, 'Token required');
+
+    let payload;
+    try {
+      payload = jwt.verify(token, config.JWT_SECRET);
+    } catch {
+      return error(401, 'Link expired or invalid');
+    }
+
+    if (payload.purpose !== 'magic_login') return error(401, 'Invalid link type');
+
+    const user = await User.findByPk(payload.userId);
+    if (!user || user.status === 'Disabled' || user.status === 'Expired') {
+      return error(403, 'Account not found or disabled');
+    }
+
+    const magicOrg = await Organisation.findByPk(payload.orgId);
+    const sessionToken = jwt.sign(
+      { userId: user.id, orgId: payload.orgId, roleId: user.roleId, licenseType: magicOrg?.licenseType ?? 'Lite', isAdmin: user.roleId === 17, purpose: 'login', environment: getCurrentEnvironment() },
+      config.JWT_SECRET
+    );
+    user.lastLoginDate = new Date();
+    user.lastLoginOrganisationId = payload.orgId;
+    user.isEmailVerified = true;
+    await user.save();
+
+    const browserAgent = getHeader(event, 'User-Agent') || '';
+    await LoginHistory.create({ userId: user.id, browserAgent });
+    setCookie(event, 'accessToken', sessionToken, { maxAge: 31536000 });
+
+    const pref = await UserPreference.findOne({ where: { userId: user.id, organisationId: payload.orgId } });
+    return success({
+      token: sessionToken,
+      setupStepsCompleted: pref?.setupStepsCompleted ?? 0,
+      setupComplete: pref?.setupComplete ?? false,
+    });
+  } catch (err) {
+    return error(500, err.message || 'Verification failed');
+  }
+};
+
+export const getUsageSummary = async (event) => {
+  try {
+    const { orgId } = event.context.user ?? {};
+    if (!orgId) return error(401, 'Unauthenticated');
+    const org = await Organisation.findByPk(orgId, { attributes: ['licenseType'] });
+    const ent = getEntitlements(org?.licenseType ?? 'Lite');
+
+    const toSummary = async (resource) => {
+      const max = ent.limits[resource];
+      if (max === Infinity) return { current: 0, max: null, warnAt: null };
+      const current = await getCurrentUsage(Number(orgId), resource);
+      return { current, max, warnAt: Math.floor(max * ent.warnAt) };
+    };
+
+    const [leads, storageMB, members] = await Promise.all([
+      toSummary('leads'), toSummary('storageMB'), toSummary('members'),
+    ]);
+    return success({ leads, storageMB, members });
+  } catch (err) {
+    return error(500, err.message || 'Failed to fetch usage summary');
+  }
+};
+
+export const updateSetupStep = async (event) => {
+  try {
+    const { userId, orgId } = event.context.user ?? {};
+    if (!userId || !orgId) return error(401, 'Unauthenticated');
+    const body = await readBody(event);
+    const { step } = parseJsonBody(body);
+    const stepNum = Number(step);
+    if (!Number.isFinite(stepNum) || stepNum < 1 || stepNum > SETUP_TOTAL_STEPS) return error(400, 'Invalid step');
+
+    const pref = await UserPreference.findOne({ where: { userId, organisationId: orgId } });
+    if (!pref) return error(404, 'Preferences not found');
+
+    if (stepNum > (pref.setupStepsCompleted || 0)) {
+      pref.setupStepsCompleted = stepNum;
+    }
+    if (stepNum >= SETUP_TOTAL_STEPS) pref.setupComplete = true;
+    await pref.save();
+    return success({ setupStepsCompleted: pref.setupStepsCompleted, setupComplete: pref.setupComplete });
+  } catch (err) {
+    return error(500, err.message || 'Failed to update setup step');
   }
 };
 
@@ -334,7 +457,7 @@ export const signupRequest = async (event) => {
     org.managerId = user.id;
     await org.save({ transaction });
     const trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 15);
+    trialEndDate.setDate(trialEndDate.getDate() + TRIAL_DAYS);
     await UserPreference.create(
       {
         userId: user.id,
@@ -344,11 +467,6 @@ export const signupRequest = async (event) => {
       },
       { transaction }
     );
-    await org.update(
-      { hasUsedTrial: true },
-      { transaction }
-    );
-
     await createDummyDentistForOrganisation({
       organisationId: org.id,
       organisationName: org.name,
@@ -478,6 +596,10 @@ export const profile = async (event) => {
     // Check if user is the organisation creator (managerId)
     const currentOrganisation = await Organisation.findByPk(loggedUser.orgId);
     userObj.isOrganisationCreator = currentOrganisation && currentOrganisation.managerId === loggedUser.userId;
+    userObj.licenseType = currentOrganisation?.licenseType ?? 'Lite';
+    userObj.licenseRenewalDate = currentOrganisation?.licenseRenewalDate ?? null;
+    userObj.licenseBillingCycle = currentOrganisation?.licenseBillingCycle ?? null;
+    userObj.hasUsedTrial = Boolean(currentOrganisation?.hasUsedTrial);
     userObj.crmFeatureAccess = {
       meta: currentOrganisation?.automationPlaceholders?.crmFeatureAccess?.meta !== false,
       whatsapp: currentOrganisation?.automationPlaceholders?.crmFeatureAccess?.whatsapp !== false,
@@ -499,7 +621,18 @@ export const profile = async (event) => {
       }
     }
 
+    const shouldShowCommercialOnboarding =
+      Boolean(userObj.isOrganisationCreator) &&
+      isOnboardingRecipientRole(userObj.roleId);
+
     try {
+      if (!shouldShowCommercialOnboarding) {
+        userObj.onboarding = {
+          showWelcomePopup: false,
+          showWelcomeVideoPopup: false,
+          inAppMessages: [],
+        };
+      } else {
       const { event: startEvent, created } = await ensureOnboardingStartEvent({
         userId: loggedUser.userId,
         organisationId: loggedUser.orgId,
@@ -531,10 +664,16 @@ export const profile = async (event) => {
         startAt,
       });
 
+      const pendingEventKeys = await getPendingEventNotifications(
+        loggedUser.orgId,
+        loggedUser.userId,
+        new Set(eventMap.keys())
+      );
       const inAppMessages = buildOnboardingInAppMessages({
         startAt,
         ctx,
         seenKeys: new Set(eventMap.keys()),
+        pendingEventKeys,
       });
 
       userObj.onboarding = {
@@ -563,12 +702,30 @@ export const profile = async (event) => {
           }
         }
       }
+      }
     } catch (onboardingErr) {
       userObj.onboarding = userObj.onboarding || {
         showWelcomePopup: false,
         showWelcomeVideoPopup: false,
         inAppMessages: [],
       };
+    }
+
+    // Auto-downgrade org if trial expired and no active Stripe subscription
+    if (
+      currentOrganisation &&
+      ['CRM', 'Pro'].includes(currentOrganisation.licenseType) &&
+      currentOrganisation.licenseRenewalDate &&
+      new Date(currentOrganisation.licenseRenewalDate) < new Date()
+    ) {
+      const activeSub = await UserSubscription.findOne({
+        where: { organisationId: loggedUser.orgId, stripeSubscriptionStatus: 'active' },
+      });
+      if (!activeSub) {
+        await currentOrganisation.update({ licenseType: 'Lite', licenseBillingCycle: null });
+        userObj.licenseType = 'Lite';
+        userObj.trialExpired = true;
+      }
     }
 
     setCookie(event, "loggedUserId", userObj.id, { maxAge: 31536000 });
@@ -877,12 +1034,14 @@ export const switchOrgnanisation = async (event) => {
     ) {
       return error(403, "Your account is deactivated");
     }
+    const switchedOrg = await Organisation.findByPk(orgId, { attributes: ['licenseType'] });
     const newToken = jwt.sign(
       {
         userId: user.userId,
         roleId: user.roleId,
         isAdmin: user.roleId === 17,
         orgId,
+        licenseType: switchedOrg?.licenseType ?? 'Lite',
         purpose: "login",
         // Preserve environment from existing access token when switching orgs.
         environment: user.environment || getCurrentEnvironment(),
@@ -1317,7 +1476,7 @@ export const acceptInvitation = async (event) => {
       },
     });
     const trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 15);
+    trialEndDate.setDate(trialEndDate.getDate() + TRIAL_DAYS);
 
     let licenseType = "Lite";
     let licenseRenewalDate = trialEndDate;

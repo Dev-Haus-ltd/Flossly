@@ -1061,7 +1061,7 @@ export const sendTaskDetailsEmail = async (data) => {
 };
 
 export const sendTrialActivatedEmail = async (data) => {
-  const subject = "Your 15-Day Free Trial Is Active 🎉";
+  const subject = `Your ${Number(data.trialDays || 14)}-Day Free Trial Is Active 🎉`;
 
   const trialEndDateFormatted = new Date(data.trialEndsOn).toLocaleDateString(
     "en-GB",
@@ -1077,7 +1077,7 @@ export const sendTrialActivatedEmail = async (data) => {
     <br />
 
     <p>
-      Your <strong>15-day free trial</strong> has been successfully activated for the organisation
+      Your <strong>${Number(data.trialDays || 14)}-day free trial</strong> has been successfully activated for the organisation
       <strong>${data.organisationName}</strong>.
     </p>
 
@@ -1188,5 +1188,35 @@ export const sendOrganisationReferralEmail = async (data) => {
   });
 };
 
+export const sendMagicLinkEmail = async ({ email, fullName, link, orgId }) => {
+  const subject = "Your Flossy login link";
+  const content = `
+    <p>Hi ${fullName || 'there'},</p>
+    <p>Click the button below to log in to Flossy. This link expires in 30 minutes.</p>
+    <p style="text-align:center;margin-top:25px;">
+      <a href="${link}" class="btn">Log in to Flossy →</a>
+    </p>
+    <p style="color:#6b7280;font-size:13px;">If you didn't request this link, you can safely ignore this email.</p>
+    <br/><p>The Flossy Team</p>
+  `;
+  const html = template.replaceAll("{subject}", subject).replace("{content}", content);
+  await sendEmail(orgId, { to: [email], subject, html });
+};
+
+export const sendTrialEndingSoonEmail = async ({ fullName, email, trialEndDate, orgId }) => {
+  const subject = "Your Flossy CRM trial is ending soon";
+  const content = `
+    <p>Hi ${fullName || 'there'},</p>
+    <p>Your 14-day Flossy CRM trial ends on <strong>${trialEndDate}</strong>.</p>
+    <p>To keep access to WhatsApp messaging, automation, unlimited leads, and patient booking — upgrade to CRM before your trial ends.</p>
+    <p style="text-align:center;margin-top:25px;">
+      <a href="${config.public.BASE_URL}/subscription" class="btn">Upgrade to CRM →</a>
+    </p>
+    <p>If you don't upgrade, your account will revert to Flossy Lite (free forever) and your data will be kept safe.</p>
+    <br/><p>The Flossy Team</p>
+  `;
+  const html = template.replaceAll("{subject}", subject).replace("{content}", content);
+  await sendEmail(orgId, { to: [email], subject, html });
+};
 
 // leaves

@@ -37,6 +37,16 @@ export const UserPreference = sequelize.define(
       type: DataTypes.DATE,
       allowNull: false,
     },
+    setupStepsCompleted: {
+      type: DataTypes.SMALLINT,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    setupComplete: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     taskTableColumns: {
       type: DataTypes.TEXT,
       allowNull: true,

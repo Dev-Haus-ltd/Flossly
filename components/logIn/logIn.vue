@@ -287,13 +287,17 @@ const getProfile = () => {
           subtitle: `Welcome back, ${user.fullName}!`,
           type: "success",
         });
+        const preference = Array.isArray(user.preferences)
+          ? user.preferences[0]
+          : user.preferences || null;
+        const hasStartedSetup = Number(preference?.setupStepsCompleted || 0) > 0;
         if (
           (user.roleId === 8 || user.roleId === 1) &&
           user.profileCompletion <= 1 &&
-          user.isOrganisationCreator
+          user.isOrganisationCreator &&
+          !hasStartedSetup
         ) {
-          // Force a full page refresh when redirecting to onboarding
-          window.location.href = "/onboarding";
+          window.location.href = "/setup";
         } else {
           router.push("/");
         }

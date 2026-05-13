@@ -2,6 +2,7 @@
   <v-container fluid class="pa-4 bg-white">
     <!-- Dashboard Content -->
     <div>
+      <DashBoardSetupProgressWidget />
       <CommonEventCard
         v-if="showCard"
         class="my-4"

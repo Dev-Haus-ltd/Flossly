@@ -5,6 +5,7 @@ import {
   getSubscription,
   prices,
   webhook,
+  startCrmTrial,
 } from "~/server/controllers/stripe";
 
 export default defineEventHandler(async (event) => {
@@ -45,6 +46,8 @@ export default defineEventHandler(async (event) => {
 
     case "subscription":
       return await getSubscription(event)
+    case "startTrial":
+      return await startCrmTrial(event)
     default:
       return { code: 0, error: "Not found" };
   }

@@ -21,6 +21,7 @@
             <template #activator="{ props: tooltipProps }">
               <v-list-item
                 v-bind="tooltipProps"
+                :data-tour-id="item.value"
                 :to="item.to"
                 :active="isExact(item.to)"
                 :class="[
@@ -40,6 +41,7 @@
 
           <v-list-item
             v-else-if="!item.children || !item.children.length"
+            :data-tour-id="item.value"
             :title="item.title"
             :to="item.to"
             :active="isExact(item.to)"
@@ -59,7 +61,7 @@
           </v-list-item>
 
           <!-- Parent with children -->
-          <div v-else class="group-with-line" :class="{ 'no-line': rail }">
+          <div v-else class="group-with-line" :data-tour-id="item.value" :class="{ 'no-line': rail }">
             <v-list-group v-model="openGroups[item.value]">
               <template #activator="{ props }">
                 <v-tooltip v-if="rail" location="right">
@@ -147,8 +149,21 @@
 
       <v-spacer />
 
-      <div 
-        :class="['sidebar-toggle-wrapper', rail ? 'collapsed-state' : 'expanded-state']" 
+      <!-- Plan chip — hidden when sidebar is collapsed to rail -->
+      <div v-if="!rail" id="tour-plan-chip" class="px-3 pb-2">
+        <v-chip
+          size="small"
+          :color="planChipColor"
+          variant="tonal"
+          class="w-100 justify-center"
+          style="cursor: default; font-size: 11px;"
+        >
+          {{ planChipLabel }}
+        </v-chip>
+      </div>
+
+      <div
+        :class="['sidebar-toggle-wrapper', rail ? 'collapsed-state' : 'expanded-state']"
         v-if="!smAndDown"
       >
         <v-btn
@@ -292,8 +307,23 @@ watch(
   },
   { immediate: true }
 );
-const { user } = useUser(); 
+const { user } = useUser();
+const authStore = useAuthStore()
 const currentOrg = ref({});
+
+const LEGACY_MAP = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' }
+const resolvedPlan = computed(() => {
+  const lt = authStore.loggedUser?.licenseType ?? 'Lite'
+  return LEGACY_MAP[lt] ?? lt
+})
+const planChipLabel = computed(() => {
+  const map = { Lite: 'Free Plan', CRM: 'CRM Plan', Pro: 'Pro Plan' }
+  return map[resolvedPlan.value] ?? resolvedPlan.value
+})
+const planChipColor = computed(() => {
+  const map = { Lite: 'default', CRM: 'primary', Pro: 'deep-purple' }
+  return map[resolvedPlan.value] ?? 'default'
+})
 
 const appBarHeight = 70;
 const drawerOffset = `${appBarHeight}px + var(--trial-banner-height, 0px)`;

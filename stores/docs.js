@@ -23,11 +23,11 @@ export const useDocStore = defineStore("docStore", {
           });
       });
     },
-    getSystemFolders() {
+    getSystemFolders(data) {
       this.isLoading = true;
       return new Promise((resolve, reject) => {
         docService
-          .getSystemFolders()
+          .getSystemFolders(data)
           .then((res) => {
             this.isLoading = false;
             resolve(res);

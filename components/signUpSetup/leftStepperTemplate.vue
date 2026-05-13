@@ -40,37 +40,6 @@
             </div>
           </div>
 
-          <div class="step-item mb-1 mb-sm-3 mb-md-3 mb-lg-5 mb-xl-6">
-            <div class="step d-flex align-center">
-              <div class="icon-circle icon-xs icon-sm-sm icon-md-md icon-lg-lg icon-xl-xl" :class="{ 'active': activeStep >= 2 }">
-                <img
-                  class="icon-image icon-image-xs icon-image-sm-sm icon-image-md-md icon-image-lg-lg icon-image-xl-xl"
-                  src="@/assets/logos/signupSetupScreen/leftStepper/pricing.svg"
-                  alt="Step 3 Icon"
-                />
-              </div>
-              <div class="text ml-2 ml-sm-3 ml-md-4">
-                <div class="step-title text-caption">Step 3</div>
-                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-bold': activeStep === 2, 'font-weight-regular': activeStep !== 2 }">Pricing</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="step-item mb-1 mb-sm-3 mb-md-3 mb-lg-5 mb-xl-6">
-            <div class="step d-flex align-center">
-              <div class="icon-circle icon-xs icon-sm-sm icon-md-md icon-lg-lg icon-xl-xl" :class="{ 'active': activeStep >= 3 }">
-                <img
-                  class="icon-image icon-image-xs icon-image-sm-sm icon-image-md-md icon-image-lg-lg icon-image-xl-xl"
-                  src="@/assets/logos/signupSetupScreen/leftStepper/dashboard.svg"
-                  alt="Step 4 Icon"
-                />
-              </div>
-              <div class="text ml-2 ml-sm-3 ml-md-4">
-                <div class="step-title text-caption">Step 4</div>
-                <div class="step-subtitle text-caption text-sm-body-2 text-md-body-1 text-lg-body-1" :class="{ 'font-weight-bold': activeStep === 3, 'font-weight-regular': activeStep !== 3 }">Dashboard Tour</div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -121,9 +90,7 @@
 
 import clinicsetupIcon from '@/assets/logos/signupSetupScreen/leftStepper/clinicsetup.svg'
 import teammemberIcon from '@/assets/logos/signupSetupScreen/leftStepper/teammember.svg'
-import pricingIcon from '@/assets/logos/signupSetupScreen/leftStepper/pricing.svg'
-import dashboardIcon from '@/assets/logos/signupSetupScreen/leftStepper/dashboard.svg'
-// Accept props from parent
+
 const props = defineProps({
   activeStep: {
     type: Number,
@@ -135,12 +102,9 @@ const props = defineProps({
   }
 });
 
-// Steps configuration for mobile stepper
 const steps = [
   { title: 'Clinic Setup', icon: clinicsetupIcon },
   { title: 'Add Team Members', icon: teammemberIcon },
-  { title: 'Pricing', icon: pricingIcon },
-  { title: 'Dashboard Tour', icon: dashboardIcon }
 ];
 </script>
 

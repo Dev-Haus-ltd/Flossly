@@ -1,6 +1,6 @@
 import { createError } from 'h3'
 import { getEntitlements } from '../config/entitlements'
-import { CrmLead, UserDocument, UserOrganisation, UserPreference } from '../models'
+import { CrmLead, UserDocument, UserOrganisation, Organisation } from '../models'
 
 const RESOURCE_LABELS = {
   leads:     'lead',
@@ -17,8 +17,9 @@ const RESOURCE_LABELS = {
  * @returns {{ current: number, max: number, warnAt: number }}
  */
 export const requireUsageAllowed = async (event, resource) => {
-  const { orgId, licenseType } = event.context.user ?? {}
-  const ent = getEntitlements(licenseType)
+  const { orgId } = event.context.user ?? {}
+  const org = await Organisation.findByPk(orgId, { attributes: ['licenseType'] })
+  const ent = getEntitlements(org?.licenseType ?? 'Lite')
   const max = ent.limits[resource]
 
   if (max === Infinity) return { current: 0, max, warnAt: Infinity }
@@ -48,11 +49,11 @@ export const requireUsageAllowed = async (event, resource) => {
  * Returns true if the org is allowed to receive more leads.
  */
 export const isLeadAllowedForOrg = async (orgId) => {
-  const pref = await UserPreference.findOne({ where: { organisationId: orgId } })
-  const ent  = getEntitlements(pref?.licenseType)
-  const max  = ent.limits.leads
+  const org = await Organisation.findByPk(orgId, { attributes: ['licenseType'] })
+  const ent = getEntitlements(org?.licenseType)
+  const max = ent.limits.leads
   if (max === Infinity) return true
-  const count = await CrmLead.count({ where: { organisationId: orgId } })
+  const count = await CrmLead.count({ where: { organisationId: orgId, softDeleted: false } })
   return count < max
 }
 
@@ -63,7 +64,7 @@ export const isLeadAllowedForOrg = async (orgId) => {
 export const getCurrentUsage = async (orgId, resource) => {
   switch (resource) {
     case 'leads':
-      return CrmLead.count({ where: { organisationId: orgId } })
+      return CrmLead.count({ where: { organisationId: orgId, softDeleted: false } })
 
     case 'storageMB': {
       const bytes = await UserDocument.sum('fileSizeBytes', {

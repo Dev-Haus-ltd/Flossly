@@ -23,25 +23,21 @@ export const LICENSE_TYPES = {
 
 // Maps any legacy or current license type to the menu feature set it should see
 const LICENSE_FEATURES = {
-  Lite:   new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
+  Lite:   new Set(["dashboard", "crm"]),
   CRM:    new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
   Pro:    new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
-  // Legacy mappings
+  // Legacy — mapped to their resolved tier's feature set
   System: new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
-  Trial:  new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
-  Drift:  new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
+  Trial:  new Set(["dashboard", "crm"]),
+  Drift:  new Set(["dashboard", "crm"]),
   Glide:  new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
   Soar:   new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
 };
 
 const getLicenseTypeFromStorage = () => {
-  if (typeof localStorage === "undefined") {
-    return LICENSE_TYPES.LITE;
-  }
-
   try {
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
-    return user?.preferences?.licenseType || LICENSE_TYPES.LITE;
+    const authStore = useAuthStore();
+    return authStore.loggedUser?.licenseType ?? LICENSE_TYPES.LITE;
   } catch {
     return LICENSE_TYPES.LITE;
   }
