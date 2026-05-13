@@ -1,14 +1,30 @@
-import { getOrgTransporter, getFromAddress } from "./nodeMailer";
+import { getOrgTransporter, getFromAddress, getOrgEmailIdentity } from "./nodeMailer";
 import { template } from "./emailTemplate";
 import { buildLeadContext, renderTokens } from './tokenRenderer.js'
 import { getS3Object } from './s3.js'
 const config = useRuntimeConfig();
 
-async function sendEmail(orgId, mailOptions) {
+const streamToBuffer = (stream) =>
+  new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+
+async function sendEmail(orgId, mailOptions, options = {}) {
   const mailer = await getOrgTransporter(orgId);
-  const from = getFromAddress(orgId);
+  let from, replyTo;
+  if (options.patientFacing) {
+    const identity = await getOrgEmailIdentity(orgId);
+    from = mailOptions.from || identity.from;
+    replyTo = identity.replyTo;
+  } else {
+    from = mailOptions.from || getFromAddress(orgId);
+  }
   return mailer.sendMail({
-    from: mailOptions.from || from,
+    from,
+    ...(replyTo ? { replyTo } : {}),
     to: mailOptions.to,
     cc: mailOptions.cc,
     bcc: mailOptions.bcc,
@@ -18,14 +34,6 @@ async function sendEmail(orgId, mailOptions) {
     attachments: mailOptions.attachments,
   });
 }
-
-const streamToBuffer = (stream) =>
-  new Promise((resolve, reject) => {
-    const chunks = [];
-    stream.on('data', (chunk) => chunks.push(chunk));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-    stream.on('error', reject);
-  });
 
 /** These notifications are configured */
 
@@ -416,7 +424,7 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
         subject: renderedSubject,
         html: wrapped,
         attachments: resolvedAttachments.length ? resolvedAttachments : undefined,
-      });
+      }, { patientFacing: true });
       sent++;
     } catch (e) {
       // swallow and continue with others
