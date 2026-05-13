@@ -280,7 +280,7 @@ export const getOrganisationById = async (event) => {
   }
 };
 
-export const updateUserLicense = async (event) => {
+export const updateOrgLicense = async (event) => {
   const admin = event.context.admin;
   if (!admin) return error(403, 'Admin access required');
 
