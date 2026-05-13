@@ -42,7 +42,7 @@ const LICENSE_FEATURES = {
   Soar:   new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
 };
 
-const getLicenseTypeFromStorage = () => {
+export const getLicenseTypeFromStorage = () => {
   try {
     const authStore = useAuthStore();
     return authStore.loggedUser?.licenseType ?? LICENSE_TYPES.LITE;
