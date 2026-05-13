@@ -3,6 +3,10 @@ import { User, UserOrganisation, Organisation, UserPreference } from '../../../.
 import { Op } from 'sequelize';
 import { getRouterParam, getQuery, readBody } from 'h3';
 import { parseJsonBody } from '../../../../utils/body';
+import sequelize from '../../../../utils/db';
+import { sendMagicLinkEmail } from '../../../../utils/emailNotifications';
+import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
 
 export const extendOrganisationTrial = async (event) => {
   const admin = event.context.admin;
@@ -273,5 +277,122 @@ export const getOrganisationById = async (event) => {
   } catch (err) {
     console.error('Get organisation by ID error:', err);
     return error(500, err.message || 'Failed to get organisation');
+  }
+};
+
+export const updateUserLicense = async (event) => {
+  const admin = event.context.admin;
+  if (!admin) return error(403, 'Admin access required');
+
+  const rawBody = await readBody(event);
+  const body = typeof rawBody === 'string' ? parseJsonBody(rawBody) : rawBody;
+  const { organisationId, licenseType, renewalDate } = body;
+
+  if (!organisationId || !licenseType || !renewalDate) {
+    return error(400, 'organisationId, licenseType, and renewalDate are required');
+  }
+
+  const validLicenseTypes = ['Lite', 'CRM', 'Pro', 'System', 'Trial', 'Drift', 'Glide', 'Soar'];
+  if (!validLicenseTypes.includes(licenseType)) {
+    return error(400, `Invalid licenseType. Must be one of: ${validLicenseTypes.join(', ')}`);
+  }
+
+  const renewalDateObj = new Date(renewalDate);
+  if (isNaN(renewalDateObj.getTime())) {
+    return error(400, 'Invalid renewalDate format. Use ISO 8601 format (e.g., 2026-12-31)');
+  }
+
+  try {
+    const organisation = await Organisation.findByPk(organisationId, {
+      attributes: ['id', 'name', 'managerId', 'licenseType', 'licenseBillingCycle', 'licenseRenewalDate'],
+    });
+
+    if (!organisation) return error(404, 'Organisation not found');
+
+    const preferences = await UserPreference.findAll({ where: { organisationId } });
+    for (const pref of preferences) {
+      pref.licenseType = licenseType;
+      pref.licenseRenewalDate = renewalDateObj;
+      await pref.save();
+    }
+
+    return success({
+      message: `License updated to ${licenseType} for organisation ${organisationId}`,
+      organisationId,
+      licenseType,
+      renewalDate: renewalDateObj,
+      usersUpdated: preferences.length,
+    });
+  } catch (err) {
+    console.error('updateUserLicense error:', err);
+    return error(500, err.message || 'Failed to update license');
+  }
+};
+
+export const createLiteAccount = async (event) => {
+  const admin = event.context.admin;
+  if (!admin) return error(403, 'Admin access required');
+
+  const rawBody = await readBody(event);
+  const body = typeof rawBody === 'string' ? parseJsonBody(rawBody) : rawBody;
+  const { email, fullName, orgName } = body;
+
+  if (!email || !fullName || !orgName) {
+    return error(400, 'email, fullName, and orgName are required');
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const trimmedName = fullName.trim();
+  const trimmedOrgName = orgName.trim();
+
+  const existing = await User.findOne({ where: { email: { [Op.iLike]: normalizedEmail } } });
+  if (existing) return error(409, 'A user with this email already exists');
+
+  const existingOrg = await Organisation.findOne({ where: { name: trimmedOrgName } });
+  if (existingOrg) return error(409, 'An organisation with this name already exists');
+
+  const transaction = await sequelize.transaction();
+  try {
+    const org = await Organisation.create({ name: trimmedOrgName, hasUsedTrial: false }, { transaction });
+
+    const user = await User.create(
+      { fullName: trimmedName, email: normalizedEmail, password: uuidv4(), profileCompletion: 0, isEmailVerified: true },
+      { transaction }
+    );
+
+    org.managerId = user.id;
+    await org.save({ transaction });
+
+    await UserPreference.create(
+      { userId: user.id, organisationId: org.id, licenseType: 'Lite', licenseRenewalDate: new Date('2099-01-01') },
+      { transaction }
+    );
+
+    await UserOrganisation.create(
+      { userId: user.id, organisationId: org.id, status: 'Active' },
+      { transaction }
+    );
+
+    await transaction.commit();
+
+    const config = useRuntimeConfig();
+    const token = jwt.sign(
+      { userId: user.id, orgId: org.id, purpose: 'magic_login' },
+      config.JWT_SECRET,
+      { expiresIn: '30m' }
+    );
+    const link = `${config.public.BASE_URL}/magic/${token}`;
+
+    try {
+      await sendMagicLinkEmail({ email: normalizedEmail, fullName: trimmedName, link, orgId: org.id });
+    } catch (emailErr) {
+      console.error('Magic link email failed after Lite account creation', emailErr?.message);
+    }
+
+    return success({ message: 'Lite account created and magic link sent', userId: user.id, orgId: org.id });
+  } catch (err) {
+    await transaction.rollback();
+    console.error('createLiteAccount error:', err);
+    return error(500, err.message || 'Failed to create Lite account');
   }
 };
