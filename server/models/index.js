@@ -107,7 +107,9 @@ import { ConsentFormDocument } from "./diary/consentFormDocument";
 import { ConsentFormSignatureAudit } from "./diary/consentFormSignatureAudit";
 import { DiaryZone } from "./diary/diaryZones";
 import { DiaryPatientCommunicationLogs } from "./diary/patientCommunicationLogs";
-// Organisation dictionary
+import { GCMandate } from "./diary/gcMandates";
+import { GCPayment } from "./diary/gcPayments";
+import { GCWebhookLog } from "./diary/gcWebhookLogs";
 import { OrganisationTreatment } from "./organisations/organisationTreatments";
 import { CrmLeadTreatment } from "./crm/leadTreatments";
 import { CrmLeadNote } from "./crm/leadNotes";
@@ -797,6 +799,9 @@ export {
   ConsentFormSignatureAudit,
   DiaryZone,
   DiaryPatientCommunicationLogs,
+  GCMandate,
+  GCPayment,
+  GCWebhookLog,
   OrganisationTreatment,
   PatientInvoice,
   PatientInvoiceItem,

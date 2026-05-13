@@ -14,13 +14,49 @@
 
       <v-divider />
 
+      <!-- Payment Method Selection -->
+      <v-card-text class="pa-4" style="background: #f9fafb">
+        <div class="payment-method-selector">
+          <v-btn-toggle
+            v-model="paymentMethodType"
+            mandatory
+            divided
+            class="w-100"
+            :disabled="isSaving"
+          >
+            <v-btn value="manual" class="flex-grow-1" variant="outlined">
+              <v-icon start size="18">mdi-cash</v-icon>
+              Manual Payment
+            </v-btn>
+            <v-btn value="gocardless" class="flex-grow-1" variant="outlined">
+              <v-icon start size="18">mdi-credit-card-check</v-icon>
+              GoCardless
+            </v-btn>
+          </v-btn-toggle>
+        </div>
+      </v-card-text>
+
       <!-- Body -->
       <v-card-text
         class="pa-5"
         style="background: #f9fafb; max-height: 70vh; overflow-y: auto"
       >
-        <v-card elevation="0" rounded="lg" class="pa-4" color="white">
+        <!-- Manual Payment Form -->
+        <v-card elevation="0" rounded="lg" class="pa-4" color="white" v-if="paymentMethodType === 'manual'">
           <v-row dense>
+            <v-col cols="12" v-if="props.invoice">
+              <div class="invoice-linked-info">
+                <div class="invoice-linked-info__row">
+                  <span class="invoice-linked-info__label">Invoice</span>
+                  <strong>{{ props.invoice.invoiceNumber }}</strong>
+                </div>
+                <div class="invoice-linked-info__row">
+                  <span class="invoice-linked-info__label">Amount Due</span>
+                  <strong>£{{ Number(props.invoice.balance ?? 0).toFixed(2) }}</strong>
+                </div>
+              </div>
+            </v-col>
+
             <!-- Amount -->
             <v-col cols="6">
               <label class="fld-lbl">
@@ -165,6 +201,32 @@
             </v-col>
           </v-row>
         </v-card>
+
+        <!-- GoCardless Info -->
+        <v-card elevation="0" rounded="lg" class="pa-4" color="white" v-else>
+          <v-row dense>
+            <v-col cols="12" v-if="props.invoice">
+              <div class="invoice-linked-info">
+                <div class="invoice-linked-info__row">
+                  <span class="invoice-linked-info__label">Invoice</span>
+                  <strong>{{ props.invoice.invoiceNumber }}</strong>
+                </div>
+                <div class="invoice-linked-info__row">
+                  <span class="invoice-linked-info__label">Amount Due</span>
+                  <strong class="amount-due">
+                    £{{ Number(props.invoice.balance ?? 0).toFixed(2) }}
+                  </strong>
+                </div>
+              </div>
+            </v-col>
+
+            <v-col cols="12" class="mt-2">
+              <v-alert type="info" variant="tonal" closable class="text-caption">
+                A secure GoCardless payment link will be emailed to the patient. Click "Proceed" to continue.
+              </v-alert>
+            </v-col>
+          </v-row>
+        </v-card>
       </v-card-text>
 
       <v-divider />
@@ -188,7 +250,7 @@
           :disabled="isSaving"
           @click="submit"
         >
-          Record Payment
+          {{ paymentMethodType === 'manual' ? 'Record Payment' : 'Proceed to Payment' }}
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -196,15 +258,17 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch } from "vue";
 import { useAccountsStore } from "@/stores/accounts";
 import { useMainStore } from "@/stores/index";
-import { usePatientChartingStore } from "@/stores/patientCharting";
+import { useDiaryStore } from "@/stores/diary";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
+  invoice: { type: Object, default: null },
+  patientName: { type: String, default: "" },
 });
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits(["update:modelValue", "proceed-gocardless"]);
 
 const store = useAccountsStore();
 const mainStore = useMainStore();
@@ -215,16 +279,17 @@ const open = computed({
   set: (v) => emit("update:modelValue", v),
 });
 
+const paymentMethodType = ref("manual");
 const today = new Date().toISOString().slice(0, 10);
 
 const blankForm = () => ({
-  amount: "",
+  amount: props.invoice?.balance ? Number(props.invoice.balance).toFixed(2) : "",
   paymentDate: today,
   method: "cash",
-  reference: "",
-  practitionerId: "",
-  notes: "",
-  allocateToInvoiceId: "",
+  reference: props.invoice ? `Invoice ${props.invoice.invoiceNumber}` : "",
+  practitionerId: props.invoice?.practitionerId || "",
+  notes: props.invoice ? `Payment for ${props.invoice.invoiceNumber}` : "",
+  allocateToInvoiceId: props.invoice?.id || "",
 });
 
 const form = ref(blankForm());
@@ -249,9 +314,19 @@ watch(open, (v) => {
   if (v) {
     form.value = blankForm();
     errors.value = {};
+    paymentMethodType.value = "manual";
     loadDentists();
   }
 });
+
+watch(
+  () => props.invoice,
+  (invoice) => {
+    if (open.value && invoice) {
+      form.value = blankForm();
+    }
+  },
+);
 
 const validate = () => {
   errors.value = {};
@@ -275,56 +350,96 @@ const loadDentists = async () => {
     console.error("Failed to load Dentists", error);
   }
 };
-const submit = async () => {
-  if (!validate()) return;
-  const selected = dentists.value.find(
-    (d) => d.id === form.value.practitionerId,
-  );
-  const payload = {
-    paymentDate: form.value.paymentDate,
-    method: form.value.method,
-    amount: Number(form.value.amount),
-    reference: form.value.reference,
-    practitionerId: form.value.practitionerId
-      ? Number(form.value.practitionerId)
-      : null,
-    practitionerName: selected?.name || "",
-    notes: form.value.notes,
-    allocateToInvoiceId: form.value.allocateToInvoiceId || null,
-  };
 
-  const res = await store.recordPayment(payload);
-  if (res?.code === 0) {
-    mainStore.setSnackbar({
-      message: "Payment recorded successfully",
-      color: "success",
-    });
+const submit = async () => {
+  if (paymentMethodType.value === "gocardless") {
+    // Emit event to open GoCardless dialog
+    emit("proceed-gocardless", props.invoice);
     open.value = false;
   } else {
-    mainStore.setSnackbar({
-      message: res?.message || "Failed to record payment",
-      color: "error",
-    });
+    // Manual payment flow
+    if (!validate()) return;
+    const selected = dentists.value.find(
+      (d) => d.id === form.value.practitionerId,
+    );
+    const payload = {
+      paymentDate: form.value.paymentDate,
+      method: form.value.method,
+      amount: Number(form.value.amount),
+      reference: form.value.reference,
+      practitionerId: form.value.practitionerId
+        ? Number(form.value.practitionerId)
+        : null,
+      practitionerName: selected?.name || "",
+      notes: form.value.notes,
+      allocateToInvoiceId: form.value.allocateToInvoiceId || null,
+    };
+
+    const res = await store.recordPayment(payload);
+    if (res?.code === 0) {
+      mainStore.setSnackbar({
+        message: "Payment recorded successfully",
+        color: "success",
+      });
+      open.value = false;
+    } else {
+      mainStore.setSnackbar({
+        message: res?.message || "Failed to record payment",
+        color: "error",
+      });
+    }
   }
 };
 </script>
 
 <style scoped lang="scss">
-.payment-dialog {
-  border-radius: 20px !important;
-  overflow: hidden;
-}
-
-.payment-dialog__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px 12px;
-  border-bottom: 1px solid #edf1f5;
-  font-size: 15px;
-  font-weight: 700;
+.title-text {
+  font-weight: 600;
   color: #1d2433;
 }
+
+.payment-method-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.invoice-linked-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: #f3f4f6;
+  border-radius: 8px;
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  &__label {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+  }
+}
+
+.amount-due {
+  color: #0061fb;
+  font-size: 16px;
+}
+
+.fld-lbl {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  display: block;
+}
+
+.req-star {
+  color: #ef4444;
+}
+
 
 .close-btn {
   border: 0;
@@ -437,6 +552,29 @@ const submit = async () => {
   font-size: 16px;
   font-weight: 600;
   color: #111827;
+}
+
+.invoice-linked-info {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.invoice-linked-info__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.invoice-linked-info__label {
+  color: #6b7280;
 }
 
 .fld-lbl {

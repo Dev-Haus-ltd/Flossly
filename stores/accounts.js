@@ -108,6 +108,16 @@ export const useAccountsStore = defineStore('accounts', {
         this.isSaving = false
       }
     },
+    async generateCombinedFromTreatments() {
+      this.isSaving = true
+      try {
+        const res = await accountsService.generateCombinedInvoiceFromTreatments(this.patientId)
+        if (res?.code === 0) await this._refresh()
+        return res
+      } finally {
+        this.isSaving = false
+      }
+    },
 
     async recordPayment(payload) {
       this.isSaving = true
@@ -140,6 +150,33 @@ export const useAccountsStore = defineStore('accounts', {
       } finally {
         this.isSaving = false
       }
+    },
+
+    /**
+     * Record a GoCardless payment initiation
+     * Stores billing request info for later tracking and matching
+     */
+    async recordGoCardlessPayment(payload) {
+      // Store billing request info in session storage for tracking
+      // This allows us to match the payment when it completes via webhook
+      const billingRequestData = {
+        billingRequestId: payload.billingRequestId,
+        customerId: payload.customerId,
+        invoiceId: payload.invoiceId,
+        patientId: payload.patientId || this.patientId,
+        amount: payload.amount,
+        customerEmail: payload.customerEmail,
+        customerName: payload.customerName,
+        initiatedAt: new Date().toISOString(),
+      }
+      
+      // Store in session for cross-page tracking
+      sessionStorage.setItem(
+        `gc_billing_${payload.billingRequestId}`,
+        JSON.stringify(billingRequestData)
+      )
+      
+      return { success: true, billingRequestId: payload.billingRequestId }
     },
 
     reset() {

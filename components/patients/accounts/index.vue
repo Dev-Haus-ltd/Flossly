@@ -20,17 +20,22 @@
         hide-chip
       />
 
-      <CommonStatCard
+      <!-- <CommonStatCard
         :icon="poundIcon"
         icon-type="image"
         label="Unallocated Credit"
         :value="store.fmtUnallocated"
         uid="accounts-unallocated"
         hide-chip
-      />
+      /> -->
 
       <div
         class="finance-card"
+        @click="
+          () => {
+            showFinanceDialog = true;
+          }
+        "
         :class="{ 'finance-card--summary': isSecondarySection }"
       >
         <template v-if="isSecondarySection">
@@ -69,10 +74,14 @@
             <span>Generate Invoice</span>
           </button>
 
-          <button type="button" class="primary-action-btn" @click="showStatementDialog = true">
+          <!-- <button
+            type="button"
+            class="primary-action-btn"
+            @click="showStatementDialog = true"
+          >
             <img :src="downloadIcon" alt="" />
             <span>Statement</span>
-          </button>
+          </button> -->
         </div>
       </div>
 
@@ -89,18 +98,29 @@
             <v-icon start size="16">mdi-plus-circle-outline</v-icon>
             <span>New Payment</span>
           </button>
-<button 
-  type="button" 
-  class="primary-action-btn" 
-  @click="() => { console.log('Button clicked'); showStatementDialog = true; }"
->
-  <img :src="downloadIcon" alt="" />
-  <span>Statement</span>
-</button>
+          <!-- <button
+            type="button"
+            class="primary-action-btn"
+            @click="showStatementDialog = true"
+          >
+            <img :src="downloadIcon" alt="" />
+            <span>Statement</span>
+          </button> -->
         </div>
       </div>
 
-      <div v-else class="finance-panel-header">
+      <div v-else-if="activeSection === 'gocardless'" class="accounts-toolbar">
+        <div class="accounts-toolbar__left">
+          <h2>GoCardless</h2>
+        </div>
+      </div>
+
+      <div
+        v-else-if="
+          activeSection === 'finance' || activeSection === 'practice-plan'
+        "
+        class="finance-panel-header"
+      >
         <h2>{{ activeSection === "finance" ? "Finance" : "Practice Plan" }}</h2>
         <div
           v-if="activeSection === 'practice-plan'"
@@ -144,12 +164,15 @@
           :invoices="store.invoices"
           :loading="store.isLoading"
           :invoice-totals="store.invoiceTotals"
+          @view-invoice="openInvoiceDetails"
+          @take-payment="openInvoicePayment"
           @update-status="updateStatus"
           @delete-invoice="confirmDeleteInvoice"
         />
 
         <!-- Payments tab -->
         <PatientAccountsPayment
+          :invoices="store.invoices"
           v-else-if="activeSection === 'payments'"
           :payments="store.payments"
           @delete-payment="confirmDeletePayment"
@@ -163,12 +186,40 @@
         <PatientAccountsPracticePlan
           v-else-if="activeSection === 'practice-plan'"
         />
+
+        <!-- GoCardless management tab -->
+        <PatientAccountsGoCardlessManagement
+          v-else-if="activeSection === 'gocardless'"
+          :patient-id="patientId"
+          @view-invoice="openInvoiceDetails"
+        />
       </div>
     </section>
 
     <!-- Record payment dialog -->
-    <PatientAccountsRecordPaymentDialog v-model="showPaymentDialog" />
+    <PatientAccountsRecordPaymentDialog
+      v-model="showPaymentDialog"
+      :invoice="invoiceToPay"
+      :patient-name="patientName"
+      @proceed-gocardless="openGoCardlessPayment"
+    />
 
+    <!-- GoCardless payment dialog -->
+    <PatientAccountsGoCardlessPaymentDialog
+      v-model="showGoCardlessPaymentDialog"
+      :invoice="invoiceToPay"
+      :patient-name="patientName"
+      :patient-email="props.patient?.email"
+      :patient-phone="patientPhone"
+    />
+
+    <PatientAccountsInvoiceDetailDialog
+      v-model="showInvoiceDialog"
+      :invoice="selectedInvoice"
+      :patient="patient"
+      @take-payment="openInvoicePayment"
+    />
+    <PatientAccountsFinanceCalculatorDialog v-model="showFinanceDialog" />
     <PatientAccountsStatementDialog v-model="showStatementDialog" />
     <!-- Delete confirmation dialog -->
     <CommonConfirmDialog
@@ -214,8 +265,12 @@ import PatientAccountsInvoice from "@/components/patients/accounts/invoice.vue";
 import PatientAccountsFinance from "@/components/patients/accounts/finance.vue";
 import PatientAccountsPayment from "@/components/patients/accounts/payment.vue";
 import PatientAccountsPracticePlan from "@/components/patients/accounts/practicePlan.vue";
+import PatientAccountsGoCardlessManagement from "@/components/patients/accounts/GoCardlessManagement.vue";
 import PatientAccountsRecordPaymentDialog from "@/components/patients/accounts/RecordPaymentDialog.vue";
+import PatientAccountsGoCardlessPaymentDialog from "@/components/patients/accounts/GoCardlessPaymentDialog.vue";
 import PatientAccountsStatementDialog from "@/components/patients/accounts/AccountStatementDialog.vue";
+import PatientAccountsInvoiceDetailDialog from "@/components/patients/accounts/InvoiceDetailDialog.vue";
+import PatientAccountsFinanceCalculatorDialog from "@/components/patients/accounts/FinanceCalculatorDialog.vue";
 import financeIcon from "@/assets/diary/finance_icon.svg";
 import poundIcon from "@/assets/diary/pound_icon.svg";
 import downloadIcon from "@/assets/diary/statements_icon.svg";
@@ -225,17 +280,31 @@ const props = defineProps({
   patient: { type: Object, default: null },
   patientName: { type: String, default: "" },
 });
-
+console.log("PatientAccounts props:", props.patient);
 const store = useAccountsStore();
 const mainStore = useMainStore();
 
 const patientId = computed(() =>
   props.patient?.id ? Number(props.patient.id) : null,
 );
+const patientPhone = computed(() =>
+  String(
+    props.patient?.preferredPhone ||
+      props.patient?.mobile ||
+      props.patient?.telephone ||
+      props.patient?.phone ||
+      "",
+  ).trim(),
+);
 
 const activeSection = ref("invoices");
 const showPaymentDialog = ref(false);
+const showGoCardlessPaymentDialog = ref(false);
 const showStatementDialog = ref(false);
+const showInvoiceDialog = ref(false);
+const selectedInvoice = ref(null);
+const invoiceToPay = ref(null);
+const showFinanceDialog = ref(false);
 const paymentDeleteDialog = ref({
   open: false,
   id: null,
@@ -263,12 +332,15 @@ const invoiceDeleteDialog = ref({
 const sections = [
   { label: "Invoices", value: "invoices" },
   { label: "Payments", value: "payments" },
+  { label: "GoCardless", value: "gocardless" },
   { label: "Finance", value: "finance" },
   { label: "Practice Plan", value: "practice-plan" },
 ];
 
 const isSecondarySection = computed(() =>
-  ["payments", "finance", "practice-plan"].includes(activeSection.value),
+  ["payments", "gocardless", "finance", "practice-plan"].includes(
+    activeSection.value,
+  ),
 );
 
 const confirmUnallocatePayment = (payment) => {
@@ -325,6 +397,30 @@ const handleConfirmDeletePayment = async () => {
   } finally {
     paymentDeleteDialog.value.loading = false;
   }
+};
+
+const openInvoiceDetails = (invoiceOrId) => {
+  if (!invoiceOrId) return;
+
+  const invoice =
+    typeof invoiceOrId === "object"
+      ? invoiceOrId
+      : store.invoices.find((inv) => Number(inv.id) === Number(invoiceOrId));
+
+  if (!invoice) return;
+
+  selectedInvoice.value = invoice;
+  showInvoiceDialog.value = true;
+};
+
+const openInvoicePayment = (invoice) => {
+  invoiceToPay.value = invoice;
+  showPaymentDialog.value = true;
+};
+
+const openGoCardlessPayment = (invoice) => {
+  invoiceToPay.value = invoice;
+  showGoCardlessPaymentDialog.value = true;
 };
 
 const confirmDeleteInvoice = async (id) => {
@@ -413,7 +509,7 @@ const updateStatus = async (invoice, status) => {
 
 .accounts-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 14px;
 }

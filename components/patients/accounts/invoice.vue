@@ -96,18 +96,15 @@
                 <button
                   type="button"
                   class="inv-number"
-                  @click="toggleExpand(item.id)"
+                  @click="$emit('view-invoice', item)"
                 >
                   {{ item.invoiceNumber }}
+                  <img :src="expandDetailIcon" alt="" width="13" height="13" />
                 </button>
-                <img :src="expandDetailIcon" alt="" width="13" height="13" />
               </div>
             </td>
             <td class="text-left">
-              <span
-                class="status-badge"
-                :class="statusClass(item.status)"
-              >
+              <span class="status-badge" :class="statusClass(item.status)">
                 {{ statusLabel(item.status) }}
               </span>
             </td>
@@ -115,9 +112,10 @@
             <td class="text-left">{{ invoiceSummary(item) }}</td>
             <td class="text-left">
               <div v-if="item.practitionerName" class="practitioner-cell">
-                <div class="avatar">
-                  {{ initials(item.practitionerName) }}
-                </div>
+                <CommonAvatar
+                  :user="{ name: item.practitionerName }"
+                  size="32px"
+                />
                 <span>{{ item.practitionerName }}</span>
               </div>
               <span v-else class="text-grey-darken-1">—</span>
@@ -142,6 +140,10 @@
                   </button>
                 </template>
                 <v-list density="compact" min-width="160">
+                  <v-list-item
+                    title="Take Payment"
+                    @click="$emit('take-payment', item)"
+                  />
                   <v-list-item
                     title="Mark as Written Off"
                     @click="$emit('update-status', item, 'written_off')"
@@ -200,8 +202,10 @@
           <div v-if="filteredInvoices.length" class="table-footer">
             <div class="footer-totals">
               <span class="totals-label">Totals:</span>
-              <span class="totals-value">{{ invoiceTotals.balance }}</span>
-              <span class="totals-value">{{ invoiceTotals.total }}</span>
+              <span class="totals-value"
+                >Balance: {{ invoiceTotals.balance }}</span
+              >
+              <span class="totals-value">Total: {{ invoiceTotals.total }}</span>
             </div>
           </div>
         </template>
@@ -229,10 +233,18 @@ import expandDetailIcon from "@/assets/diary/expand_detail_icon.svg";
 const props = defineProps({
   invoices: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
-  invoiceTotals: { type: Object, default: () => ({ balance: "£0.00", total: "£0.00" }) },
+  invoiceTotals: {
+    type: Object,
+    default: () => ({ balance: "£0.00", total: "£0.00" }),
+  },
 });
 
-const emit = defineEmits(["update-status", "delete-invoice"]);
+const emit = defineEmits([
+  "view-invoice",
+  "take-payment",
+  "update-status",
+  "delete-invoice",
+]);
 
 // State
 const search = ref("");
@@ -263,7 +275,7 @@ const invoiceHeaders = ref([
     resizable: true,
   },
   {
-    title: "Summary",
+    title: "Treatment Plan",
     key: "summary",
     align: "start",
     width: 200,
@@ -363,20 +375,8 @@ const formatDate = (d) => {
   });
 };
 
-const initials = (name) =>
-  String(name || "")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join("");
-
 const invoiceSummary = (invoice) => {
-  if (!invoice.items?.length) return invoice.planName || "—";
-  return invoice.items
-    .map((i) => i.description)
-    .join(", ")
-    .slice(0, 60);
+  return invoice.planName || "—";
 };
 
 const toggleExpand = (id) => {
@@ -455,46 +455,73 @@ const startResize = (event, column) => {
 }
 
 .full-width-table {
-  border-top: 1px solid rgba(0,0,0,0.12);
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: unset;
-  table-layout: fixed;
-  border-collapse: separate;
-  border-spacing: 0;
+
+  :deep(table) {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100% !important;
+    table-layout: fixed;
+  }
+
+  /* Vertical lines between columns - consistent with payment table */
+  :deep(thead tr th) {
+    border-right: 1px solid rgba(0, 0, 0, 0.12);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+    background-color: #f6f6f6 !important;
+    padding: 0px 7px !important;
+    height: 48px !important;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    vertical-align: middle;
+  }
+
+  :deep(thead tr th:last-child) {
+    border-right: none;
+  }
+
+  :deep(tbody tr td) {
+    border-right: 1px solid rgba(0, 0, 0, 0.12);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+    padding: 4px 8px !important;
+    height: 48px !important;
+    vertical-align: middle;
+    font-size: 14px;
+    color: #374151;
+  }
+
+  :deep(tbody tr td:last-child) {
+    border-right: none;
+  }
 
   :deep(.v-table__wrapper) {
-    overflow-x: auto;
-  }
+    margin-top: 0 !important;
 
-  :deep(.v-table .v-table__wrapper > table > thead > tr > th:not(:last-child)) {
-    border-right: 1px solid rgba(0,0,0,0.12);
-  }
+    tbody tr {
+      height: 48px !important;
+    }
 
-  :deep(.v-table .v-table__wrapper > table > tbody > tr > td:not(:last-child)) {
-    border-right: 1px solid rgba(0,0,0,0.12);
-  }
-
-  :deep(.v-data-table .v-table__wrapper tbody tr:hover) {
-    background-color: #f9fafb;
-    transition: background-color 0.2s ease;
-  }
-
-  :deep(.v-table .v-table__wrapper > table > tbody > tr) {
-    height: 48px !important;
-  }
-
-  :deep(.v-table .v-table__wrapper > table > tbody > tr > td) {
-    padding: 4px 8px !important;
+    tbody tr:hover {
+      background-color: #f9fafb;
+      transition: background-color 0.2s ease;
+    }
   }
 }
 
 .table-row {
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
   transition: background 0.15s;
 }
 
 .table-row td {
+  padding: 4px 8px !important;
   font-size: 14px;
   color: #374151;
+  height: 48px !important;
+  vertical-align: middle;
 }
 
 .resize-handle {
@@ -559,22 +586,8 @@ const startResize = (event, column) => {
   gap: 8px;
 }
 
-.avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #f2c6aa, #b97a56);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
 .balance-due {
-  color: #ff6b76 !important;
+  color: #dc2626 !important;
   font-weight: 600;
 }
 

@@ -91,6 +91,21 @@
 
         <template v-slot:item="{ item }">
           <tr class="table-row">
+            <td class="text-center">
+              <button
+                type="button"
+                class="expand-trigger"
+                @click.stop="toggleExpand(item.id)"
+              >
+                <v-icon size="18" color="#6B7280">
+                  {{
+                    expandedPayments.includes(item.id)
+                      ? "mdi-chevron-up"
+                      : "mdi-chevron-down"
+                  }}
+                </v-icon>
+              </button>
+            </td>
             <td class="text-left">
               <div class="payment-number">{{ item.paymentNumber }}</div>
             </td>
@@ -110,8 +125,8 @@
                 {{ methodLabel(item.method) }}
               </v-chip>
             </td>
-            <td class="text-left">{{ item.reference || "—" }}</td>
-            <td class="text-left">
+            <!-- <td class="text-left">{{ item.reference || "—" }}</td> -->
+            <!-- <td class="text-left">
               <div v-if="item.allocations?.length" class="allocation-list">
                 <span
                   v-for="alloc in item.allocations.slice(0, 3)"
@@ -134,11 +149,33 @@
               <span :class="{ 'balance-due': Number(item.unallocated) > 0 }">
                 {{ fmtGbp(item.unallocated) }}
               </span>
-            </td>
+            </td> -->
             <td class="text-left font-weight-medium">
               {{ fmtGbp(item.amount) }}
             </td>
             <td class="text-left">
+              <div class="d-flex align-center justify-center">
+                <v-tooltip text="Delete Payment">
+                  <template #activator="{ props: tooltipProps }">
+                    <button
+                      type="button"
+                      v-bind="tooltipProps"
+                      class="action-icon-btn"
+                      @click="$emit('delete-payment', item.id)"
+                    >
+                      <img
+                        :src="deleteIcon"
+                        alt="Delete"
+                        width="16"
+                        height="16"
+                        class="action-icon"
+                      />
+                    </button>
+                  </template>
+                </v-tooltip>
+              </div>
+            </td>
+            <!-- <td class="text-left">
               <v-menu>
                 <template #activator="{ props: menuProps }">
                   <button
@@ -164,34 +201,127 @@
                   />
                 </v-list>
               </v-menu>
-            </td>
+            </td> -->
           </tr>
 
           <!-- Expanded row for allocations -->
           <tr
-            v-if="
-              expandedPayments.includes(item.id) && item.allocations?.length
-            "
+            v-if="expandedPayments.includes(item.id)"
+            class="expanded-payment-row"
           >
-            <td colspan="9" class="expanded-row-cell">
-              <div class="expanded-card">
-                <div class="expanded-header">
-                  <span class="font-weight-medium">Payment Allocations</span>
+            <td colspan="7" class="expanded-row-cell">
+              <div class="payment-details-card">
+                <div v-if="item.allocations?.length" class="allocation-section">
+                  <!-- <div class="allocation-title">Linked Invoices</div> -->
+
+                  <div
+                    v-for="alloc in item.allocations"
+                    :key="alloc.id"
+                    class="invoice-allocation-card"
+                  >
+                    <template v-if="getInvoiceById(alloc.invoiceId)">
+                      <div class="invoice-allocation-top">
+                        <div>
+                          <div class="invoice-number">
+                            {{ getInvoiceById(alloc.invoiceId).invoiceNumber }}
+                          </div>
+
+                          <div class="invoice-date">
+                            {{
+                              formatDate(
+                                getInvoiceById(alloc.invoiceId).invoiceDate,
+                              )
+                            }}
+                          </div>
+                        </div>
+
+                        <div
+                          class="invoice-status"
+                          :class="
+                            getStatusClass(
+                              getInvoiceById(alloc.invoiceId).status,
+                            )
+                          "
+                        >
+                          {{
+                            getInvoiceById(alloc.invoiceId).status?.replace(
+                              "_",
+                              " ",
+                            )
+                          }}
+                        </div>
+                      </div>
+
+                      <div class="invoice-allocation-body">
+                        <div class="invoice-meta">
+                          <span>Total</span>
+                          <strong>
+                            {{ fmtGbp(getInvoiceById(alloc.invoiceId).total) }}
+                          </strong>
+                        </div>
+
+                        <div class="invoice-meta">
+                          <span>Paid</span>
+                          <strong>
+                            {{
+                              fmtGbp(getInvoiceById(alloc.invoiceId).amountPaid)
+                            }}
+                          </strong>
+                        </div>
+
+                        <div class="invoice-meta">
+                          <span>Balance</span>
+                          <strong class="balance-text">
+                            {{
+                              fmtGbp(getInvoiceById(alloc.invoiceId).balance)
+                            }}
+                          </strong>
+                        </div>
+
+                        <!-- <div class="invoice-meta">
+                          <span>Allocated</span>
+                          <strong class="allocated-text">
+                            {{ fmtGbp(alloc.amount) }}
+                          </strong>
+                        </div> -->
+                      </div>
+
+                      <!-- Invoice Services -->
+                      <div
+                        v-if="getInvoiceById(alloc.invoiceId).items?.length"
+                        class="invoice-items"
+                      >
+                        <div
+                          v-for="service in getInvoiceById(alloc.invoiceId)
+                            .items"
+                          :key="service.id"
+                          class="invoice-item-row"
+                        >
+                          <div>
+                            <div class="service-name">
+                              {{ service.description }}
+                            </div>
+
+                            <div class="service-meta">
+                              Tooth {{ service.fdi }}
+                              <template v-if="service.surface">
+                                • {{ service.surface }}
+                              </template>
+                            </div>
+                          </div>
+
+                          <strong>
+                            {{ fmtGbp(service.total) }}
+                          </strong>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
                 </div>
-                <v-table density="compact" class="expanded-table">
-                  <thead>
-                    <tr>
-                      <th>Invoice Number</th>
-                      <th>Allocated Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="alloc in item.allocations" :key="alloc.id">
-                      <td>{{ alloc.invoiceNumber }}</td>
-                      <td>{{ fmtGbp(alloc.amount) }}</td>
-                    </tr>
-                  </tbody>
-                </v-table>
+
+                <div v-else class="empty-allocation">
+                  No invoice allocations found
+                </div>
               </div>
             </td>
           </tr>
@@ -205,9 +335,10 @@
 import { ref, computed } from "vue";
 import searchIcon from "@/assets/icons/listView/serach-icon.svg";
 import filterIcon from "@/assets/icons/listView/filter-icon.svg";
-
+import deleteIcon from "@/assets/crm/delete.svg";
 const props = defineProps({
   payments: { type: Array, default: () => [] },
+  invoices: { type: Array, default: () => [] },
 });
 
 defineEmits([
@@ -224,6 +355,13 @@ const expandedPayments = ref([]);
 
 // Table headers
 const paymentHeaders = ref([
+  {
+    title: "",
+    key: "expand",
+    align: "center",
+    width: 50,
+    resizable: false,
+  },
   {
     title: "Payment",
     key: "paymentNumber",
@@ -249,30 +387,30 @@ const paymentHeaders = ref([
     title: "Method",
     key: "method",
     align: "start",
-    width: 70,
+    width: 150,
     resizable: true,
   },
-  {
-    title: "Reference",
-    key: "reference",
-    align: "start",
-    width: 70,
-    resizable: true,
-  },
-  {
-    title: "Allocated to",
-    key: "allocations",
-    align: "start",
-    width: 120,
-    resizable: true,
-  },
-  {
-    title: "Unallocated",
-    key: "unallocated",
-    align: "start",
-    width: 100,
-    resizable: true,
-  },
+  // {
+  //   title: "Reference",
+  //   key: "reference",
+  //   align: "start",
+  //   width: 70,
+  //   resizable: true,
+  // },
+  // {
+  //   title: "Allocated to",
+  //   key: "allocations",
+  //   align: "start",
+  //   width: 120,
+  //   resizable: true,
+  // },
+  // {
+  //   title: "Unallocated",
+  //   key: "unallocated",
+  //   align: "start",
+  //   width: 100,
+  //   resizable: true,
+  // },
   {
     title: "Total",
     key: "amount",
@@ -308,8 +446,20 @@ const methodOptions = [
 ];
 
 const methodLabel = (m) => METHOD_LABELS[m] || m;
+const getInvoiceById = (invoiceId) => {
+  return props.invoices.find((inv) => inv.id === invoiceId);
+};
 
-// Filtered payments
+const getStatusClass = (status) => {
+  switch (status) {
+    case "paid":
+      return "status-paid";
+    case "part_paid":
+      return "status-part";
+    default:
+      return "status-unpaid";
+  }
+}; // Filtered payments
 const filteredPayments = computed(() => {
   let filtered = [...props.payments];
 
@@ -435,7 +585,223 @@ const startResize = (event, column) => {
     width: 100% !important;
     table-layout: fixed;
   }
+  .expand-trigger {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
 
+    &:hover {
+      background: #f3f4f6;
+    }
+  }
+
+  .expanded-payment-row {
+    background: #fafafa;
+  }
+
+  .payment-details-card {
+    padding: 20px 24px;
+    background: #fafafa;
+  }
+
+  .details-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(180px, 1fr));
+    gap: 20px;
+  }
+
+  .detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+    }
+
+    span {
+      font-size: 14px;
+      color: #111827;
+      font-weight: 500;
+    }
+  }
+
+  .payment-status {
+    width: fit-content;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+  }
+
+  .payment-status--allocated {
+    background: #e8f7ea;
+    color: #16a34a !important;
+  }
+
+  .payment-status--unallocated {
+    background: #fef3c7;
+    color: #d97706 !important;
+  }
+
+  .allocation-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 12px;
+  }
+
+  .allocation-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 10px;
+
+    span {
+      font-size: 13px;
+      color: #374151;
+    }
+
+    strong {
+      font-size: 13px;
+      color: #111827;
+    }
+  }
+
+  @media (max-width: 1024px) {
+    .details-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .invoice-allocation-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+
+  .invoice-allocation-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+
+  .invoice-number {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+  }
+
+  .invoice-date {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+  }
+
+  .invoice-status {
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+
+  .status-paid {
+    background: #dcfce7;
+    color: #15803d;
+  }
+
+  .status-part {
+    background: #fef3c7;
+    color: #d97706;
+  }
+
+  .status-unpaid {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+
+  .invoice-allocation-body {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .invoice-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    span {
+      font-size: 11px;
+      color: #9ca3af;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    strong {
+      font-size: 14px;
+      color: #111827;
+    }
+  }
+
+  .balance-text {
+    color: #dc2626 !important;
+  }
+
+  .allocated-text {
+    color: #2563eb !important;
+  }
+
+  .invoice-items {
+    border-top: 1px solid #f3f4f6;
+    padding-top: 14px;
+  }
+
+  .invoice-item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+
+    &:not(:last-child) {
+      border-bottom: 1px solid #f3f4f6;
+    }
+  }
+
+  .service-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #111827;
+  }
+
+  .service-meta {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+  }
+
+  @media (max-width: 768px) {
+    .invoice-allocation-body {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
   /* Vertical lines between columns - matches CRM pattern */
   :deep(thead tr th) {
     border-right: 1px solid rgba(0, 0, 0, 0.12);
@@ -491,7 +857,12 @@ const startResize = (event, column) => {
   height: 48px !important;
   vertical-align: middle;
 }
-
+.empty-allocation {
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #6b7280;
+}
 .resize-handle {
   display: inline-block;
   width: 5px;

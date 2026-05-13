@@ -2,6 +2,7 @@ import { Op } from 'sequelize'
 import { readBody, getQuery } from 'h3'
 import {
   DiaryPatient,
+  DiaryTreatmentPlan,
   DiaryTreatmentPlanItem,
   PatientInvoice,
   PatientInvoiceItem,
@@ -297,7 +298,7 @@ export const deleteInvoice = async (event) => {
 export const generateInvoiceFromTreatments = async (event) => {
   const { orgId, userId } = event.context.user
   const body = await readBody(event)
-  const { patientId } = typeof body === 'string' ? parseJsonBody(body) : body
+  const { patientId, combine } = typeof body === 'string' ? parseJsonBody(body) : body
   if (!patientId) return error(400, 'patientId required')
   await assertPatient(orgId, patientId)
 
@@ -331,21 +332,43 @@ export const generateInvoiceFromTreatments = async (event) => {
 
   if (!items.length) return error(400, 'No uninvoiced completed treatments found')
 
-  // Group by appointmentGroupId (or planId if no group) to create one invoice per appointment
-  const groups = new Map()
-  items.forEach((item) => {
-    const key = item.appointmentGroupId || item.planId || 'default'
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(item)
-  })
-
   const today = new Date().toISOString().slice(0, 10)
   const created = []
 
-  for (const [, groupItems] of groups) {
+  const invoiceGroups = combine ? new Map([['combined', items]]) : new Map()
+  if (!combine) {
+    items.forEach((item) => {
+      const key = item.appointmentGroupId || item.planId || 'default'
+      if (!invoiceGroups.has(key)) invoiceGroups.set(key, [])
+      invoiceGroups.get(key).push(item)
+    })
+  }
+
+  for (const [, groupItems] of invoiceGroups) {
     const invoiceNumber = await nextSequence(PatientInvoice, orgId, 'invoiceNumber', 'INV-')
     const subtotal = groupItems.reduce((sum, i) => sum + toNum(i.cost), 0)
     const firstItem = groupItems[0]
+
+    let planName = ''
+    let appointmentGroupId = null
+    let appointmentId = null
+
+    if (!combine) {
+      planName = firstItem.planName || ''
+      if (firstItem.planId) {
+        const plan = await DiaryTreatmentPlan.findOne({
+          where: {
+            organisationId: Number(orgId),
+            patientId: Number(patientId),
+            planKey: firstItem.planId,
+          },
+          attributes: ['name'],
+        })
+        if (plan) planName = plan.name
+      }
+      appointmentGroupId = firstItem.appointmentGroupId || null
+      appointmentId = firstItem.appointmentId || null
+    }
 
     const invoice = await PatientInvoice.create({
       organisationId: Number(orgId),
@@ -358,13 +381,13 @@ export const generateInvoiceFromTreatments = async (event) => {
       total: subtotal,
       amountPaid: 0,
       balance: subtotal,
-      notes: '',
+      notes: combine ? 'Combined treatment plan invoice' : '',
       practitionerId: firstItem.practitionerId || null,
       practitionerName: firstItem.practitionerName || firstItem.clinicianName || '',
-      appointmentId: firstItem.appointmentId || null,
-      appointmentGroupId: firstItem.appointmentGroupId || null,
-      planId: firstItem.planId || null,
-      planName: firstItem.planName || '',
+      appointmentId: appointmentId,
+      appointmentGroupId: appointmentGroupId,
+      planId: combine ? null : firstItem.planId || null,
+      planName: combine ? 'Combined treatment plans' : planName,
       createdByUserId: userId || null,
     })
 

@@ -188,9 +188,7 @@
               class="content-box pa-3" 
               style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px"
             >
-              <div class="message-text">
-                {{ selectedLog.content }}
-              </div>
+              <div class="message-text" v-html="sanitizedContent"></div>
             </div>
           </v-card>
         </div>
@@ -227,6 +225,7 @@
 
 <script setup>
 import { ref, computed, watch } from "vue";
+import { normalizeConsentHtmlForDigitalFlow } from "~/utils/consentHtml";
 
 const props = defineProps({
   modelValue: {
@@ -263,6 +262,12 @@ const isConsentForm = computed(() => {
 const dialogModel = computed({
   get: () => props.modelValue,
   set: (val) => emit("update:modelValue", val),
+});
+
+// Sanitized content for HTML rendering
+const sanitizedContent = computed(() => {
+  if (!props.selectedLog?.content) return "";
+  return normalizeConsentHtmlForDigitalFlow(props.selectedLog.content);
 });
 
 // Helper functions

@@ -1147,7 +1147,7 @@ watch(showDetailsDialog, (newValue) => {
   display: flex;
   align-items: center;
   justify-content: start;
-  padding: 5px 12px;
+  padding: 3px 12px;
   color: #ffffff;
   font-size: 12px;
   font-weight: 500;

@@ -25,6 +25,10 @@ export default {
     return Post('/diary/generateInvoiceFromTreatments', { patientId })
   },
 
+  generateCombinedInvoiceFromTreatments(patientId) {
+    return Post('/diary/generateInvoiceFromTreatments', { patientId, combine: true })
+  },
+
   listPayments(patientId) {
     return Get(`/diary/paymentsList?patientId=${encodeURIComponent(patientId)}`)
   },

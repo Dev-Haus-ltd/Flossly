@@ -87,7 +87,7 @@
                 <v-col cols="6">
                   <label class="fld-lbl"
                     >Consent Form Template
-                    <span class="req-star">*</span></label
+                    </label
                   >
                   <v-select
                     v-model="form.email.templateId"
@@ -99,7 +99,7 @@
                     placeholder="Select a template to send..."
                     class="mt-1"
                     :loading="loadingTemplates"
-                    :rules="[requiredRule]"
+                    
                   />
                 </v-col>
 
