@@ -92,6 +92,7 @@ import { CrmLeadAssignee } from "./crm/leadAssignees";
 import { CrmAutomationTemplate } from "./crm/automationTemplates";
 import { CrmAutomationGroup } from "./crm/automationGroups";
 import { CrmAutomationGroupTemplate } from "./crm/automationGroupTemplates";
+import { FormConfig } from "./crm/formConfig";
 import { CrmAutomationDictionaryGroup } from "./crm/crmAutomationDictionaryGroups";
 import { CrmAutomationDictionaryTemplate } from "./crm/crmAutomationDictionaryTemplates";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
@@ -573,6 +574,7 @@ export {
   CrmAutomationTemplate,
   CrmAutomationGroup,
   CrmAutomationGroupTemplate,
+  FormConfig,
   CrmAutomationDictionaryGroup,
   CrmAutomationDictionaryTemplate,
   CrmWhatsAppMessageLog,
@@ -631,3 +633,9 @@ ChatbotMessageAttachment.belongsTo(ChatbotConversation, { foreignKey: "conversat
 ChatbotMessageAttachment.belongsTo(User, { foreignKey: "uploadedBy", as: "uploader", onDelete: "SET NULL" });
 
 // Bug reports and feature requests removed - using conversation metadata instead
+
+// --------------------------
+// FormConfig -> Organisation
+// --------------------------
+Organisation.hasMany(FormConfig, { foreignKey: 'organisationId', as: 'formConfigs', onDelete: 'CASCADE', hooks: true });
+FormConfig.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });

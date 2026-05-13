@@ -1,4 +1,5 @@
 import crmService from "../services/crmService";
+import webFormService from "../services/webFormService";
 
 export const useCrmStore = defineStore("crmStore", {
   state: () => ({
@@ -380,6 +381,15 @@ export const useCrmStore = defineStore("crmStore", {
     deleteWhatsAppMessage(payload) { return this._wrap(() => crmService.deleteWhatsAppMessage(payload)); },
     reactWhatsAppMessage(payload) { return this._wrap(() => crmService.reactWhatsAppMessage(payload)); },
     getLeadPriceAttachmentRecent(payload) { return this._wrap(() => crmService.getLeadPriceAttachmentRecent(payload)); },
+
+    // Web Forms
+    listForms(params = {}) { return this._wrap(() => webFormService.listForms(params)); },
+    createForm(payload) { return this._wrap(() => webFormService.createForm(payload)); },
+    updateForm(payload) { return this._wrap(() => webFormService.updateForm(payload)); },
+    archiveForms(payload) { return this._wrap(() => webFormService.archiveForms(payload)); },
+    restoreForms(payload) { return this._wrap(() => webFormService.restoreForms(payload)); },
+    deleteForm(payload) { return this._wrap(() => webFormService.deleteForm(payload)); },
+    getAvailableFields() { return this._wrap(() => webFormService.getAvailableFields()); },
     getAutoReplySettings() { return this._wrap(() => crmService.getAutoReplySettings()); },
     updateAutoReplySettings(payload) { return this._wrap(() => crmService.updateAutoReplySettings(payload)); },
   },

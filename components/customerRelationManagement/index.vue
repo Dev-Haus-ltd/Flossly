@@ -4,8 +4,58 @@
 
   >
     <div class="cust-border d-flex align-center">
-      <p class="mr-1">CRM</p>
+      <p
+        class="mr-1"
+        :style="showForms ? 'color: #0061FB; cursor: pointer;' : ''"
+        @click="showForms = false"
+      >CRM</p>
+      <template v-if="showForms">
+        <p
+          class="mr-1"
+          :style="builderBridge.active ? 'font-size:12px; color: #0061FB; cursor: pointer;' : 'font-size:12px; color:#c3c3c3;'"
+          @click="builderBridge.confirmClose?.()"
+        >/ Lead Capture Forms</p>
+        <template v-if="builderBridge.active">
+          <p class="mr-1" style="font-size:12px; color:#c3c3c3;">/</p>
+          <v-text-field
+            :model-value="builderBridge.formName"
+            @update:model-value="builderBridge.formName = $event"
+            variant="plain"
+            density="compact"
+            hide-details
+            class="crm-breadcrumb-input"
+            placeholder="Form name..."
+          />
+        </template>
+      </template>
+      <v-spacer v-if="builderBridge.active && showForms" />
+      <template v-if="builderBridge.active && showForms">
+        <v-btn variant="text" :loading="builderBridge.saving" @click="builderBridge.saveOnly?.()">
+          <v-icon start>mdi-content-save-outline</v-icon>
+          Save
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          rounded="lg"
+          class="mr-2"
+          :loading="builderBridge.saving"
+          :disabled="!builderBridge.canPublish"
+          @click="builderBridge.saveAndShare?.()"
+        >
+          <v-icon start>mdi-share-variant</v-icon>
+          Save & Share
+        </v-btn>
+      </template>
     </div>
+
+    <!-- Forms view -->
+    <div v-if="showForms">
+      <CustomerRelationManagementFormsFormList />
+    </div>
+
+    <!-- Default CRM view -->
+    <div v-else>
     <div class="mt-5 px-5">
       <v-card v-if="isLite && usage?.leads" rounded="lg" elevation="0" border class="mb-4 usage-card">
         <v-card-text class="pa-4">
@@ -156,6 +206,19 @@
               <v-icon size="18">mdi-refresh</v-icon>
             </template>
             Refresh Meta Leads
+          </v-btn>
+
+          <v-btn
+            color="secondary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn"
+            @click="showForms = true"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-form-select</v-icon>
+            </template>
+            Lead Forms
           </v-btn>
 
           <v-btn
@@ -507,7 +570,34 @@
         </v-card>
       </v-dialog>
 
+      <!-- <!-- WhatsApp connect dialog (temporarily hidden until complete) -->
+      <v-dialog v-model="whatsAppDialog" max-width="640">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
+            <span>WhatsApp Connection</span>
+            <v-chip v-if="isWhatsAppConnected" color="success" size="small" label>Connected</v-chip>
+          </v-card-title>
+          <v-card-text class="pa-0">
+            <v-alert
+              v-if="whatsAppStatus.phoneNumberId"
+              type="info"
+              variant="tonal"
+              class="mb-3"
+            >
+              Connected phone: {{ whatsAppStatus.displayPhoneNumber || whatsAppStatus.phoneNumberId }}
+              <span v-if="whatsAppStatus.verifiedName"> ({{ whatsAppStatus.verifiedName }})</span>
+            </v-alert>
+            <p class="text-caption mb-0">Use the button above to connect via Meta embedded signup.</p>
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-spacer />
+            <v-btn variant="text" @click="whatsAppDialog = false">Close</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
     </div>
+    </div><!-- end v-else CRM default view -->
   </v-sheet>
 </template>
 
@@ -533,6 +623,17 @@ const route = useRoute();
 const router = useRouter();
 const diaryStore = useDiaryStore();
 const mainStore = useMainStore();
+const showForms = ref(false);
+const builderBridge = reactive({
+  active: false,
+  formName: '',
+  canPublish: false,
+  saving: false,
+  saveOnly: null,
+  saveAndShare: null,
+  confirmClose: null,
+})
+provide('crm-builder-bridge', builderBridge)
 const addLeadDrawer = ref(false);
 const bulkLeadUploadDialog = ref(false);
 const metaMenu = ref(false);
@@ -1860,6 +1961,22 @@ watch(isConnected, (val) => {
 :deep(.v-breadcrumbs) {
   font-weight: 400;
   font-size: 14px;
+}
+
+.crm-breadcrumb-input {
+  max-width: 220px;
+
+  :deep(.v-field__input) {
+    font-size: 12px;
+    font-weight: 400;
+    color: #c3c3c3;
+    padding: 0;
+    min-height: unset;
+  }
+
+  :deep(.v-field) {
+    padding: 0;
+  }
 }
 
 /* Stats Container - Fill available space */
