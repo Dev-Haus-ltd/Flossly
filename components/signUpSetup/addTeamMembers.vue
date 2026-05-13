@@ -76,14 +76,24 @@
         </template>
       </v-text-field>
     </div>
-    <v-btn @click="updateModel" variant="text" height="48" color="primary" class="add-more-btn"
-      >+ Add More</v-btn
-    >
+    <v-btn
+      v-if="model.users.length < LITE_INVITE_LIMIT"
+      @click="updateModel"
+      variant="text"
+      height="48"
+      color="primary"
+      class="add-more-btn"
+    >+ Add More</v-btn>
+    <v-alert v-else type="info" variant="tonal" density="compact" class="mt-2" rounded="lg">
+      Flossy Lite includes up to {{ LITE_INVITE_LIMIT + 1 }} team members (including you). You can add more after upgrading to CRM.
+    </v-alert>
   </v-form>
 </template>
 
 <script setup>
 import { ref, defineExpose, watch } from "vue";
+
+const LITE_INVITE_LIMIT = 2 // Lite = 3 members total; org creator = 1, so 2 invites max
 
 const valid = ref(false);
 const form = ref(null);

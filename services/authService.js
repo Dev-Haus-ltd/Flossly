@@ -44,6 +44,17 @@ export default {
         });
     });
   },
+  verifyMagicLink(token) {
+    return new Promise((resolve, reject) => {
+      Post("/auth/verifyMagicLink", { token })
+        .then((res) => {
+          resolve(res);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  },
   login(data) {
     return new Promise((resolve, reject) => {
       Post("/auth/login", data)

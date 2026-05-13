@@ -11,8 +11,9 @@ import { seedCrmAutomationDictionary as runSeedCrmAutomationDictionary } from '.
 import { seedConsentFormTemplates as runSeedConsentFormTemplates } from '../utils/seedConsentFormTemplates';
 import { Op, fn, col } from 'sequelize';
 import sequelize from '../utils/db';
-import { sendInvitationEmail } from '../utils/emailNotifications';
+import { sendInvitationEmail, sendMagicLinkEmail } from '../utils/emailNotifications';
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
 import stripe from '../utils/stripe';
 import { getS3Object } from '../utils/s3';
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification';
@@ -825,45 +826,39 @@ export const getOrgsTrialsExpiringInXDays = async (event) => {
     const endDate = new Date(targetDate);
     endDate.setHours(23, 59, 59, 999);
 
-    // Get all trial licenses from UserPreferences
-    const trialPreferences = await UserPreference.findAll({
+    const trialOrganisations = await Organisation.findAll({
       where: {
-        licenseType: 'Trial',
+        licenseType: {
+          [Op.in]: ['Trial', 'CRM', 'Pro']
+        },
         licenseRenewalDate: {
           [Op.lte]: endDate,
           [Op.gte]: new Date()
         }
-      },
-      include: [
-        {
-          model: User,
-          as: 'user',
-          attributes: ['id', 'fullName', 'email']
-        }
-      ]
+      }
     });
 
-    // Fetch organisations separately
-    const orgIds = [...new Set(trialPreferences.map(p => p.organisationId).filter(Boolean))];
-    const organisations = await Organisation.findAll({
-      where: { id: { [Op.in]: orgIds } },
-      attributes: ['id', 'name']
+    const managerIds = [...new Set(trialOrganisations.map((org) => org.managerId).filter(Boolean))];
+    const managers = await User.findAll({
+      where: { id: { [Op.in]: managerIds } },
+      attributes: ['id', 'fullName', 'email']
     });
-    const orgMap = Object.fromEntries(organisations.map(o => [o.id, o.name]));
+    const managerMap = Object.fromEntries(managers.map((user) => [user.id, user]));
 
-    const expiringTrials = trialPreferences.map(pref => {
-      const daysRemaining = Math.ceil((new Date(pref.licenseRenewalDate) - new Date()) / (1000 * 60 * 60 * 24));
+    const expiringTrials = trialOrganisations.map((org) => {
+      const daysRemaining = Math.ceil((new Date(org.licenseRenewalDate) - new Date()) / (1000 * 60 * 60 * 24));
+      const manager = managerMap[org.managerId] || null;
       
       return {
-        organisationId: pref.organisationId,
-        organisationName: orgMap[pref.organisationId] || 'Unknown',
-        userId: pref.userId,
-        userName: pref.user?.fullName,
-        userEmail: pref.user?.email,
-        licenseType: pref.licenseType,
-        licenseBillingCycle: pref.licenseBillingCycle,
-        licenseRenewalDate: pref.licenseRenewalDate,
-        daysRemaining: daysRemaining
+        organisationId: org.id,
+        organisationName: org.name || 'Unknown',
+        userId: org.managerId || null,
+        userName: manager?.fullName || null,
+        userEmail: manager?.email || null,
+        licenseType: org.licenseType,
+        licenseBillingCycle: org.licenseBillingCycle,
+        licenseRenewalDate: org.licenseRenewalDate,
+        daysRemaining
       };
     });
 
@@ -1052,40 +1047,37 @@ export const getOrgsByPlanType = async (event) => {
   const { planType, limit = 50, offset = 0 } = query;
 
   try {
-    // Get all user preferences with license info
-    const preferences = await UserPreference.findAll({
-      include: [
-        {
-          model: User,
-          as: 'user',
-          attributes: ['id', 'fullName', 'email']
-        }
-      ]
+    const where = {};
+    if (planType) where.licenseType = planType;
+
+    const organisations = await Organisation.findAll({
+      where,
+      attributes: ['id', 'name', 'managerId', 'licenseType', 'licenseBillingCycle', 'licenseRenewalDate']
     });
 
-    // Fetch organisations separately
-    const orgIds = [...new Set(preferences.map(p => p.organisationId).filter(Boolean))];
-    const organisations = await Organisation.findAll({
-      where: { id: { [Op.in]: orgIds } },
-      attributes: ['id', 'name']
+    const managerIds = [...new Set(organisations.map((org) => org.managerId).filter(Boolean))];
+    const managers = await User.findAll({
+      where: { id: { [Op.in]: managerIds } },
+      attributes: ['id', 'fullName', 'email']
     });
-    const orgMap = Object.fromEntries(organisations.map(o => [o.id, o.name]));
+    const managerMap = Object.fromEntries(managers.map((user) => [user.id, user]));
 
     const orgsByPlan = {};
     const filteredOrgs = [];
 
-    for (const pref of preferences) {
-      const planName = pref.licenseType || 'Unknown'; // Trial, Drift, Glide, Soar, System
+    for (const org of organisations) {
+      const planName = org.licenseType || 'Unknown';
+      const manager = managerMap[org.managerId] || null;
       
       const orgInfo = {
-        organisationId: pref.organisationId,
-        organisationName: orgMap[pref.organisationId] || 'Unknown',
-        userId: pref.userId,
-        userName: pref.user?.fullName,
-        userEmail: pref.user?.email,
-        licenseType: pref.licenseType,
-        licenseBillingCycle: pref.licenseBillingCycle,
-        licenseRenewalDate: pref.licenseRenewalDate
+        organisationId: org.id,
+        organisationName: org.name || 'Unknown',
+        userId: org.managerId || null,
+        userName: manager?.fullName || null,
+        userEmail: manager?.email || null,
+        licenseType: org.licenseType,
+        licenseBillingCycle: org.licenseBillingCycle,
+        licenseRenewalDate: org.licenseRenewalDate
       };
 
       // Group by plan
@@ -3041,49 +3033,45 @@ export const extendOrganisationTrial = async (event) => {
   }
 
   try {
-    // Get all users in the organisation with Trial license
-    const userPreferences = await UserPreference.findAll({
-      where: {
-        organisationId,
-        licenseType: 'Trial'
-      },
-      include: [
-        {
-          model: User,
-          as: 'user',
-          attributes: ['id', 'email', 'fullName']
-        }
-      ]
+    const org = await Organisation.findByPk(organisationId, {
+      attributes: ['id', 'name', 'managerId', 'licenseType', 'licenseRenewalDate']
     });
 
-    if (userPreferences.length === 0) {
-      return error(404, "No users with Trial license found in this organisation");
+    if (!org) {
+      return error(404, "Organisation not found");
     }
 
-    // Extend renewal date for all trial users
-    const updates = [];
-    for (const pref of userPreferences) {
-      const currentRenewalDate = new Date(pref.licenseRenewalDate);
-      const newRenewalDate = new Date(currentRenewalDate.getTime() + (extensionDays * 24 * 60 * 60 * 1000));
-      
-      pref.licenseRenewalDate = newRenewalDate;
-      await pref.save();
-      
-      updates.push({
-        userId: pref.userId,
-        email: pref.user?.email,
-        fullName: pref.user?.fullName,
-        previousRenewalDate: currentRenewalDate,
-        newRenewalDate: newRenewalDate
-      });
+    if (!['Trial', 'CRM', 'Pro'].includes(org.licenseType)) {
+      return error(404, "No active trial-style licence found in this organisation");
     }
+
+    const manager = org.managerId
+      ? await User.findByPk(org.managerId, { attributes: ['id', 'email', 'fullName'] })
+      : null;
+
+    const currentRenewalDate = new Date(org.licenseRenewalDate);
+    const newRenewalDate = new Date(currentRenewalDate.getTime() + (extensionDays * 24 * 60 * 60 * 1000));
+    org.licenseRenewalDate = newRenewalDate;
+    await org.save();
 
     return success({
-      message: `Extended trial period by ${extensionDays} days for ${updates.length} user(s)`,
+      message: `Extended trial period by ${extensionDays} days for organisation ${org.name || organisationId}`,
       organisationId,
       extensionDays,
-      usersUpdated: updates.length,
-      updates
+      organisation: {
+        id: org.id,
+        name: org.name,
+        licenseType: org.licenseType,
+        previousRenewalDate: currentRenewalDate,
+        newRenewalDate
+      },
+      manager: manager
+        ? {
+            userId: manager.id,
+            email: manager.email,
+            fullName: manager.fullName
+          }
+        : null
     });
   } catch (err) {
     console.error('Extend organisation trial error:', err);
@@ -3281,14 +3269,14 @@ export const updateUserLicense = async (event) => {
   }
 
   const body = await readBody(event);
-  const { userId, organisationId, licenseType, renewalDate } = body;
+  const { organisationId, licenseType, renewalDate } = body;
 
-  if (!userId || !organisationId || !licenseType || !renewalDate) {
-    return error(400, "userId, organisationId, licenseType, and renewalDate are required");
+  if (!organisationId || !licenseType || !renewalDate) {
+    return error(400, "organisationId, licenseType, and renewalDate are required");
   }
 
   // Validate license type
-  const validLicenseTypes = ['System', 'Trial', 'Drift', 'Glide', 'Soar'];
+  const validLicenseTypes = ['Lite', 'CRM', 'Pro', 'System', 'Trial', 'Drift', 'Glide', 'Soar'];
   if (!validLicenseTypes.includes(licenseType)) {
     return error(400, `Invalid licenseType. Must be one of: ${validLicenseTypes.join(', ')}`);
   }
@@ -3300,52 +3288,41 @@ export const updateUserLicense = async (event) => {
   }
 
   try {
-    // Find the user preference record
-    const userPref = await UserPreference.findOne({
-      where: {
-        userId,
-        organisationId
-      },
-      include: [
-        {
-          model: User,
-          as: 'user',
-          attributes: ['id', 'email', 'fullName']
-        },
-        {
-          model: Organisation,
-          as: 'organisation',
-          attributes: ['id', 'name']
-        }
-      ]
+    const organisation = await Organisation.findByPk(organisationId, {
+      attributes: ['id', 'name', 'managerId', 'licenseType', 'licenseBillingCycle', 'licenseRenewalDate']
     });
 
-    if (!userPref) {
-      return error(404, "User preference not found for the specified user and organisation");
+    if (!organisation) {
+      return error(404, "Organisation not found");
     }
 
-    const previousLicenseType = userPref.licenseType;
-    const previousRenewalDate = userPref.licenseRenewalDate;
+    const manager = organisation.managerId
+      ? await User.findByPk(organisation.managerId, { attributes: ['id', 'email', 'fullName'] })
+      : null;
 
-    // Update license type and renewal date
-    userPref.licenseType = licenseType;
-    userPref.licenseRenewalDate = renewalDateObj;
-    await userPref.save();
+    const previousLicenseType = organisation.licenseType;
+    const previousRenewalDate = organisation.licenseRenewalDate;
+
+    organisation.licenseType = licenseType;
+    organisation.licenseRenewalDate = renewalDateObj;
+    await organisation.save();
 
     return success({
-      message: `License updated successfully for ${userPref.user?.fullName || 'user'}`,
+      message: `License updated successfully for ${organisation.name || 'organisation'}`,
       update: {
-        userId: userPref.userId,
-        organisationId: userPref.organisationId,
-        user: userPref.user,
-        organisation: userPref.organisation,
+        organisationId: organisation.id,
+        organisation: {
+          id: organisation.id,
+          name: organisation.name
+        },
+        manager,
         previous: {
           licenseType: previousLicenseType,
           renewalDate: previousRenewalDate
         },
         current: {
-          licenseType: userPref.licenseType,
-          renewalDate: userPref.licenseRenewalDate
+          licenseType: organisation.licenseType,
+          renewalDate: organisation.licenseRenewalDate
         }
       }
     });
@@ -7433,5 +7410,72 @@ export const rejectLeave = async (event) => {
   } catch (err) {
     console.error('Reject leave error:', err);
     return error(500, err.message || "Failed to reject leave");
+  }
+};
+
+export const createLiteAccount = async (event) => {
+  const admin = event.context.admin;
+  if (!admin) return error(403, "Admin access required");
+
+  const body = await readBody(event);
+  const { email, fullName, orgName } = body;
+
+  if (!email || !fullName || !orgName) {
+    return error(400, "email, fullName, and orgName are required");
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const trimmedName = fullName.trim();
+  const trimmedOrgName = orgName.trim();
+
+  const existing = await User.findOne({ where: { email: { [Op.iLike]: normalizedEmail } } });
+  if (existing) return error(409, "A user with this email already exists");
+
+  const existingOrg = await Organisation.findOne({ where: { name: trimmedOrgName } });
+  if (existingOrg) return error(409, "An organisation with this name already exists");
+
+  const transaction = await sequelize.transaction();
+  try {
+    const org = await Organisation.create({ name: trimmedOrgName, hasUsedTrial: false }, { transaction });
+
+    const user = await User.create(
+      { fullName: trimmedName, email: normalizedEmail, password: uuidv4(), profileCompletion: 0, isEmailVerified: true },
+      { transaction }
+    );
+
+    org.managerId = user.id;
+    await org.save({ transaction });
+
+    await UserPreference.create(
+      { userId: user.id, organisationId: org.id, licenseType: 'Lite', licenseRenewalDate: new Date('2099-01-01') },
+      { transaction }
+    );
+
+    await UserOrganisation.create(
+      { userId: user.id, organisationId: org.id, status: 'Active' },
+      { transaction }
+    );
+
+    await transaction.commit();
+
+    const config = useRuntimeConfig();
+    const token = jwt.sign(
+      { userId: user.id, orgId: org.id, purpose: 'magic_login' },
+      config.JWT_SECRET,
+      { expiresIn: '30m' }
+    );
+    const link = `${config.public.BASE_URL}/magic/${token}`;
+
+    try {
+      await sendMagicLinkEmail({ email: normalizedEmail, fullName: trimmedName, link, orgId: org.id });
+    } catch (emailErr) {
+      console.error('Magic link email failed after Lite account creation', emailErr?.message);
+    }
+
+    return success({ message: 'Lite account created and magic link sent', userId: user.id, orgId: org.id });
+  } catch (err) {
+    await transaction.rollback();
+    console.error('createLiteAccount error:', err);
+    return error(500, err.message || 'Failed to create Lite account');
   }
 };

@@ -393,89 +393,78 @@
           :data="metaHealthData"
         />
 
-        <v-dialog v-model="whapiDialog" max-width="520">
-          <v-card class="pa-4">
-            <v-card-title
-              class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center"
+      <v-dialog v-model="whapiDialog" max-width="520">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
+            <span>Connect WhatsApp</span>
+            <v-chip v-if="whapiStatusLabel" :color="whapiStatusColor" size="small" label>
+              {{ whapiStatusLabel }}
+            </v-chip>
+          </v-card-title>
+          <v-card-text class="pa-0">
+            <v-alert
+              v-if="whapiActivationMessage"
+              type="info"
+              variant="tonal"
+              class="mb-2"
             >
-              <span>Connect WhatsApp</span>
-              <v-chip
-                v-if="whapiStatusLabel"
-                :color="whapiStatusColor"
-                size="small"
-                label
-              >
-                {{ whapiStatusLabel }}
-              </v-chip>
-            </v-card-title>
-            <v-card-text class="pa-0">
-              <v-alert
-                v-if="whapiActivationMessage"
-                type="info"
-                variant="tonal"
-                class="mb-2"
-              >
-                {{ whapiActivationMessage }}
-                <div
-                  v-if="whapiCooldown"
-                  class="text-caption text-medium-emphasis mt-1"
-                >
-                  Refresh available in {{ whapiCooldown }}s
-                </div>
-              </v-alert>
-              <div v-if="whapiQr" class="d-flex flex-column align-center gap-2">
-                <img
-                  :src="whapiQr"
-                  alt="WhatsApp QR"
-                  style="max-width: 260px"
-                />
-                <div class="text-caption text-medium-emphasis">
-                  Scan this QR code using WhatsApp on the phone you want to
-                  connect or switch to.
-                </div>
+              {{ whapiActivationMessage }}
+              <div v-if="whapiCooldown" class="text-caption text-medium-emphasis mt-1">
+                Refresh available in {{ whapiCooldown }}s
               </div>
-              <v-alert
-                v-else-if="whapiStatus.phoneNumber || whapiStatus.displayName"
-                type="info"
-                variant="tonal"
-                class="mb-2"
-              >
-                Connected phone:
-                {{
-                  whapiStatus.displayName
-                    ? `${whapiStatus.displayName} (${whapiStatus.phoneNumber})`
-                    : whapiStatus.phoneNumber
-                }}
-              </v-alert>
-              <v-alert v-else type="info" variant="tonal" class="mb-2">
-                QR code not ready yet. If the channel is Stopped/Overdue,
-                activate it first and then refresh after about a minute.
-              </v-alert>
-            </v-card-text>
-            <v-card-actions class="pa-0 mt-4">
-              <v-btn variant="text" @click="whapiDialog = false">Close</v-btn>
-              <v-spacer />
-              <v-btn
-                v-if="whapiCanActivate && !whapiQr"
-                :loading="whapiLoading"
-                variant="flat"
-                color="warning"
-                @click="activateWhapiChannel"
-              >
-                Activate (1 day)
-              </v-btn>
-              <v-btn
-                :loading="whapiLoading"
-                :disabled="whapiCooldown > 0"
-                variant="flat"
-                color="primary"
-                @click="refreshWhapiQr"
-              >
-                Refresh QR
-              </v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
+            </v-alert>
+            <v-alert
+              v-else-if="!canManageWhapi"
+              type="warning"
+              variant="tonal"
+              class="mb-2"
+            >
+              Live WhatsApp connection is available on paid CRM and Pro subscriptions only.
+            </v-alert>
+            <div v-if="whapiQr" class="d-flex flex-column align-center gap-2">
+              <img :src="whapiQr" alt="WhatsApp QR" style="max-width: 260px;" />
+              <div class="text-caption text-medium-emphasis">
+                Scan this QR code using WhatsApp on the phone you want to connect or switch to.
+              </div>
+            </div>
+            <v-alert
+              v-else-if="whapiStatus.phoneNumber || whapiStatus.displayName"
+              type="info"
+              variant="tonal"
+              class="mb-2"
+            >
+              Connected phone:
+              {{ whapiStatus.displayName ? `${whapiStatus.displayName} (${whapiStatus.phoneNumber})` : whapiStatus.phoneNumber }}
+            </v-alert>
+            <v-alert v-else type="info" variant="tonal" class="mb-2">
+              QR code not ready yet. If the channel is Stopped/Overdue, activate it first and then refresh after about a minute.
+            </v-alert>
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-btn variant="text" @click="whapiDialog = false">Close</v-btn>
+            <v-spacer />
+            <v-btn
+              v-if="whapiCanActivate && !whapiQr"
+              :loading="whapiLoading"
+              :disabled="!canManageWhapi"
+              variant="flat"
+              color="warning"
+              @click="activateWhapiChannel"
+            >
+              Activate (1 day)
+            </v-btn>
+            <v-btn
+              :loading="whapiLoading"
+              :disabled="whapiCooldown > 0 || !canManageWhapi"
+              variant="flat"
+              color="primary"
+              @click="refreshWhapiQr"
+            >
+              Refresh QR
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
 
         <v-dialog v-model="confirmWhapiDisconnect" max-width="520">
           <v-card class="pa-4">
@@ -834,21 +823,23 @@ const normalizeLicenseType = (value) => {
   return exact || LICENSE_TYPES.TRIAL;
 };
 const currentOrgLicense = computed(() => {
+  const licenseType = String(authStore.loggedUser?.licenseType || user.value?.licenseType || '').trim();
+  if (licenseType) return licenseType;
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences)
     ? user.value.preferences
     : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
-  return normalizeLicenseType(
-    match?.licenseType || resolveUserLicenseType(user.value),
-  );
+  return String(match?.licenseType || 'Lite').trim();
+});
+const canManageWhapi = computed(() => {
+  const type = String(currentOrgLicense.value || '').toLowerCase();
+  const billingCycle = authStore.loggedUser?.licenseBillingCycle || user.value?.licenseBillingCycle || null;
+  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type) && !!billingCycle;
 });
 const canBookAppointments = computed(() => {
-  return [
-    LICENSE_TYPES.TRIAL,
-    LICENSE_TYPES.SOAR,
-    LICENSE_TYPES.SYSTEM,
-  ].includes(currentOrgLicense.value);
+  const type = String(currentOrgLicense.value || '').toLowerCase();
+  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type);
 });
 watch(bookingPractitionerOptions, (opts) => {
   if (!bookingInitialPractitioner.value && opts.length) {
@@ -979,6 +970,13 @@ const loadWhapiStatus = async () => {
 };
 
 const connectWhapi = async () => {
+  if (!canManageWhapi.value) {
+    mainStore?.setSnackbar?.({
+      title: 'Live WhatsApp connection is available on paid CRM and Pro subscriptions only.',
+      type: 'warning',
+    });
+    return;
+  }
   try {
     whapiLoading.value = true;
     whapiActivationPending.value = false;
@@ -1020,6 +1018,7 @@ const connectWhapi = async () => {
 };
 
 const refreshWhapiQr = async () => {
+  if (!canManageWhapi.value) return;
   try {
     whapiLoading.value = true;
     const res = await crmStore.getWhapiQr();
@@ -1044,7 +1043,7 @@ const refreshWhapiQr = async () => {
 };
 
 const activateWhapiChannel = async () => {
-  if (whapiLoading.value || whapiActivationPending.value) return;
+  if (whapiLoading.value || whapiActivationPending.value || !canManageWhapi.value) return;
   try {
     whapiLoading.value = true;
     const res = await crmStore.extendWhapiChannel();
@@ -1624,10 +1623,11 @@ const onBookLeads = async (selection) => {
   const picked = Array.isArray(selection) ? selection : [];
   if (!picked.length) return;
   if (picked.length > 1) {
-    mainStore?.setSnackbar?.({
-      title: "Select only one lead to book an appointment",
-      type: "error",
-    });
+    mainStore?.setSnackbar?.({ title: 'Select only one lead to book an appointment', type: 'error' });
+    return;
+  }
+  if (!canBookAppointments.value) {
+    mainStore?.setSnackbar?.({ title: 'Upgrade to CRM or Pro to book leads into the diary', type: 'warning' });
     return;
   }
   const lead = picked[0];

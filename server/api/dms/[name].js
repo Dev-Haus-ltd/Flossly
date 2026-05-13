@@ -1,7 +1,11 @@
 import { listDmConversations, listDmMessages, sendDmMessage, markDmRead, processDmQueue, uploadDmAttachment, refreshDmProfile, refreshAllDmProfiles, getDmConnectionStatus } from "../../controllers/dms";
+import { requireFeature } from "../../utils/requireFeature";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, "name");
+
+  if (name === 'send' || name === 'processQueue') await requireFeature(event, 'whatsapp')
+
   switch (name) {
     case "conversations":
       return await listDmConversations(event);

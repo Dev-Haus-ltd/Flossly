@@ -26,7 +26,7 @@ export const UserPreference = sequelize.define(
       },
     },
     licenseType: {
-      type: DataTypes.ENUM("System", "Trial", "Drift", "Glide", "Soar"),
+      type: DataTypes.ENUM("System", "Trial", "Drift", "Glide", "Soar", "Lite", "CRM", "Pro"),
       allowNull: false,
     },
     licenseBillingCycle: {
@@ -36,6 +36,16 @@ export const UserPreference = sequelize.define(
     licenseRenewalDate: {
       type: DataTypes.DATE,
       allowNull: false,
+    },
+    setupStepsCompleted: {
+      type: DataTypes.SMALLINT,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    setupComplete: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
     taskTableColumns: {
       type: DataTypes.TEXT,

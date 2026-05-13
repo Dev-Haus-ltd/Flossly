@@ -1,16 +1,22 @@
 import stripe from "@/server/utils/stripe";
-import { UserPreference, UserSubscription } from "../models";
+import { UserPreference, UserSubscription, Organisation } from "../models";
+import { resolveTier } from '../config/entitlements.js';
 import { User } from "../models";
 import { parseJsonBody } from "../utils/body";
 import { sendSystemSubscriptionConfirmedNotification } from "../utils/fcmNotification.js";
+import { TRIAL_DAYS } from "@shared/defaults/commercialPolicy.js";
 
 const config = useRuntimeConfig();
 
 const LICENSE_TYPES = {
+  LITE:  "Lite",
+  CRM:   "CRM",
+  PRO:   "Pro",
+  // Legacy values — kept for webhook backwards compat with old Stripe products
   TRIAL: "Trial",
   DRIFT: "Drift",
   GLIDE: "Glide",
-  SOAR: "Soar",
+  SOAR:  "Soar",
 };
 
 const BILLING_CYCLES = {
@@ -21,7 +27,10 @@ const BILLING_CYCLES = {
 const normalizeLicenseType = (raw) => {
   const value = String(raw || "").trim().toLowerCase();
   if (!value) return null;
-  if (value === "soar") return LICENSE_TYPES.SOAR;
+  if (value === "pro")   return LICENSE_TYPES.PRO;
+  if (value === "crm")   return LICENSE_TYPES.CRM;
+  if (value === "lite")  return LICENSE_TYPES.LITE;
+  if (value === "soar")  return LICENSE_TYPES.SOAR;
   if (value === "glide") return LICENSE_TYPES.GLIDE;
   if (value === "drift") return LICENSE_TYPES.DRIFT;
   if (value === "trial") return LICENSE_TYPES.TRIAL;
@@ -37,11 +46,14 @@ const resolveLicenseTypeFromPrice = (price) => {
   if (direct) return direct;
 
   const name = String(price?.product?.name || "").toLowerCase();
-  if (name.includes("soar")) return LICENSE_TYPES.SOAR;
+  if (name.includes("pro"))   return LICENSE_TYPES.PRO;
+  if (name.includes("crm"))   return LICENSE_TYPES.CRM;
+  if (name.includes("lite"))  return LICENSE_TYPES.LITE;
+  if (name.includes("soar"))  return LICENSE_TYPES.SOAR;
   if (name.includes("glide")) return LICENSE_TYPES.GLIDE;
   if (name.includes("drift")) return LICENSE_TYPES.DRIFT;
   if (name.includes("trial")) return LICENSE_TYPES.TRIAL;
-  return LICENSE_TYPES.TRIAL;
+  return LICENSE_TYPES.LITE;
 };
 
 const resolveBillingCycleFromPrice = (price) => {
@@ -82,7 +94,7 @@ const resolveRenewalDateFromSubscription = (subscription) => {
   return null;
 };
 
-const updateUserPreferenceFromSubscription = async (stripeSubscription) => {
+const updateOrgLicenseFromSubscription = async (stripeSubscription) => {
   if (!stripeSubscription) return;
 
   const subscriptionId = stripeSubscription.id;
@@ -95,28 +107,18 @@ const updateUserPreferenceFromSubscription = async (stripeSubscription) => {
   const subRecord = await UserSubscription.findOne({
     where: { stripeSubscriptionId: subscription.id },
   });
-  if (!subRecord) return;
+  if (!subRecord?.organisationId) return;
 
-  const userPreference = await UserPreference.findOne({
-    where: {
-      userId: subRecord.userId,
-      organisationId: subRecord.organisationId,
-    },
-  });
-  if (!userPreference) return;
+  const org = await Organisation.findByPk(subRecord.organisationId);
+  if (!org) return;
 
   const price = subscription?.items?.data?.[0]?.price || null;
   const { licenseType, licenseBillingCycle } = resolveLicenseFromPrice(price);
   const renewalDate = resolveRenewalDateFromSubscription(subscription);
-  const updates = {
-    licenseType,
-    licenseBillingCycle,
-  };
-  if (renewalDate) {
-    updates.licenseRenewalDate = renewalDate;
-  }
+  const updates = { licenseType, licenseBillingCycle };
+  if (renewalDate) updates.licenseRenewalDate = renewalDate;
 
-  await userPreference.update(updates);
+  await org.update(updates);
 };
 
 export const createSubscription = async (event) => {
@@ -269,11 +271,7 @@ export const confirmPayment = async (event) => {
       throw createError({ message: "Subscription not found in system" });
     subscription.stripeSubscriptionStatus = "active";
     await subscription.save();
-    const user = await UserPreference.findOne({
-      where: { userId: loggedUser.userId,
-        organisationId: loggedUser.orgId,
-       },
-    });
+    const org = await Organisation.findByPk(loggedUser.orgId);
     const stripeSubscription = await stripe.subscriptions.retrieve(
       subscriptionId,
       { expand: ["items.data.price.product"] }
@@ -292,10 +290,7 @@ export const confirmPayment = async (event) => {
         licenseBillingCycle === BILLING_CYCLES.YEARLY ? 365 : 30
       );
 
-    user.licenseType = licenseType;
-    user.licenseBillingCycle = licenseBillingCycle;
-    user.licenseRenewalDate = renewalDate;
-    await user.save();
+    await org.update({ licenseType, licenseBillingCycle, licenseRenewalDate: renewalDate });
     const loggedUserObj = await User.findByPk(loggedUser.userId)
     await paymentSuccessNotification(loggedUserObj)
 
@@ -380,7 +375,7 @@ export const webhook = async (event) => {
           subscriptionId,
           { expand: ["items.data.price.product"] }
         );
-        await updateUserPreferenceFromSubscription(subscription);
+        await updateOrgLicenseFromSubscription(subscription);
         break;
       }
       case "invoice.payment_failed": {
@@ -400,12 +395,12 @@ export const webhook = async (event) => {
           },
           { where: { stripeCustomerId: subscription.customer } }
         );
-        await updateUserPreferenceFromSubscription(subscription);
+        await updateOrgLicenseFromSubscription(subscription);
         break;
       }
       case "customer.subscription.deleted": {
         const subscription = obj;
-        await updateUserPreferenceFromSubscription(subscription);
+        await updateOrgLicenseFromSubscription(subscription);
         await UserSubscription.update(
           {
             stripeSubscriptionStatus: "canceled",
@@ -458,6 +453,31 @@ export const getSubscription = async (event) => {
     );
 
     return success(stripeSub);
+  } catch (err) {
+    return error(500, err.message);
+  }
+};
+
+export const startCrmTrial = async (event) => {
+  try {
+    const loggedUser = event.context.user;
+    if (!loggedUser?.userId || !loggedUser?.orgId) return error(401, 'Unauthenticated');
+
+    const { tier = 'CRM' } = await readBody(event);
+    if (!['CRM', 'Pro'].includes(tier)) return error(400, 'tier must be CRM or Pro');
+
+    const org = await Organisation.findByPk(loggedUser.orgId);
+    if (!org) return error(404, 'Organisation not found');
+    if (org.hasUsedTrial) return error(409, 'This organisation has already used its free trial');
+
+    if (resolveTier(org.licenseType) !== 'Lite') return error(409, 'Free trial is only available on the free Lite plan');
+
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + TRIAL_DAYS);
+
+    await org.update({ licenseType: tier, licenseRenewalDate: trialEndDate, hasUsedTrial: true });
+
+    return success({ trialEndDate: trialEndDate.toISOString(), tier });
   } catch (err) {
     return error(500, err.message);
   }

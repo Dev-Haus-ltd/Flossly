@@ -1191,38 +1191,15 @@
       @confirm="doDeleteArchived"
       @cancel="confirmArchivedDelete = false"
     />
-    <v-dialog v-model="showBookPlanDialog" max-width="560">
-      <v-card class="plan-upgrade-dialog rounded-xl overflow-hidden">
-        <div class="plan-upgrade-dialog__hero">
-          <div>
-            <div class="plan-upgrade-dialog__eyebrow">Plan Access</div>
-            <div class="plan-upgrade-dialog__title">Upgrade to Soar</div>
-            <div class="plan-upgrade-dialog__subtitle">
-              Unlock deeper CRM and diary workflows for your team.
-            </div>
-          </div>
-          <v-chip size="small" color="white" variant="flat" class="plan-upgrade-dialog__chip">
-            Current: {{ currentOrgLicenseLabel }}
-          </v-chip>
-        </div>
-        <v-card-text class="plan-upgrade-dialog__body">
-          <p class="plan-upgrade-dialog__copy">
-            Your current plan covers the essentials. Soar adds the full premium workflow layer for high-volume CRM operations.
-          </p>
-          <div class="plan-upgrade-dialog__feature-list">
-            <div class="plan-upgrade-dialog__feature">
-              <v-icon size="18" color="primary">mdi-calendar-check-outline</v-icon>
-              <span>Advanced diary and patient workflow tooling</span>
-            </div>
-            <div class="plan-upgrade-dialog__feature">
-              <v-icon size="18" color="primary">mdi-robot-outline</v-icon>
-              <span>Deeper automation and premium CRM capabilities</span>
-            </div>
-            <div class="plan-upgrade-dialog__feature">
-              <v-icon size="18" color="primary">mdi-chart-line</v-icon>
-              <span>Broader growth, conversion, and team coordination features</span>
-            </div>
-          </div>
+    <v-dialog v-model="showBookPlanDialog" max-width="500">
+      <v-card class="pa-4">
+        <v-card-title class="text-subtitle-1 pa-0 mb-2">
+          Soar Plan Required
+        </v-card-title>
+        <v-card-text class="pa-0">
+          This action is available on the Soar plan. Your current plan is
+          <strong>{{ currentOrgLicenseLabel }}</strong>.
+          Upgrade to Soar to unlock diary booking, patient auto-creation, lead form sending, and more.
         </v-card-text>
         <v-card-actions class="plan-upgrade-dialog__actions">
           <v-spacer />
@@ -1916,16 +1893,13 @@ const currentOrgLicense = computed(() => {
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
-  return normalizeLicenseType(match?.licenseType || resolveUserLicenseType(user.value));
+  return String(match?.licenseType || 'Trial').trim();
 });
 
-const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || LICENSE_TYPES.TRIAL);
+const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || 'Trial');
 const canBookAppointments = computed(() => {
-  return [
-    LICENSE_TYPES.TRIAL,
-    LICENSE_TYPES.SOAR,
-    LICENSE_TYPES.SYSTEM,
-  ].includes(currentOrgLicense.value);
+  const type = String(currentOrgLicense.value || '').toLowerCase();
+  return ['soar', 'system'].includes(type);
 });
 
 const renderTemplateWithContext = (input, ctx, lead) => {
