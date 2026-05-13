@@ -1,23 +1,20 @@
 <template>
   <div
     class="flossly-card"
-      :class="{ 'flossly-card-thick': isToolBox }"
+    :class="{ 'flossly-card-thick': isToolBox, 'flossly-card-locked': locked }"
     :id="`flossly-card-${uid}`"
     :style="{ backgroundColor: isToolBox ? '#1E2B80' : '#F1F9FF' }"
     @click="handleClick(uid)"
   >
-    
+    <v-icon v-if="locked" size="18" color="warning" class="lock-icon">mdi-lock-outline</v-icon>
     <div class="content">
-      <!-- <img :src="img" alt="Card Image" class="main-img" /> -->
        <div class="pa-5 rounded-xl" :class="[{ 'blur-card': isToolBox }]" :style="{backgroundColor: colors || '',height:'80px',width:'80px'}">
-
          <lord-icon
            :src="img"
            trigger="hover"
            :target="`#flossly-card-${uid}`"
            colors="primary:#ffffff"
-           class="main-img "
-           
+           class="main-img"
          />
        </div>
       <p class="title" :style="{color: isToolBox ? '#ffffff' : '#000000'}">{{ title }}</p>
@@ -35,16 +32,25 @@ const props = defineProps({
   img: { type: String, required: true },
   colors: { type: String, default: "" },
   isToolBox: { type: Boolean, default: false },
-  route: { type: String, required:false }, // route to navigate
+  locked: { type: Boolean, default: false },
+  lockedFeature: { type: String, default: '' },
+  route: { type: String, required: false },
   uid: { type: [String, Number], required: true },
   isHovered: Boolean,
 });
 const handleClick = () => {
+  if (props.locked) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('upgrade-required', {
+        detail: { feature: props.lockedFeature || 'diary', code: 'FEATURE_NOT_AVAILABLE' },
+      }));
+    }
+    return;
+  }
   if (!props.isToolBox && props.route) {
     router.push(props.route);
-  }
-  else{
-    emit('handleClick', props.uid)
+  } else {
+    emit('handleClick', props.uid);
   }
 };
 </script>
@@ -100,11 +106,11 @@ const handleClick = () => {
   position: absolute;
   top: 10px;
   right: 10px;
+  z-index: 1;
 }
 
-.lock-icon img {
-  width: 24px;
-  height: 24px;
+.flossly-card-locked {
+  opacity: 0.75;
 }
 
 .content {

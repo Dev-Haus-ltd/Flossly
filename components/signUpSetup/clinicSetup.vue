@@ -26,7 +26,7 @@
       :rules="[required]"
       single-line
       density="comfortable"
-      class="mt-2"
+      class="input-bordered mt-2 mb-4"
       flat
     />
     <!-- <label class="mb-2 lbl"> Clinic Type</label>

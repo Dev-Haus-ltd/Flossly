@@ -22,6 +22,8 @@
             :colors="item.colors"
             :isToolBox="item.isToolBox"
             :route="item.route"
+            :locked="item.title === 'Flossly Diary' && !canUseDiary"
+            locked-feature="diary"
             :uid="index"
             @handleClick="handleClickProductCard"
           />
@@ -392,6 +394,7 @@ const resolvedTier = computed(() => {
   return LEGACY_PLAN_MAP[normalized] ?? (normalized || 'Lite');
 });
 const canUseTaskPool = computed(() => ['CRM', 'Pro'].includes(resolvedTier.value));
+const canUseDiary = computed(() => resolvedTier.value === 'Pro');
 const activeCrmLeads = computed(() =>
   (crmLeads.value || []).filter((lead) => !lead?.softDeleted)
 );
