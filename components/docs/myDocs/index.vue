@@ -184,6 +184,7 @@
 
 <script setup>
 import { downloadFile } from "~/lib/misc";
+import { resetUsageState } from "~/composables/useUsageSummary";
 
 const route = useRoute();
 const router = useRouter();
@@ -263,6 +264,8 @@ const updateView = () => {
   const parentId = selectedFolder.value?.id || null;
   getFolders(parentId);
   getDocs({ folderId: parentId });
+  resetUsageState();
+  fetchUsage();
 };
 
 const getFolders = (parentId = null) => {
@@ -486,6 +489,8 @@ const confirmDelete = async () => {
         title: `${isDeleteFolder.value ? 'Folder' : 'File'} deleted successfully`,
         type: "success",
       });
+      resetUsageState();
+      await fetchUsage();
       updateView();
       getRecentDocs();
     } else {

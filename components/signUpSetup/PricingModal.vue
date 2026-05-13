@@ -216,7 +216,9 @@ const displayPlans = computed(() => {
       const featureList = featureObj?.features || [];
       const description = featureObj?.description || plan.product?.description || plan.description || "";
       // Lite is the free plan — not purchasable through this modal
-      const displayAmount = key === "lite" ? 0 : plan.unit_amount;
+      // Hardcoded UI fallbacks until Stripe plans are updated (CRM £199, Pro £499)
+      const FALLBACK_PENCE = { crm: 19900, pro: 49900 }
+      const displayAmount = key === "lite" ? 0 : (FALLBACK_PENCE[key] ?? plan.unit_amount);
       return {
         ...plan,
         key,

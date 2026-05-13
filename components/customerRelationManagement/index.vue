@@ -60,6 +60,28 @@
     <CustomerRelationManagementFormsFormList v-if="showForms" />
     <template v-else>
     <div class="mt-5 px-5">
+      <v-card v-if="isLite && usage?.leads" rounded="lg" elevation="0" border class="mb-4 usage-card">
+        <v-card-text class="pa-4">
+          <div class="d-flex align-center justify-space-between flex-wrap ga-3 mb-2">
+            <div>
+              <p class="text-subtitle-2 font-weight-semibold mb-0">Lite lead allowance</p>
+              <p class="text-caption text-medium-emphasis mb-0">
+                {{ leadsUsedLabel }} of {{ leadsLimitLabel }} leads used
+              </p>
+            </div>
+            <v-chip size="small" :color="leadUsageTone" variant="tonal">
+              {{ leadsRemainingLabel }} remaining
+            </v-chip>
+          </div>
+          <v-progress-linear
+            :model-value="leadUsagePct"
+            :color="leadUsageTone"
+            bg-color="#e8eefc"
+            rounded
+            height="8"
+          />
+        </v-card-text>
+      </v-card>
       <v-row class="stat-row" align="stretch">
         <v-col style="flex: 1 1 0;" v-for="(stat, i) in leadStats" :key="i">
           <CommonStatCard
@@ -192,24 +214,25 @@
               Refresh Meta Leads
             </v-btn>
 
-            <v-btn
-              color="secondary"
-              variant="flat"
-              rounded="lg"
-              class="add-task-btn"
-              @click="showForms = true"
-            >
-              <template #prepend>
-                <v-icon size="18">mdi-form-select</v-icon>
-              </template>
-              Lead Forms
-            </v-btn>
+          <v-btn
+            color="secondary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn"
+            @click="showForms = true"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-form-select</v-icon>
+            </template>
+            Lead Forms
+          </v-btn>
 
           <v-btn
             color="secondary"
             variant="flat"
             rounded="lg"
             class="add-task-btn mx-2"
+            data-tour-id="crm-upgrade-upload"
             @click="openBulkLeadUploadDialog"
           >
             <template #prepend>
@@ -218,20 +241,21 @@
             Upload bulk leads
           </v-btn>
 
-            <v-btn
-              color="primary"
-              variant="flat"
-              rounded="lg"
-              class="add-task-btn"
-              @click="handleAddLeadClick"
-            >
-              <template #prepend>
-                <v-icon size="18">mdi-plus-circle-outline</v-icon>
-              </template>
-              Add New Lead
-            </v-btn>
-          </div>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn"
+            @click="handleAddLeadClick"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-plus-circle-outline</v-icon>
+            </template>
+            Add New Lead
+          </v-btn>
+
         </div>
+      </div>
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
@@ -541,61 +565,55 @@
                 class="mb-3"
               />
 
-              <div
-                v-if="businessPagesFiltered.length"
-                class="business-page-list"
-              >
-                <v-list density="compact">
-                  <v-list-item
-                    v-for="page in businessPagesFiltered"
-                    :key="page.id"
-                  >
-                    <template #prepend>
-                      <v-checkbox-btn
-                        :model-value="selectedPageIds.includes(page.id)"
-                        :disabled="
-                          page.connectedElsewhere || page.connectedToOrg
-                        "
-                        @click.stop="toggleBusinessPage(page)"
-                      />
-                    </template>
-                    <v-list-item-title>{{
-                      page.name || page.id
-                    }}</v-list-item-title>
-                    <v-list-item-subtitle>
-                      {{ page.statusLabel }}
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                </v-list>
-              </div>
-              <div v-else class="text-caption text-medium-emphasis">
-                No pages found for this portfolio.
-              </div>
-            </v-card-text>
-            <v-card-actions class="pa-0 mt-4">
-              <v-btn variant="text" @click="businessDialog = false">
-                Close
-              </v-btn>
-              <v-spacer />
-              <v-btn
-                variant="text"
-                :disabled="!businessPagesSelectable.length"
-                @click="selectAllBusinessPages"
-              >
-                Select All
-              </v-btn>
-              <v-btn
-                color="primary"
-                variant="flat"
-                :loading="businessSaving"
-                :disabled="!selectedPageIds.length"
-                @click="connectSelectedBusinessPages"
-              >
-                Connect Selected
-              </v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
+            <div v-if="businessPagesFiltered.length" class="business-page-list">
+              <v-list density="compact">
+                <v-list-item
+                  v-for="page in businessPagesFiltered"
+                  :key="page.id"
+                >
+                  <template #prepend>
+                    <v-checkbox-btn
+                      :model-value="selectedPageIds.includes(page.id)"
+                      :disabled="page.connectedElsewhere || page.connectedToOrg"
+                      @click.stop="toggleBusinessPage(page)"
+                    />
+                  </template>
+                  <v-list-item-title>{{ page.name || page.id }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    {{ page.statusLabel }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+              </v-list>
+            </div>
+            <div v-else class="text-caption text-medium-emphasis">
+              No pages found for this portfolio.
+            </div>
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-btn variant="text" @click="businessDialog = false">
+              Close
+            </v-btn>
+            <v-spacer />
+            <v-btn
+              variant="text"
+              :disabled="!businessPagesSelectable.length"
+              @click="selectAllBusinessPages"
+            >
+              Select All
+            </v-btn>
+            <v-btn
+              color="primary"
+              variant="flat"
+              :loading="businessSaving"
+              :disabled="!selectedPageIds.length"
+              @click="connectSelectedBusinessPages"
+            >
+              Connect Selected
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
     </div>
     </template>
     <!-- end v-else CRM default view -->
@@ -611,6 +629,7 @@ import { useMainStore } from '@/stores/index'
 import { useCrmStore } from '@/stores/crm'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
+import { useUsageSummary } from '@/composables/useUsageSummary'
 import searchicon from "@/assets/icons/listView/serach-icon.svg";
 import crmService from "@/services/crmService";
 const crmStore = useCrmStore();
@@ -618,7 +637,7 @@ const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
 const userList = computed(() => storeUsers.value || []);
 const authStore = useAuthStore();
-const { usage, isLite } = useUsageSummary()
+const { usage, isLite, fetchUsage } = useUsageSummary()
 const route = useRoute();
 const router = useRouter();
 const diaryStore = useDiaryStore();
@@ -1363,6 +1382,7 @@ const onSelect = (selection) => {
 onMounted(() => {
   const metaConnected = route.query.meta === "connected";
   const metaError = route.query.error;
+  fetchUsage();
   initLeads(metaConnected);
   checkConnection();
   loadWhatsAppUsage();
@@ -1774,10 +1794,14 @@ const resolveLeadSource = (source) => {
 
 const handleSuccess = async () => {
   addLeadDrawer.value = false;
+  resetUsageState();
+  await fetchUsage();
   await fetchLeads(activeFilters.value);
 };
 const handleBulkUploadComplete = async () => {
   bulkLeadUploadDialog.value = false;
+  resetUsageState();
+  await fetchUsage();
   await fetchLeads(activeFilters.value);
 };
 
@@ -1902,6 +1926,8 @@ const onItemsPerPageChange = async (val) => {
 };
 
 const handleLeadsRefresh = async () => {
+  resetUsageState();
+  await fetchUsage();
   await fetchLeads(activeFilters.value);
 };
 

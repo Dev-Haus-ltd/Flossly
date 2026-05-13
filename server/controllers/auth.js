@@ -250,10 +250,10 @@ export const getUsageSummary = async (event) => {
       return { current, max, warnAt: Math.floor(max * ent.warnAt) };
     };
 
-    const [leads, storageMB, members] = await Promise.all([
-      toSummary('leads'), toSummary('storageMB'), toSummary('members'),
+    const [leads, storageMB, members, forms] = await Promise.all([
+      toSummary('leads'), toSummary('storageMB'), toSummary('members'), toSummary('forms'),
     ]);
-    return success({ leads, storageMB, members });
+    return success({ leads, storageMB, members, forms });
   } catch (err) {
     return error(500, err.message || 'Failed to fetch usage summary');
   }

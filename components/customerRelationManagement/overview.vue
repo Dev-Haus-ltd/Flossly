@@ -804,6 +804,7 @@ const handleMetaQuery = () => {
   const metaConnected = route.query.meta === 'connected'
   const igConnected = route.query.meta === 'ig_connected'
   const metaError = route.query.error
+  const metaWarning = route.query.warning
   const pagesCount = Number(route.query.pages || 0)
   const igAccount = route.query.account
 
@@ -813,6 +814,9 @@ const handleMetaQuery = () => {
   } else if (metaConnected && pagesCount === 0) {
     const msg = 'Meta could not be connected. You need full access to the page you are trying to connect.'
     mainStore?.setSnackbar?.({ title: msg, type: 'error' })
+  } else if (metaConnected && metaWarning) {
+    metaHealthData.value = null
+    mainStore?.setSnackbar?.({ title: String(metaWarning), type: 'warning' })
   } else if (metaConnected) {
     metaHealthData.value = null
     mainStore?.setSnackbar?.({ title: 'Meta connected successfully', type: 'success' })

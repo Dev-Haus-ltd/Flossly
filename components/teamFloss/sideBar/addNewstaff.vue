@@ -249,10 +249,12 @@ const onSubmit = async () => {
   // Block submit if email invalid
   const emailValid = !form.value.email || emailRule(form.value.email) === true;
   if (formValidation.valid && emailValid && !selfInviteError.value) {
-    authStore.inviteMembers({users: [form.value]}).then((res) => {
+    try {
+      const res = await authStore.inviteMembers({users: [form.value]})
       if (res.code === 0) {
         userStore.resetUsers();
         resetUsageState();
+        await fetchUsage();
         setSnack("success", "User Invited Successfully");
         resetForm();
         emit("update:modelValue", false);
@@ -261,11 +263,11 @@ const onSubmit = async () => {
         const errorMessage = res?.data?.message || res?.message || "User is not Invited.";
         setSnack("error", errorMessage);
       }
-    }).catch((err) => {
+    } catch (err) {
       // Extract error message from the nested error response structure
       // Error structure: { data: { message: { data: { message: "..." } } } }
       let errorMessage = "Failed to invite user.";
-      
+
       // Try to extract from nested structure: err.data.message.data.message
       if (err?.data?.message?.data?.message && typeof err.data.message.data.message === 'string' && err.data.message.data.message.trim() !== '') {
         errorMessage = err.data.message.data.message;
@@ -286,9 +288,9 @@ const onSubmit = async () => {
       else if (err?.data?.data?.message && typeof err.data.data.message === 'string' && err.data.data.message.trim() !== '') {
         errorMessage = err.data.data.message;
       }
-      
+
       setSnack("error", errorMessage);
-    });
+    }
   } else if (selfInviteError.value) {
     // Show specific error for self-invitation
     setSnack("error", selfInviteError.value);
