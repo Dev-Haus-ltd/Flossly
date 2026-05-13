@@ -1,7 +1,22 @@
 import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, updateOption, deleteOption, getAlertOptions, saveAlertOptions, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, saveAutomationBatch, resetAutomationOverride, deleteAutomation, sendLeadMail, sendLeadWhatsApp, bulkUploadLeads, bulkUploadAutomations, listAutomationGroups, saveAutomationGroup, deleteAutomationGroup, getWhatsAppUsage, listLeadWhatsAppLogs, uploadLeadAttachment, uploadLeadWhatsAppMedia, getLeadPriceAttachmentRecent, getAutomationSendNowStatus, getLeadAutomationLog, updateLeadAutoReply } from '~/server/controllers/crm'
+import { requireFeature } from '~/server/utils/requireFeature'
+import { requirePaidWhatsApp } from '~/server/utils/requirePaidWhatsApp'
+
+const AUTOMATION_WRITE_CASES = new Set([
+  'automationSave', 'automationSaveBatch', 'automationReset', 'automationDelete',
+  'automationGroupSave', 'automationGroupDelete', 'automationBulkUpload',
+])
+const WHATSAPP_CASES = new Set(['whatsappSend', 'whatsappUploadMedia'])
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
+
+  if (AUTOMATION_WRITE_CASES.has(path)) await requireFeature(event, 'automation')
+  if (WHATSAPP_CASES.has(path)) {
+    await requireFeature(event, 'whatsapp')
+    await requirePaidWhatsApp(event)
+  }
+
   switch (path) {
     case 'list':
       return await listLeads(event)

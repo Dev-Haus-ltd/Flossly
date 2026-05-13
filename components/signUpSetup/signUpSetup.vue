@@ -1,9 +1,7 @@
 <template>
   <div
     :class="
-      steps[step].key === 3
-        ? 'form-container py-3 py-md-5 px-3 d-flex flex-column'
-        : step === 1
+      step === 1
         ? 'form-container py-3 py-md-5 px-3 d-flex flex-column align-start ml-0 ml-md-6 buttons-bottom'
         : 'form-container py-3 py-md-5 px-3 d-flex flex-column align-start ml-0 ml-md-6'
     "
@@ -24,77 +22,65 @@
     </div>
 
     <!-- Navigation Buttons -->
-    <div v-if="!isPaymentCompleted" class="button-container">
+    <div class="button-container">
       <v-btn
-        v-if="!isPaymentOpen"
         color="grey-darken-1"
         variant="tonal"
         @click="handleBack"
         class="me-2 nav-button"
         height="48"
         width="100"
-        rounded="lg" size="x-large"
+        rounded="lg"
+        size="x-large"
         style="font-size: 16px;"
       >
         Back
       </v-btn>
 
-      <v-btn 
+      <!-- Step 0: Next -->
+      <v-btn
+        v-if="step < steps.length - 1"
         color="primary"
-        variant="flat" 
+        variant="flat"
         height="48"
         width="100"
         class="nav-button"
-        @click="nextStep" 
-        v-if="step < steps.length - 1"
+        @click="nextStep"
         :disabled="isNextDisabled"
-        rounded="lg" size="x-large"
+        rounded="lg"
+        size="x-large"
         style="font-size: 16px;"
       >
         Next
       </v-btn>
 
-      <v-btn
-        v-if="step === 1"
-        color="grey-darken-1"
-        variant="text"
-        @click="step++"
-        class="me-2 nav-button"
-        height="48"
-        width="100"
-        rounded="lg" size="x-large"
-        style="font-size: 16px;"
-      >
-      Skip for now
-      </v-btn>
-
-      <template v-if="
-        step === steps.length - 1 &&
-        !isPaymentOpen
-        ">
+      <!-- Step 1 (last): Skip + Finish -->
+      <template v-if="step === steps.length - 1">
         <v-btn
-          color="primary"
-          @click="handlePricingCheckout"
+          color="grey-darken-1"
+          variant="text"
+          @click="navigateToDashboard"
+          class="me-2 nav-button"
           height="48"
           width="100"
-          class="nav-button"
           rounded="lg"
           size="x-large"
-          variant="flat"
           style="font-size: 16px;"
         >
-          Buy Now
+          Skip for now
         </v-btn>
         <v-btn
           color="primary"
-          variant="text"
-          @click="navigateToDashboard"
-          class="nav-button trial-link"
+          variant="flat"
+          @click="nextStep"
+          class="nav-button"
           height="48"
+          width="100"
           rounded="lg"
           size="x-large"
+          style="font-size: 16px;"
         >
-          Start your free trial
+          Finish
         </v-btn>
       </template>
     </div>
@@ -104,7 +90,6 @@
 <script setup>
 import clinicSetup from "./clinicSetup.vue";
 import AddTeamMembers from "./addTeamMembers.vue";
-import Pricing from "./pricing.vue";
 
 const orgStore = useOrgStore();
 const authStore = useAuthStore();
@@ -113,23 +98,6 @@ const userStore = useUserStore();
 const router = useRouter();
 const newPracticeCompleted = ref(false);
 const isFinalizingNewPractice = ref(false);
-const isPaymentOpen = computed(() => {
-  if (step.value !== steps.length - 1) return false;
-  const exposed = stepComponent.value?.isPaymentOpen;
-  if (typeof exposed === "object" && exposed && "value" in exposed) {
-    return Boolean(exposed.value);
-  }
-  return Boolean(exposed);
-});
-
-const isPaymentCompleted = computed(() => {
-  if (step.value !== steps.length - 1) return false;
-  const exposed = stepComponent.value?.isPaymentCompleted;
-  if (typeof exposed === "object" && exposed && "value" in exposed) {
-    return Boolean(exposed.value);
-  }
-  return Boolean(exposed);
-});
 
 // Define emit to send current step to parent
 const emit = defineEmits(['update:currentStep', 'go-to-initial-screen']);
@@ -156,14 +124,6 @@ const steps = [
       "Enhance your team's collaboration and efficiency by inviting new members to your Flossly workspace.",
     component: AddTeamMembers,
   },
-  {
-    key: 3,
-
-    title: "",
-    subTitle: "",
-    component: Pricing,
-    showCta: false,
-  },
 ];
 
 // Dynamically resolve current component
@@ -174,9 +134,8 @@ const currentComponentProps = computed(() => ({
 // Form refs & models
 const stepComponent = ref();
 const stepModels = ref([
-  { name: "", logo: null, contact: "", address: "" }, // Clinic model  // removed , type: ""
-  { users: [{ roleId: null, email: "" }] }, // Team model
-  {}, // Pricing model
+  { name: "", logo: null, contact: "", address: "", postalCode: "" },
+  { users: [{ roleId: null, email: "" }] },
 ]);
 
 const user = ref({});
@@ -197,6 +156,7 @@ onMounted(() => {
     stepModels.value[0].name = "";
     stepModels.value[0].contact = "";
     stepModels.value[0].address = "";
+    stepModels.value[0].postalCode = "";
     stepModels.value[0].logo = null;
   } else {
     // For existing org update flow, pre-fill with current org name
@@ -206,6 +166,7 @@ onMounted(() => {
     stepModels.value[0].name = currentOrg?.organisation?.name || "";
     stepModels.value[0].contact = currentOrg?.organisation?.contact || "";
     stepModels.value[0].address = currentOrg?.organisation?.address || "";
+    stepModels.value[0].postalCode = currentOrg?.organisation?.postalCode || "";
     stepModels.value[0].logo = currentOrg?.organisation?.logo || null;
 
     // snapshot for dirty check
@@ -213,13 +174,13 @@ onMounted(() => {
       name: stepModels.value[0].name,
       contact: stepModels.value[0].contact,
       address: stepModels.value[0].address,
+      postalCode: stepModels.value[0].postalCode,
       logo: stepModels.value[0].logo, // string URL
     };
   }
 });
 
 const isNextDisabled = computed(() => {
-  // STEP 0 – Clinic setup
   if (step.value === 0) {
     const clinic = stepModels.value[0];
     return (
@@ -228,18 +189,6 @@ const isNextDisabled = computed(() => {
       !clinic.address?.trim()
     );
   }
-
-  // STEP 1 – Team members
-  if (step.value === 1) {
-    const users = stepModels.value[1]?.users || [];
-
-    // Require at least one valid email + role
-    return users.length === 0 || users.some(
-      u => !u.email?.trim() || !u.roleId
-    );
-  }
-
-  // STEP 2 – Pricing (Next button not shown anyway)
   return false;
 });
 
@@ -253,6 +202,7 @@ const isClinicDirty = () => {
   if (current.name !== initial.name) return true;
   if (current.contact !== initial.contact) return true;
   if (current.address !== initial.address) return true;
+  if (current.postalCode !== initial.postalCode) return true;
 
   // new logo selected
   if (
@@ -289,6 +239,7 @@ const nextStep = async () => {
     formData.append("contact", data.contact);
     // formData.append("type", data.type);
     formData.append("address", data.address);
+    formData.append("postalCode", data.postalCode || "");
     formData.append("origin", "onboarding");
     if (
       data.logo &&
@@ -366,58 +317,33 @@ const nextStep = async () => {
         });
       });
   } else if (step.value === 1) {
-    const data = stepModels.value[1];
+    // Last step — validate invites then navigate to dashboard (finalization happens there)
     if (isNewPractice.value) {
-      step.value++;
+      await navigateToDashboard();
       return;
     }
+    const data = stepModels.value[1];
     data.origin = "onboarding";
     authStore
       .inviteMembers(data)
       .then((res) => {
         if (res.code === 0) {
-          // Reset the user cache to ensure new invited users will be fetched when they become active
           userStore.resetUsers();
-          step.value++;
+          navigateToDashboard();
         } else {
-          // Extract error message from response
           const errorMessage = res?.data?.message || res?.message || "Failed to invite team members.";
-          mainStore.setSnackbar({
-            title: errorMessage,
-            type: "error",
-          });
+          mainStore.setSnackbar({ title: errorMessage, type: "error" });
         }
       })
       .catch((err) => {
-        // Extract error message from the nested error response structure
-        // Error structure: { data: { message: { data: { message: "..." } } } }
-        let errorMessage = "Failed to invite team members.";
-        
-        // Try to extract from nested structure: err.data.message.data.message
-        if (err?.data?.message?.data?.message && typeof err.data.message.data.message === 'string' && err.data.message.data.message.trim() !== '') {
-          errorMessage = err.data.message.data.message;
-        }
-        // Fallback: err.data.message (if it's a string)
-        else if (err?.data?.message && typeof err.data.message === 'string' && err.data.message.trim() !== '') {
-          errorMessage = err.data.message;
-        }
-        // Fallback: err.data.message.message
-        else if (err?.data?.message?.message && typeof err.data.message.message === 'string' && err.data.message.message.trim() !== '') {
-          errorMessage = err.data.message.message;
-        }
-        // Fallback: err.message
-        else if (err?.message && typeof err.message === 'string' && err.message.trim() !== '') {
-          errorMessage = err.message;
-        }
-        // Additional fallback: check if message is directly in data
-        else if (err?.data?.data?.message && typeof err.data.data.message === 'string' && err.data.data.message.trim() !== '') {
-          errorMessage = err.data.data.message;
-        }
-        
-        mainStore.setSnackbar({
-          title: errorMessage,
-          type: "error",
-        });
+        const errorMessage =
+          err?.data?.message?.data?.message ||
+          (typeof err?.data?.message === 'string' ? err.data.message : null) ||
+          err?.data?.message?.message ||
+          err?.message ||
+          err?.data?.data?.message ||
+          "Failed to invite team members.";
+        mainStore.setSnackbar({ title: errorMessage, type: "error" });
       });
   }
 };
@@ -429,6 +355,7 @@ const buildOrgFormData = () => {
   formData.append("contact", data.contact);
   // formData.append("type", data.type);
   formData.append("address", data.address);
+  formData.append("postalCode", data.postalCode || "");
   formData.append("origin", "onboarding");
   if (data.logo) {
     formData.append("logo", data.logo, data.logo?.name);
@@ -520,37 +447,7 @@ const navigateToDashboard = async () => {
   router.push("/");
 };
 
-const handlePricingCheckout = async () => {
-  await nextTick();
-  const pricingRef = stepComponent.value;
-  if (pricingRef?.startCheckout) {
-    const started = pricingRef.startCheckout();
-    if (!started) {
-      mainStore.setSnackbar({
-        title: "Please select a plan to continue.",
-        type: "error",
-      });
-    }
-    return;
-  }
-  mainStore.setSnackbar({
-    title: "Checkout is not ready yet. Please try again.",
-    type: "error",
-  });
-};
-
-watch(isPaymentCompleted, async (completed) => {
-  if (!completed) return;
-  if (isNewPractice.value) {
-    const ok = await finalizeNewPractice();
-    if (!ok) return;
-  }
-  router.push("/");
-});
-
-// Handle back navigation with awareness of Pricing payment modal
 const handleBack = () => {
-  // If on first step (step 0), go back to initial screen
   if (step.value === 0) {
     if (isNewPractice.value) {
       orgStore.clearNewPracticeMode();
@@ -559,23 +456,6 @@ const handleBack = () => {
       emit('go-to-initial-screen');
     }
     return;
-  }
-  
-  // Pricing step is index 2 (0-based)
-  if (step.value === 2) {
-    const pricingRef = stepComponent.value;
-    // If payment modal is open, close it instead of moving to previous step
-    if (pricingRef) {
-      const exposed = pricingRef.isPaymentOpen;
-      const paymentOpen =
-        typeof exposed === "object" && exposed && "value" in exposed
-          ? Boolean(exposed.value)
-          : Boolean(exposed);
-      if (paymentOpen) {
-        pricingRef.cancelPaymentFlow?.();
-        return;
-      }
-    }
   }
   step.value--;
 };

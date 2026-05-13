@@ -517,14 +517,17 @@ const currentOrgName = computed(() => {
   return match?.organisation?.name || ''
 })
 const currentOrgLicense = computed(() => {
+  const direct = String(authStore.loggedUser?.licenseType || user.value?.licenseType || '').trim()
+  if (direct) return direct
   const orgId = user.value?.currentLoggedInOrgId
   const prefs = user.value?.preferences || []
   const match = prefs.find((row) => row.organisationId === orgId)
-  return match?.licenseType || 'Trial'
+  return match?.licenseType || 'Lite'
 })
 const canManageWhapi = computed(() => {
   const type = String(currentOrgLicense.value || '').toLowerCase()
-  return ['drift', 'glide', 'soar', 'system'].includes(type)
+  const billingCycle = authStore.loggedUser?.licenseBillingCycle || user.value?.licenseBillingCycle || null
+  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type) && !!billingCycle
 })
 
 const integrationCards = computed(() => ([

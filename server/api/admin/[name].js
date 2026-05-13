@@ -118,7 +118,8 @@ import {
   getOrgDocumentById,
   listLeaveRequests,
   approveLeave,
-  rejectLeave
+  rejectLeave,
+  createLiteAccount
 } from '../../controllers/admin';
 
 export default defineEventHandler(async (event) => {
@@ -504,6 +505,9 @@ export default defineEventHandler(async (event) => {
     
     case 'rejectLeave':
       return await rejectLeave(event);
+
+    case 'createLiteAccount':
+      return await createLiteAccount(event);
 
     // 404 for unknown endpoints
     default:

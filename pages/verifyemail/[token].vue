@@ -38,6 +38,7 @@
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const { track } = usePostHog();
 
 const loading = ref(true);
 const success = ref(false);
@@ -47,17 +48,13 @@ const verifyEmail = async (link) => {
   try {
     const res = await authStore.verifyEmail({ link });
     loading.value = false;
-    console.log('Verification response:', res);
-    
-    // Check for successful verification - either code 0 or success true
     if (res && (res.code === 0 || res.success === true)) {
       success.value = true;
+      track('email_verified');
     } else {
-      console.error('Verification failed - unexpected response:', res);
       success.value = false;
     }
   } catch (err) {
-    console.error('Verification error:', err);
     success.value = false;
     loading.value = false;
   }

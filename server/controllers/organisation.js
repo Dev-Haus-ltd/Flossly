@@ -36,6 +36,7 @@ import bcrypt from "bcrypt";
 import { Op } from "sequelize";
 import { uploadTempFile } from "../utils/storage";
 import { parseJsonBody } from "../utils/body";
+import { TRIAL_DAYS } from "@shared/defaults/commercialPolicy.js";
 
 // Role constants for access control
 // Role ID 1 = Practice Manager, Role ID 8 = Principal Dentist / Practice Owner
@@ -127,11 +128,13 @@ export const updateOrganisationDetails = async (event) => {
     const name = firstNonEmpty(fields, 'name');
     const address = firstNonEmpty(fields, 'address');
     const contact = firstNonEmpty(fields, 'contact');
+    const postalCode = firstNonEmpty(fields, 'postalCode');
     const typeVal = firstNonEmpty(fields, 'type');
 
     if (name !== undefined) organisation.name = name;
     if (address !== undefined) organisation.address = address;
     if (contact !== undefined) organisation.contact = contact;
+    if (postalCode !== undefined) organisation.postalCode = postalCode;
 
     // Validate enum against model allowed values (Sequelize stores them on rawAttributes)
     if (typeVal !== undefined) {
@@ -953,6 +956,7 @@ export const createOrganisationForUser = async (event) => {
   const contact = firstNonEmpty(fields, 'contact');
   const address = firstNonEmpty(fields, 'address');
   const typeVal = firstNonEmpty(fields, 'type');
+  const postalCode = firstNonEmpty(fields, 'postalCode');
 
   if (!organisationName) {
     return error(400, "Organisation name is required");
@@ -980,6 +984,7 @@ export const createOrganisationForUser = async (event) => {
     // Add optional fields if provided (for full creation mode)
     if (contact) orgData.contact = contact;
     if (address) orgData.address = address;
+    if (postalCode) orgData.postalCode = postalCode;
     if (typeVal) {
       const enumValues =
         Organisation.rawAttributes &&
@@ -1028,7 +1033,7 @@ export const createOrganisationForUser = async (event) => {
     }
 
     trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 15);
+    trialEndDate.setDate(trialEndDate.getDate() + TRIAL_DAYS);
 
     await UserPreference.create(
       {
@@ -1173,7 +1178,7 @@ export const createOrganisationForUser = async (event) => {
         email: user.email,
         fullName: user.fullName,
         organisationName: org.name,
-        trialDays: 15,
+        trialDays: TRIAL_DAYS,
         trialEndsOn: trialEndDate,
       });
     } catch (emailErr) {

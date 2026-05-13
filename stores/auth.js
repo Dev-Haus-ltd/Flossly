@@ -65,6 +65,21 @@ export const useAuthStore = defineStore("authStore", {
           });
       });
     },
+    verifyMagicLink(token) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true;
+        authService
+          .verifyMagicLink(token)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
     login(data) {
       return new Promise((resolve, reject) => {
         this.isLoading = true;
@@ -126,8 +141,16 @@ export const useAuthStore = defineStore("authStore", {
             if (res.data && process.client) {
               const { setUser } = useUser();
               setUser(res.data);
+              try {
+                const { identify } = usePostHog();
+                identify(res.data.id, {
+                  email: res.data.email,
+                  orgId: res.data.currentLoggedInOrgId,
+                  licenseType: res.data?.licenseType,
+                });
+              } catch {}
             }
-            
+
             resolve(res);
           })
           .catch((err) => {

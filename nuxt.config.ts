@@ -16,6 +16,8 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       BASE_URL: process.env.NUXT_PUBLIC_BASE_URL || process.env.BASE_URL,
+      GOOGLE_MAPS_API_KEY: process.env.NUXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '',
+      POSTHOG_KEY: process.env.NUXT_PUBLIC_POSTHOG_KEY || '',
       CHATBOT_URL: process.env.NUXT_PUBLIC_CHATBOT_URL || process.env.CHATBOT_URL,
       META_APP_ID: process.env.NUXT_PUBLIC_META_APP_ID || process.env.META_APP_ID,
       META_WA_EMBEDDED_CONFIG_ID: process.env.NUXT_PUBLIC_META_WA_EMBEDDED_CONFIG_ID || process.env.META_WA_EMBEDDED_CONFIG_ID,

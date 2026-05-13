@@ -15,6 +15,8 @@ import { sendS3Object } from "../utils/s3";
 import { uploadTempFile, uploadBufferFile, deleteLink } from "../utils/storage";
 import { convertDocToDocx } from "../utils/docConversion";
 import { parseJsonBody } from "../utils/body";
+import { requireUsageAllowed } from "../utils/requireUsageAllowed";
+import { success, error } from "../utils/response";
 
 export const createFolder = async (event) => {
   const body = await readBody(event);
@@ -368,6 +370,7 @@ export const listSystemFolders = async (event) => {
 export const addDocument = async (event) => {
   const loggedUser = event.context.user;
   try {
+    await requireUsageAllowed(event, 'storageMB')
     const form = formidable({
       multiples: true,
       uploadDir: os.tmpdir(),
@@ -431,6 +434,7 @@ export const addDocument = async (event) => {
         tags: fields.tags ? fields.tags[0] : null,
         link: filePath,
         folderId: fields.folderId ? fields.folderId[0] : null,
+        fileSizeBytes: file.size || 0,
         lastViewedOn: new Date(),
       });
       createdDocuments.push(document);

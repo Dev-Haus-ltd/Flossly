@@ -43,20 +43,25 @@
       max-width="680"
       persistent
       icon-src="/Logoicon2.svg"
-      title="Welcome to FlosslyOS"
-      subtitle="UK's Number 1 Productivity Software for Dental Clinics"
-      primary-label="Done"
+      title="Welcome to Flossy"
+      subtitle="UK's dental practice platform — free to start, built to grow."
+      primary-label="Let's go"
       :footnote="welcomeFootnote"
       @primary="handleWelcomeDone"
       @close="handleWelcomeClose"
     >
       <div class="onboarding-copy">
         <p class="mb-2">
-          Let's get started. Complete this 2-minute setup and save 10 hours this week.
+          Let's get started. Complete the 2-minute setup and save hours this week.
         </p>
-        <p class="mb-0">
-          <strong>We've upgraded you to a free {{ trialTotalDaysLabel }} {{ welcomeTrialPlanLabel }}.</strong>
-          Explore all the features Flossly has to offer and decide what works best for you.
+        <p v-if="isLiteUser" class="mb-0">
+          You're on <strong>Flossy Lite — free forever.</strong>
+          Capture leads, manage tasks, and run your team at no cost.
+          Upgrade to CRM or Pro anytime to unlock more.
+        </p>
+        <p v-else class="mb-0">
+          <strong>You're on a free {{ trialTotalDaysLabel }} {{ welcomeTrialPlanLabel }}.</strong>
+          Explore everything Flossy has to offer and decide what works best for your practice.
         </p>
       </div>
     </OnboardingPopup>
@@ -107,6 +112,7 @@
 import { CommonLoader } from "#components";
 import { isAuthenticated } from "./lib/auth.js";
 import { useFCM } from '~/composables/useFCM';
+import { TRIAL_DAYS } from '@shared/defaults/commercialPolicy.js';
 
 const authStore = useAuthStore();
 const { user, setUser } = useUser();
@@ -348,6 +354,13 @@ const normalizeDate = (value) => {
   return date;
 };
 
+const LEGACY_MAP = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' }
+const resolvedLicense = computed(() => {
+  const lt = String(user.value?.licenseType || '').trim()
+  return LEGACY_MAP[lt] ?? (lt || 'Lite')
+})
+const isLiteUser = computed(() => resolvedLicense.value === 'Lite')
+
 const resolvePreference = () => {
   const raw = user.value || {};
   const pref = raw?.preferences;
@@ -357,32 +370,31 @@ const resolvePreference = () => {
 };
 
 const trialPlanName = computed(() => {
-  const license = String(resolvePreference().licenseType || "").trim();
-  if (["Drift", "Glide", "Soar"].includes(license)) return license;
-  return "";
+  const plan = resolvedLicense.value
+  if (['CRM', 'Pro'].includes(plan)) return plan
+  return ''
 });
 
 const trialTotalDays = computed(() => {
   const pref = resolvePreference();
-  const end = normalizeDate(pref.licenseRenewalDate);
-  const start = normalizeDate(pref.createdAt || user.value?.createdAt);
-  if (!end || !start) return 14;
+  const end = normalizeDate(user.value?.licenseRenewalDate || pref.licenseRenewalDate);
+  const start = normalizeDate(user.value?.onboarding?.startAt || pref.createdAt || user.value?.createdAt);
+  if (!end || !start) return TRIAL_DAYS;
   const diff = Math.ceil((end - start) / (24 * 60 * 60 * 1000));
-  return Number.isFinite(diff) && diff > 0 ? diff : 14;
+  return Number.isFinite(diff) && diff > 0 ? diff : TRIAL_DAYS;
 });
 
 const trialTotalDaysLabel = computed(() => `${trialTotalDays.value}-day`);
 
 const welcomeFootnote = computed(() => {
-  const plan = trialPlanName.value;
-  if (plan) {
-    return `After your trial ends, you can continue with our ${plan} plan or choose another plan.`;
-  }
-  return "After your trial ends, you can choose the plan that fits your practice.";
-});
+  if (isLiteUser.value) return ''
+  const plan = trialPlanName.value
+  if (plan) return `After your ${trialTotalDaysLabel.value} trial, continue on ${plan} or choose another plan.`
+  return 'After your trial ends, you can choose the plan that fits your practice.'
+})
 
 const welcomeTrialPlanLabel = computed(() =>
-  trialPlanName.value ? `${trialPlanName.value} plan` : "trial"
+  trialPlanName.value ? `${trialPlanName.value} trial` : 'trial'
 );
 
 const updateLocalOnboarding = (updates) => {
@@ -538,7 +550,7 @@ const handleInAppDialogToggle = (val) => {
 };
 
 const showFloatingButtons = computed(() => {
-  const excludedRoutes = ["onboarding", "login", "signup"];
+  const excludedRoutes = ["onboarding", "setup", "login", "signup"];
   return loggedIn.value && !excludedRoutes.includes(route.name);
 });
 
@@ -695,7 +707,7 @@ const onFloatingClick = (e) => {
 
 
 const showChatbot = computed(() => {
-  const excludedRoutes = ["onboarding", "login", "signup"];
+  const excludedRoutes = ["onboarding", "setup", "login", "signup"];
   return loggedIn.value && !excludedRoutes.includes(route.name);
 });
 

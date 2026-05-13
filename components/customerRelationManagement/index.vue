@@ -309,6 +309,14 @@
                 Refresh available in {{ whapiCooldown }}s
               </div>
             </v-alert>
+            <v-alert
+              v-else-if="!canManageWhapi"
+              type="warning"
+              variant="tonal"
+              class="mb-2"
+            >
+              Live WhatsApp connection is available on paid CRM and Pro subscriptions only.
+            </v-alert>
             <div v-if="whapiQr" class="d-flex flex-column align-center gap-2">
               <img :src="whapiQr" alt="WhatsApp QR" style="max-width: 260px;" />
               <div class="text-caption text-medium-emphasis">
@@ -334,6 +342,7 @@
             <v-btn
               v-if="whapiCanActivate && !whapiQr"
               :loading="whapiLoading"
+              :disabled="!canManageWhapi"
               variant="flat"
               color="warning"
               @click="activateWhapiChannel"
@@ -342,7 +351,7 @@
             </v-btn>
             <v-btn
               :loading="whapiLoading"
-              :disabled="whapiCooldown > 0"
+              :disabled="whapiCooldown > 0 || !canManageWhapi"
               variant="flat"
               color="primary"
               @click="refreshWhapiQr"
@@ -642,14 +651,21 @@ const bookingInitialTime = computed(() => bookingTime.value);
 const bookingLeadName = computed(() => bookingLead.value?.name || '');
 const bookingLeadPatientId = computed(() => bookingResolvedPatientId.value || bookingLead.value?.patientId || null);
 const currentOrgLicense = computed(() => {
+  const licenseType = String(authStore.loggedUser?.licenseType || user.value?.licenseType || '').trim();
+  if (licenseType) return licenseType;
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
-  return String(match?.licenseType || 'Trial').trim();
+  return String(match?.licenseType || 'Lite').trim();
+});
+const canManageWhapi = computed(() => {
+  const type = String(currentOrgLicense.value || '').toLowerCase();
+  const billingCycle = authStore.loggedUser?.licenseBillingCycle || user.value?.licenseBillingCycle || null;
+  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type) && !!billingCycle;
 });
 const canBookAppointments = computed(() => {
   const type = String(currentOrgLicense.value || '').toLowerCase();
-  return ['soar', 'system'].includes(type);
+  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type);
 });
 watch(bookingPractitionerOptions, (opts) => {
   if (!bookingInitialPractitioner.value && opts.length) {
@@ -780,6 +796,13 @@ const loadWhapiStatus = async () => {
 };
 
 const connectWhapi = async () => {
+  if (!canManageWhapi.value) {
+    mainStore?.setSnackbar?.({
+      title: 'Live WhatsApp connection is available on paid CRM and Pro subscriptions only.',
+      type: 'warning',
+    });
+    return;
+  }
   try {
     whapiLoading.value = true;
     whapiActivationPending.value = false;
@@ -812,6 +835,7 @@ const connectWhapi = async () => {
 };
 
 const refreshWhapiQr = async () => {
+  if (!canManageWhapi.value) return;
   try {
     whapiLoading.value = true;
     const res = await crmStore.getWhapiQr();
@@ -831,7 +855,7 @@ const refreshWhapiQr = async () => {
 };
 
 const activateWhapiChannel = async () => {
-  if (whapiLoading.value || whapiActivationPending.value) return;
+  if (whapiLoading.value || whapiActivationPending.value || !canManageWhapi.value) return;
   try {
     whapiLoading.value = true;
     const res = await crmStore.extendWhapiChannel();
@@ -1318,7 +1342,7 @@ const onBookLeads = async (selection) => {
     return;
   }
   if (!canBookAppointments.value) {
-    mainStore?.setSnackbar?.({ title: 'Upgrade to the Soar plan to book leads into the diary', type: 'warning' });
+    mainStore?.setSnackbar?.({ title: 'Upgrade to CRM or Pro to book leads into the diary', type: 'warning' });
     return;
   }
   const lead = picked[0];

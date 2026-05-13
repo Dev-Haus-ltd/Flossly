@@ -157,3 +157,6 @@ service.json
 # Claude Code local settings
 .claude/settings.local.json
 
+# Internal docs — shared manually, not tracked in git
+/docs/
+

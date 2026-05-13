@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, OrganisationTreatment } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
+import { isLeadAllowedForOrg } from '../utils/requireUsageAllowed'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body"
@@ -22,10 +23,26 @@ import {
   resolveDmParticipantProfile,
 } from '../utils/dmAttachments.js'
 import { normalizeMetaVideoPermalink } from '../utils/metaVideo.js'
+import { getMetaAssetLimits } from '../utils/commercialPolicy.js'
 
 const META_VERSION = 'v24.0'
 const STANDARD_MESSAGING_WINDOW_MS = 24 * 60 * 60 * 1000
 const META_SUBSCRIBED_FIELDS = 'leadgen,messages,messaging_postbacks'
+
+const getMetaLimitMessage = (assetType, max) => {
+  if (assetType === 'pages') {
+    return `Flossly Lite supports up to ${max} connected Facebook page${max === 1 ? '' : 's'}. Upgrade to connect more.`
+  }
+  if (assetType === 'instagramAccounts') {
+    return `Flossly Lite supports up to ${max} connected Instagram account${max === 1 ? '' : 's'}. Upgrade to connect more.`
+  }
+  return 'Your current plan does not support more Meta connections.'
+}
+
+const getOrgMetaLimits = async (orgId) => {
+  const org = await Organisation.findByPk(orgId, { attributes: ['id', 'licenseType'] })
+  return getMetaAssetLimits(org)
+}
 
 const normalizeBaseUrl = (value = '') => String(value || '').replace(/\/+$/, '')
 
@@ -371,9 +388,27 @@ export const authCallback = async (event) => {
       }
     }
 
-    const pagesToConnect = pages.filter(
+    let pagesToConnect = pages.filter(
       (p) => p?.id && p?.access_token && !conflictsById.has(String(p.id))
     )
+
+    const metaLimits = await getOrgMetaLimits(orgId)
+    let remainingIgSlots = Number.POSITIVE_INFINITY
+    if (metaLimits) {
+      const [activePageCount, activeInstagramCount] = await Promise.all([
+        MetaPage.count({ where: { organisationId: orgId, status: 'Active' } }),
+        CrmDmAccount.count({
+          where: { organisationId: orgId, platform: 'instagram', status: 'Active' },
+        }),
+      ])
+      const remainingPageSlots = Math.max(0, metaLimits.pages - Number(activePageCount || 0))
+      remainingIgSlots = Math.max(0, metaLimits.instagramAccounts - Number(activeInstagramCount || 0))
+      if (remainingPageSlots <= 0) {
+        setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
+        return sendRedirect(event, `/crm?error=${encodeURIComponent(getMetaLimitMessage('pages', metaLimits.pages))}`)
+      }
+      pagesToConnect = pagesToConnect.slice(0, remainingPageSlots)
+    }
 
 
     if (!pagesToConnect.length) {
@@ -464,7 +499,7 @@ export const authCallback = async (event) => {
         } catch {}
       }
       const igAccountId = String(igAccount?.id || '')
-      if (igAccountId) {
+      if (igAccountId && remainingIgSlots > 0) {
         await upsertDmAccount({
           organisationId: orgId,
           connectedByUserId: userId,
@@ -477,6 +512,7 @@ export const authCallback = async (event) => {
             igAccountId,
           },
         })
+        if (Number.isFinite(remainingIgSlots)) remainingIgSlots -= 1
       }
     }
 
@@ -654,25 +690,28 @@ const fetchLeadsForOrg = async (orgId, { days = 0, maxPerForm = 1000, debugEnabl
               await existing.save()
               broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
             } else {
-              await CrmLead.create({
-                organisationId: orgId,
-                pageId,
-                formId: form.id,
-                leadId: le.id,
-                campaignId,
-                adSetId,
-                adId,
-                name: fullName,
-                email,
-                telephone: phone,
-                inquiryDate: on,
-                rawData: le,
-                leadSource: 'Meta Leadgen',
-                leadStatus: 'New',
-              })
-              imported++
-              debug.imported += 1
-              broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
+              const allowed = await isLeadAllowedForOrg(orgId)
+              if (allowed) {
+                await CrmLead.create({
+                  organisationId: orgId,
+                  pageId,
+                  formId: form.id,
+                  leadId: le.id,
+                  campaignId,
+                  adSetId,
+                  adId,
+                  name: fullName,
+                  email,
+                  telephone: phone,
+                  inquiryDate: on,
+                  rawData: le,
+                  leadSource: 'Meta Leadgen',
+                  leadStatus: 'New',
+                })
+                imported++
+                debug.imported += 1
+                broadcastMetaEvent('lead', { orgId, leadId: le.id, pageId, formId: form.id })
+              }
             }
             fetchedForForm++
             if (fetchedForForm >= maxPerForm) break
@@ -1332,6 +1371,24 @@ export const igAuthCallback = async (event) => {
     } catch (e) {}
 
     const expiry = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null
+    const metaLimits = await getOrgMetaLimits(orgId)
+    if (metaLimits) {
+      const existingIg = await CrmDmAccount.findOne({
+        where: {
+          organisationId: orgId,
+          platform: 'instagram',
+          accountId: igAccountId,
+        },
+      })
+      if (!existingIg) {
+        const activeInstagramCount = await CrmDmAccount.count({
+          where: { organisationId: orgId, platform: 'instagram', status: 'Active' },
+        })
+        if (activeInstagramCount >= metaLimits.instagramAccounts) {
+          throw new Error(getMetaLimitMessage('instagramAccounts', metaLimits.instagramAccounts))
+        }
+      }
+    }
 
     await upsertDmAccount({
       organisationId: orgId,
@@ -1685,6 +1742,8 @@ export const webhook = async (event) => {
             await existing.save()
             broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
           } else {
+            const allowed = await isLeadAllowedForOrg(mp.organisationId)
+            if (!allowed) continue
             const created = await CrmLead.create({
               organisationId: mp.organisationId,
               pageId,
@@ -2357,6 +2416,16 @@ export const connectBusinessPages = async (event) => {
   if (!tokenRow) return error(400, 'Meta not connected')
   const userToken = decrypt(tokenRow.userTokenEnc)
   if (!userToken) return error(400, 'Meta token missing')
+  const metaLimits = await getOrgMetaLimits(orgId)
+  if (metaLimits) {
+    const activePageCount = await MetaPage.count({
+      where: { organisationId: orgId, status: 'Active' },
+    })
+    const remainingPageSlots = Math.max(0, metaLimits.pages - Number(activePageCount || 0))
+    if (pageIds.length > remainingPageSlots) {
+      return error(403, getMetaLimitMessage('pages', metaLimits.pages))
+    }
+  }
 
   const conflicts = await MetaPage.findAll({
     where: {

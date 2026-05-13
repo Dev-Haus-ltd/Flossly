@@ -32,8 +32,8 @@
           <div class="plan-detail-title">{{ selectedPlan.displayName }}</div>
         </div>
         <div class="plan-detail-price">
-          <span class="plan-price">{{ formatPrice(selectedPlan.displayAmount ?? selectedPlan.unit_amount, selectedPlan.currency) }}</span>
-          <span class="plan-price-cycle">per {{ billingLabel(selectedPlan) }}</span>
+          <span class="plan-price">{{ selectedPlan.key === 'lite' ? 'Free' : formatPrice(selectedPlan.displayAmount ?? selectedPlan.unit_amount, selectedPlan.currency) }}</span>
+          <span class="plan-price-cycle">{{ selectedPlan.key === 'lite' ? 'forever' : `per ${billingLabel(selectedPlan)}` }}</span>
         </div>
         <div class="plan-feature-title">{{ selectedPlan.shortName }} plan includes:</div>
         <ul class="plan-features">
@@ -130,67 +130,69 @@ const isPlansLoading = ref(true);
 
 const features = ref([
   {
-    type: "Flossly - Soar Package",
-    description: "Suited for organizations desiring enterprise-level automation, data-driven insights, and seamless scaling across multiple sites",
+    type: "Flossy Pro",
+    description: "Enterprise-level automation, AI-driven insights, and seamless scaling across multiple sites.",
+    badge: "Coming Soon",
     features: [
-      "Everything in Glide PLUS",
-      "AI Assistant(AI-generated task suggestions,Smart staff scheduling suggestions)",
-      "HR document assistant (AI-generated policies, templates)",
-      "Email & social content writing (coming soon)",
-      "Full Payroll + Invoice Management(Integrated with QuickBooks)",
-      "Dedicated Onboarding + Migration",
-      "Dedicated Account Manager",
-      "API & Integration Support",
+      "Everything in CRM PLUS",
+      "Google Ads integration",
+      "AI assistant (task suggestions, smart scheduling)",
+      "HR document assistant (AI-generated policies)",
+      "Full Payroll + Invoice Management",
+      "Dedicated account manager",
+      "API & integration support",
     ],
-    licenseType: "soar",
+    licenseType: "Pro",
   },
   {
-    type: "Flossly - Glide Package",
-    description: "Intended for clinics seeking comprehensive team and compliance management alongside workflow tools",
+    type: "Flossy CRM",
+    description: "WhatsApp messaging, automation, unlimited leads, and patient booking for growing practices.",
+    badge: "Most popular",
     features: [
-      "Full HR Management (Onboarding workflows, policies, reviews)",
-      "Organisation Management (Multi-org login, Role-based views)",
-      "Staff Management (Add/manage staff, assign tasks)",
-      "Advanced Notifications (promos, approvals)",
-      "Rota Scheduling (assign/view staff shifts)",
-      "Holiday Approvals (by manager)",
-      "Team Payroll Overview",
-      "Invoicing (Manual, pre-QB)",
+      "Everything in Lite PLUS",
+      "WhatsApp Business messaging",
+      "CRM automation sequences",
+      "Unlimited leads",
+      "Patient booking from pipeline",
+      "Team task pool",
+      "Full diary & appointment management",
     ],
-    licenseType: "glide",
+    licenseType: "CRM",
   },
   {
-    type: "Flossly - Drift Package",
-    description: "This package is ideal for small practices needing basic workflow and documentation management, without advanced HR, CRM, or AI automation.",
+    type: "Flossy Lite",
+    description: "Free forever — capture leads, manage tasks, and get started with no commitment.",
+    badge: "Free forever",
     features: [
-      "Secure User Auth (Login, Registration, Profile, Forgot Password)",
-      "Task Management (Assign, Track, Complete - for you & your staff)",
-      "HR Essentials(Time-off tracking,Staff list,Profile & policy docs)",
-      "Document Management (Folders, Uploads)",
-      "Basic Notifications (task updates, onboarding emails)",
+      "Up to 100 leads",
+      "Task management",
+      "HR essentials (time-off, staff list, docs)",
+      "Document management",
+      "Basic notifications & onboarding",
+      "3 team members",
     ],
-    licenseType: "drift",
+    licenseType: "Lite",
   },
 ]);
 
 const getPlanKey = (plan) => {
   const name = String(plan?.product?.name || "").toLowerCase();
-  if (name.includes("soar")) return "soar";
-  if (name.includes("glide")) return "glide";
-  if (name.includes("drift")) return "drift";
+  if (name.includes("soar") || name.includes("pro")) return "pro";
+  if (name.includes("glide") || name.includes("crm")) return "crm";
+  if (name.includes("drift") || name.includes("lite")) return "lite";
   return "other";
 };
 
 const getFeatureKeyFromType = (type) => {
   const name = String(type || "").toLowerCase();
-  if (name.includes("soar")) return "soar";
-  if (name.includes("glide")) return "glide";
-  if (name.includes("drift")) return "drift";
+  if (name.includes("soar") || name.includes("pro")) return "pro";
+  if (name.includes("glide") || name.includes("crm")) return "crm";
+  if (name.includes("drift") || name.includes("lite")) return "lite";
   return "other";
 };
 
-const planOrder = { soar: 0, glide: 1, drift: 2, other: 3 };
-const planSequence = ["soar", "glide", "drift"];
+const planOrder = { pro: 0, crm: 1, lite: 2, other: 3 };
+const planSequence = ["pro", "crm", "lite"];
 const selectedPlanId = ref(null);
 const getFirstEnabledPlan = (list) =>
   (Array.isArray(list) ? list : []).find((plan) => !plan?.disabled) ||
@@ -204,27 +206,17 @@ const displayPlans = computed(() => {
       const key = getPlanKey(plan);
       const featureKey = getFeatureKeyFromType(plan.product?.name);
       const displayName =
-        key === "soar"
-          ? "Soar (Coming Soon)" //Full Access
-          : key === "glide"
-          ? "Glide"
-          : key === "drift"
-          ? "Drift"
+        key === "pro" ? "Pro"
+          : key === "crm" ? "CRM"
+          : key === "lite" ? "Lite"
           : plan.product?.name || "Plan";
-      const shortName =
-        key === "soar" ? "Soar" : key === "glide" ? "Glide" : key === "drift" ? "Drift" : "Plan";
-      const badge = "";
+      const shortName = displayName;
+      const badge = key === "crm" ? "Most popular" : key === "lite" ? "Free forever" : "";
       const featureObj = features.value.find((x) => getFeatureKeyFromType(x.type) === featureKey);
       const featureList = featureObj?.features || [];
       const description = featureObj?.description || plan.product?.description || plan.description || "";
-      const displayAmount =
-        key === "drift"
-          ? 9900
-          : key === "glide"
-          ? 29900
-          : key === "soar"
-          ? 39900
-          : plan.unit_amount;
+      // Lite is the free plan — not purchasable through this modal
+      const displayAmount = key === "lite" ? 0 : plan.unit_amount;
       return {
         ...plan,
         key,
@@ -233,7 +225,7 @@ const displayPlans = computed(() => {
         badge,
         features: featureList,
         description,
-        disabled: key === "soar", // 🔴 UI-disable Soar
+        disabled: key === "lite",
         displayAmount,
       };
     })
@@ -272,7 +264,8 @@ const billingLabel = (plan) => {
 
 watch(displayPlans, (list) => {
   if (!selectedPlanId.value && list.length) {
-    const fallback = getFirstEnabledPlan(list);
+    const crmPlan = list.find((p) => p.key === 'crm' && !p.disabled);
+    const fallback = crmPlan || getFirstEnabledPlan(list);
     if (fallback?.id) {
       selectedPlanId.value = fallback.id;
     }

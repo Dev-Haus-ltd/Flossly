@@ -795,6 +795,29 @@ export const startMetaSyncScheduler = () => {
   });
 };
 
+export const startLicenseExpiryScheduler = () => {
+  cron.schedule('0 1 * * *', async () => {
+    try {
+      const now = new Date();
+      const expired = await Organisation.findAll({
+        where: {
+          licenseType: { [Op.notIn]: ['Lite', 'System'] },
+          licenseRenewalDate: { [Op.lt]: now },
+        },
+        attributes: ['id', 'name', 'licenseType'],
+      });
+      if (!expired.length) return;
+      await Organisation.update(
+        { licenseType: 'Lite', licenseBillingCycle: null },
+        { where: { id: { [Op.in]: expired.map((o) => o.id) } } }
+      );
+      console.log(`[LicenseExpiry] Downgraded ${expired.length} org(s) to Lite`);
+    } catch (err) {
+      console.error('[LicenseExpiry] scheduler error:', err?.message);
+    }
+  });
+};
+
 export const startShiftReminderScheduler = () => {
   cron.schedule('0 9 * * *', async () => {
     console.log('[Shift Reminder] Running daily shift reminder check...');

@@ -1,8 +1,11 @@
 import { listTreatments, listPatients, createPatient, updatePatient, listAppointments, createAppointment, updateAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats } from '~/server/controllers/diary'
 import { success } from '~/server/utils/response'
+import { requireFeature } from '~/server/utils/requireFeature'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
+
+  if (path === 'appointmentCreate' || path === 'appointmentUpdate') await requireFeature(event, 'patientBooking')
   switch (path) {
     case 'treatments':
       return await listTreatments(event)
