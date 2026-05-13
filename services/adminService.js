@@ -1,4 +1,4 @@
-import { Get, Post } from './apiWrapper'
+import { Get, Post, Patch } from './apiWrapper'
 
 export default {
   listClinicalNoteTemplates(params = {}) {
@@ -6,18 +6,19 @@ export default {
     if (params.type) search.set('type', params.type)
     if (params.status) search.set('status', params.status)
     const suffix = search.toString() ? `?${search.toString()}` : ''
-    return Get(`/admin/listClinicalNoteTemplates${suffix}`)
+    return Get(`/admin/diary/clinical-notes${suffix}`)
   },
 
   createClinicalNoteTemplate(payload) {
-    return Post('/admin/createClinicalNoteTemplate', payload)
+    return Post('/admin/diary/clinical-notes', payload)
   },
 
   updateClinicalNoteTemplate(payload) {
-    return Post('/admin/updateClinicalNoteTemplate', payload)
+    const { id, ...rest } = payload
+    return Patch(`/admin/diary/clinical-notes/${encodeURIComponent(id)}`, { ...rest, id })
   },
 
   getClinicalNoteTemplateVersions(id) {
-    return Get(`/admin/getClinicalNoteTemplateVersions?id=${encodeURIComponent(id)}`)
+    return Get(`/admin/diary/clinical-notes/${encodeURIComponent(id)}/versions`)
   },
 }
