@@ -90,6 +90,18 @@
           </v-alert>
         </div>
 
+        <div v-if="liteUploadWarning" class="mb-3">
+          <v-alert
+            :type="liteRemainingSlots > 0 ? 'warning' : 'error'"
+            variant="tonal"
+            density="compact"
+          >
+            <div style="font-size: 13px">
+              <strong>{{ liteUploadWarning }}</strong>
+            </div>
+          </v-alert>
+        </div>
+
         <!-- Pagination header -->
         <div v-if="totalPages > 1" class="d-flex align-center justify-space-between mb-2">
           <div style="font-size: 12px; color: #737373">
@@ -389,12 +401,12 @@
           v-if="parsedLeads.length"
           color="primary"
           @click="uploadLeads"
-          :disabled="hasValidationErrors || isUploading || isProcessing"
+          :disabled="hasValidationErrors || isUploading || isProcessing || uploadableLeadCount === 0"
           class="mr-3"
           style="font-weight: 500; text-transform: none"
           variant="flat"
         >
-          Upload {{ parsedLeads.length.toLocaleString() }} Leads
+          Upload {{ uploadableLeadCount.toLocaleString() }} Lead{{ uploadableLeadCount !== 1 ? 's' : '' }}
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -404,6 +416,7 @@
 <script setup>
 import { ref, watch, computed } from "vue";
 import * as XLSX from "xlsx";
+import { useUsageSummary } from "@/composables/useUsageSummary";
 import {
   extractExtension,
   formatFileSize as formatFileSizeUtil,
@@ -443,6 +456,7 @@ const CHUNK_SIZE = 50;
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
 const config = useRuntimeConfig();
+const { usage, isLite, fetchUsage } = useUsageSummary()
 
 const MAX_FILE_SIZE =
   parseInt(config.public.MAX_FILE_SIZE_FOR_TASK_SHEET) || 5 * 1024 * 1024;
@@ -486,9 +500,36 @@ const errorCount = computed(() =>
 const warningCount = computed(() =>
   parsedLeads.value.filter((l) => l.hasWarnings).length
 );
+const liteLeadUsage = computed(() => usage.value?.leads || null)
+const liteRemainingSlots = computed(() => {
+  if (!isLite.value) return Infinity
+  const max = Number(liteLeadUsage.value?.max || 0)
+  const current = Number(liteLeadUsage.value?.current || 0)
+  if (!max) return 0
+  return Math.max(0, max - current)
+})
+const uploadableLeadCount = computed(() => {
+  if (!parsedLeads.value.length) return 0
+  if (!isLite.value) return parsedLeads.value.length
+  return Math.min(parsedLeads.value.length, liteRemainingSlots.value)
+})
+const skippedLeadCount = computed(() =>
+  Math.max(0, parsedLeads.value.length - uploadableLeadCount.value)
+)
+const liteUploadWarning = computed(() => {
+  if (!isLite.value || !parsedLeads.value.length || !liteLeadUsage.value?.max) return ""
+  if (liteRemainingSlots.value <= 0) {
+    return "Your Flossy Lite account has already reached its 100-lead limit. No leads from this file can be added unless you upgrade."
+  }
+  if (skippedLeadCount.value <= 0) return ""
+  return `Your Flossy Lite account has ${liteRemainingSlots.value} lead slot${liteRemainingSlots.value !== 1 ? 's' : ''} remaining. Only the first ${uploadableLeadCount.value} lead${uploadableLeadCount.value !== 1 ? 's' : ''} from this file will be added. The remaining ${skippedLeadCount.value} will be skipped unless you upgrade.`
+})
 
 watch(() => props.modelValue, (val) => (isOpen.value = val));
 watch(isOpen, (val) => emit("update:modelValue", val));
+watch(isOpen, (val) => {
+  if (val) fetchUsage()
+})
 
 const validationErrors = computed(() => {
   const issues = [];
@@ -888,10 +929,19 @@ const uploadLeads = async () => {
     });
     return;
   }
+  if (uploadableLeadCount.value <= 0) {
+    mainStore.setSnackbar({
+      type: "error",
+      title: "No leads can be uploaded on the current Lite limit.",
+    });
+    return;
+  }
 
   isUploading.value = true;
   try {
-    const leadsPayload = parsedLeads.value.map((lead) => ({
+    const uploadedCount = uploadableLeadCount.value
+    const skippedCount = skippedLeadCount.value
+    const leadsPayload = parsedLeads.value.slice(0, uploadedCount).map((lead) => ({
       name: lead.name?.trim(),
       email: lead.email?.trim(),
       telephone: lead.telephone?.trim(),
@@ -919,7 +969,9 @@ const uploadLeads = async () => {
       close();
       mainStore.setSnackbar({
         type: "success",
-        title: res.data?.message || res.message || "Leads uploaded successfully",
+        title: skippedCount > 0
+          ? `Uploaded ${uploadedCount} lead${uploadedCount !== 1 ? 's' : ''}. ${skippedCount} ${skippedCount === 1 ? 'lead was' : 'leads were'} skipped because Flossy Lite allows up to 100 leads.`
+          : (res.data?.message || res.message || "Leads uploaded successfully"),
       });
     } else {
       mainStore.setSnackbar({
@@ -930,7 +982,7 @@ const uploadLeads = async () => {
   } catch (err) {
     mainStore.setSnackbar({
       type: "error",
-      title: err.message || "Failed to upload leads",
+      title: err?.data?.message || err?.message || "Failed to upload leads",
     });
   } finally {
     isUploading.value = false;

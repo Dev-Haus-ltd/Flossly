@@ -13,7 +13,7 @@
             <div>
               <p class="text-subtitle-2 font-weight-semibold mb-0">Lite lead allowance</p>
               <p class="text-caption text-medium-emphasis mb-0">
-                {{ leadsUsedLabel }} of {{ leadsLimitLabel }} leads used
+                {{ leadsUsedLabel }}/{{ leadsLimitLabel }} leads used
               </p>
             </div>
             <v-chip size="small" :color="leadUsageTone" variant="tonal">
@@ -520,7 +520,7 @@ import { useMainStore } from '@/stores/index'
 import { useCrmStore } from '@/stores/crm'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
-import { useUsageSummary } from '@/composables/useUsageSummary'
+import { resetUsageState, useUsageSummary } from '@/composables/useUsageSummary'
 import searchicon from "@/assets/icons/listView/serach-icon.svg";
 import crmService from '@/services/crmService'
 const crmStore = useCrmStore();
@@ -528,7 +528,7 @@ const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
 const userList = computed(() => storeUsers.value || []);
 const authStore = useAuthStore();
-const { usage, isLite } = useUsageSummary()
+const { usage, isLite, fetchUsage } = useUsageSummary()
 const route = useRoute();
 const router = useRouter();
 const diaryStore = useDiaryStore();
@@ -1192,6 +1192,7 @@ const onSelect = (selection) => {
 onMounted(() => {
   const metaConnected = route.query.meta === "connected";
   const metaError = route.query.error;
+  fetchUsage();
   initLeads(metaConnected);
   checkConnection();
   loadWhatsAppUsage();
@@ -1517,6 +1518,8 @@ const handleSuccess = async () => {
 };
 const handleBulkUploadComplete = async () => {
   bulkLeadUploadDialog.value = false;
+  resetUsageState();
+  await fetchUsage();
   await fetchLeads(activeFilters.value);
 };
 
