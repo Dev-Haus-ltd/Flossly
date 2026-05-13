@@ -50,6 +50,7 @@
     "firebase": "^12.9.0",
     "firebase-admin": "^13.6.1",
     "flag-icons": "^7.5.0",
+    "gocardless-nodejs": "^8.1.0",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.12.1",
     "ioredis": "^5.8.2",

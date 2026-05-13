@@ -1,5 +1,7 @@
 import patientChartingService from '~/services/patientChartingService'
 import diaryService from '~/services/diaryService'
+import accountsService from '~/services/accountsService'
+import { useAccountsStore } from '~/stores/accounts'
 import { createDefaultTooth, UPPER_ARCH, LOWER_ARCH, DECIDUOUS_UPPER_ARCH, DECIDUOUS_LOWER_ARCH, CONDITIONS, TOOTH_STATUSES } from '~/components/patients/charting/toothData.js'
 import {
   DEFAULT_APPOINTMENT_ID,
@@ -1038,8 +1040,21 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
 
       const groupId = item.appointmentGroupId || DEFAULT_APPOINTMENT_ID
       const inGroup = this.treatmentItems.filter((i) => (i.appointmentGroupId || DEFAULT_APPOINTMENT_ID) === groupId)
-      if (inGroup.length && inGroup.every((i) => String(i.status || '').toLowerCase() === 'completed')) {
+      const appointment = this.appointments.find(a => a.id === groupId)
+      const wasAlreadyCompleted = appointment?.status === 'completed'
+      if (inGroup.length && inGroup.every((i) => String(i.status || '').toLowerCase() === 'completed') && !wasAlreadyCompleted) {
         this.updateAppointment(groupId, { status: 'completed' })
+        // Automatically generate invoices when appointment is completed
+        try {
+          await accountsService.generateInvoiceFromTreatments(this.patientId)
+          // Refresh accounts store if it's loaded for the same patient
+          const accountsStore = useAccountsStore()
+          if (accountsStore.patientId === this.patientId) {
+            await accountsStore._refresh()
+          }
+        } catch (error) {
+          console.error('Failed to generate invoices:', error)
+        }
       }
     },
     addAppointment() {

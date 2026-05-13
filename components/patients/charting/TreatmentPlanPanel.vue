@@ -467,6 +467,19 @@
       <v-btn variant="outlined" size="small" rounded="lg" prepend-icon="mdi-clock-outline" @click="$emit('set-interval')">Set Interval</v-btn>
       <div class="tp-footer__right">
         <v-btn v-if="activeView === 'plan'" variant="outlined" size="small" rounded="lg" prepend-icon="mdi-file-document-outline" @click="$emit('print-plan')">Plan Preview</v-btn>
+        <v-btn
+          v-if="activeView === 'plan'"
+          color="primary"
+          variant="flat"
+          size="small"
+          rounded="lg"
+          prepend-icon="mdi-cash-register"
+          :loading="chargeAllLoading"
+          :disabled="chargeAllLoading || !props.patientId || Number(props.total || 0) <= 0"
+          @click="chargeCombinedTotal"
+        >
+          Charge
+        </v-btn>
         <span v-if="nhsBand" class="tp-nhs-badge" :class="`tp-nhs-badge--${nhsBand}`">NHS Band {{ nhsBand }}</span>
         <div class="tp-footer__total">
           <span class="tp-footer__total-label">Total</span>
@@ -514,6 +527,8 @@ import ChartImagesPanel from './ChartImagesPanel.vue'
 import ChartRichTextEditor from './ChartRichTextEditor.vue'
 import { makeTPName } from '~/shared/defaults/charting/chartingDefaults.js'
 import deleteIcon from '../../../assets/crm/delete.svg'
+import accountsService from '~/services/accountsService'
+import { useMainStore } from '~/stores/index'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -541,11 +556,13 @@ const emit = defineEmits([
   'mark-complete', 'print-plan', 'select-note-item', 'select-appointment', 'move-item',
 ])
 const router = useRouter()
+const mainStore = useMainStore()
 
 const activeView = ref('plan')
 // Fix #10 — use £ not the verbose 'GBP ' prefix
 const currencySymbol = '£'
 const totalFormatted = computed(() => Number(props.total || 0).toFixed(2))
+const chargeAllLoading = ref(false)
 
 const APPOINTMENT_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending', color: '#6b7280' },
@@ -744,6 +761,35 @@ function formatDate(iso) {
 
 function formatCost(val) {
   return Number(val || 0).toFixed(2)
+}
+
+async function chargeCombinedTotal() {
+  if (!props.patientId) {
+    mainStore?.setSnackbar?.({ title: 'Unable to charge patient: missing patient details.', type: 'error' })
+    return
+  }
+  if (Number(props.total || 0) <= 0) {
+    mainStore?.setSnackbar?.({ title: 'No treatment plan total to charge.', type: 'warning' })
+    return
+  }
+
+  chargeAllLoading.value = true
+  try {
+    const res = await accountsService.generateCombinedInvoiceFromTreatments(props.patientId)
+    if (res?.code !== 0) {
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to charge combined total.', type: 'error' })
+      return
+    }
+
+    const invoice = Array.isArray(res.data) ? res.data[0] : res.data
+    const total = invoice?.total ?? props.total
+    mainStore?.setSnackbar?.({ title: `Charged combined total of £${Number(total || props.total).toFixed(2)}.`, type: 'success' })
+    emit('charge-combined-success', invoice)
+  } catch (err) {
+    mainStore?.setSnackbar?.({ title: err?.message || 'Unable to create combined invoice.', type: 'error' })
+  } finally {
+    chargeAllLoading.value = false
+  }
 }
 
 function canMove(apptId, item, direction) {

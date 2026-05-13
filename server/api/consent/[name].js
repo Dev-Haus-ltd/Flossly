@@ -11,6 +11,7 @@ import {
   getSignedConsentDocument,
   getConsentAuditTrail,
   voidConsentDocument,
+  getConsentDocumentById,
   searchPatients,
 } from '~/server/controllers/consentForms'
 
@@ -41,6 +42,8 @@ export default defineEventHandler(async (event) => {
       return await submitSignedConsent(event)
     case 'documentGetSigned':
       return await getSignedConsentDocument(event)
+    case 'documentGetById':
+      return await getConsentDocumentById(event)
     case 'documentVoid':
       return await voidConsentDocument(event)
 

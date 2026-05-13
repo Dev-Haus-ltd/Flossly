@@ -59,6 +59,7 @@ const isPublicPath = (path) => {
     "/api/form/submit",
     "/api/consent/documentGetForSigning",
     "/api/consent/documentSubmitSigned",
+    "/api/gocardless/webhook",
   ];
 
   const isPublic = publicPaths.some(

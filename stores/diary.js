@@ -309,6 +309,70 @@ deletePatient(patientId) {
       });
     },
 
+    getPatientCommunicationLogs(payload) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .getPatientCommunicationLogs(payload)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+
+    createCommunicationLog(payload) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .createCommunicationLog(payload)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+
+    updateCommunicationLog(payload) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .updateCommunicationLog(payload)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+
+    deleteCommunicationLog(id) {
+      this.isLoading = true;
+      return new Promise((resolve, reject) => {
+        diaryService
+          .deleteCommunicationLog(id)
+          .then((res) => {
+            this.isLoading = false;
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false;
+            reject(err);
+          });
+      });
+    },
+
     // Unique Patient Comfort
     getPatientComfort(patientId) {
       this.isLoading = true;
