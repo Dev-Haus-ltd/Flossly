@@ -57,7 +57,7 @@
     <!-- Default CRM view -->
     <div v-else>
     <div class="mt-5 px-5">
-      <v-card v-if="isLite && usage?.leads" rounded="lg" elevation="0" border class="mb-4 usage-card">
+      <v-card v-if="isLite && usage?.leads" rounded="lg" elevation="0" border class="mb-4 usage-card" data-tour-id="crm-upgrade-allowance">
         <v-card-text class="pa-4">
           <div class="d-flex align-center justify-space-between flex-wrap ga-3 mb-2">
             <div>
@@ -213,6 +213,7 @@
             variant="flat"
             rounded="lg"
             class="add-task-btn"
+            data-tour-id="crm-upgrade-forms"
             @click="showForms = true"
           >
             <template #prepend>
@@ -226,6 +227,7 @@
             variant="flat"
             rounded="lg"
             class="add-task-btn mx-2"
+            data-tour-id="crm-upgrade-upload"
             @click="openBulkLeadUploadDialog"
           >
             <template #prepend>
@@ -239,6 +241,7 @@
             variant="flat"
             rounded="lg"
             class="add-task-btn"
+            data-tour-id="crm-upgrade-add"
             @click="handleAddLeadClick"
           >
             <template #prepend>
@@ -1615,6 +1618,8 @@ const resolveLeadSource = (source) => {
 
 const handleSuccess = async () => {
   addLeadDrawer.value = false;
+  resetUsageState();
+  await fetchUsage();
   await fetchLeads(activeFilters.value);
 };
 const handleBulkUploadComplete = async () => {
@@ -1746,6 +1751,8 @@ const onItemsPerPageChange = async (val) => {
 };
 
 const handleLeadsRefresh = async () => {
+  resetUsageState();
+  await fetchUsage();
   await fetchLeads(activeFilters.value);
 };
 

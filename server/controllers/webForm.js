@@ -6,6 +6,8 @@ import { FormConfig, CrmLead, CrmOption, CrmLeadCommunication, UserOrganisation,
 import sequelize from '../utils/db'
 import { success, error } from '../utils/response'
 import { parseJsonBody } from '../utils/body'
+import { getCurrentUsage, requireUsageAllowed } from '../utils/requireUsageAllowed'
+import { getEntitlements } from '../config/entitlements'
 import { sendImmediateCrmAutomationsForLead } from '../utils/crmAutomation.js'
 import { sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 
@@ -41,6 +43,18 @@ const supportsFormSoftDelete = async () => {
     formSoftDeleteSupported = false
   }
   return formSoftDeleteSupported
+}
+
+const getFormLimitMessage = ({ action = 'add more' } = {}) =>
+  `Lite includes 1 active lead form. Upgrade to ${action}.`
+
+const wouldExceedActiveFormLimit = async ({ orgId, restoringActiveCount = 0 }) => {
+  const org = await Organisation.findByPk(orgId, { attributes: ['licenseType'] })
+  const ent = getEntitlements(org?.licenseType ?? 'Lite')
+  const max = ent.limits.forms
+  if (max === Infinity) return false
+  const current = await getCurrentUsage(orgId, 'forms')
+  return (current + restoringActiveCount) > max
 }
 
 // Available lead schema field definitions for the builder
@@ -117,6 +131,8 @@ export const createForm = async (event) => {
     : DEFAULT_FIELDS
 
   try {
+    await requireUsageAllowed(event, 'forms')
+
     const formPayload = {
       organisationId: orgId,
       name,
@@ -131,6 +147,9 @@ export const createForm = async (event) => {
     const form = await FormConfig.create(formPayload)
     return success(form)
   } catch (e) {
+    if (e?.statusCode === 403) {
+      return error(403, e?.data?.message || getFormLimitMessage())
+    }
     return error(500, e?.message || 'Failed to create form')
   }
 }
@@ -150,6 +169,11 @@ export const updateForm = async (event) => {
     const form = await FormConfig.findOne({ where })
     if (!form) return error(404, 'Form not found')
 
+    const isActivating = payload.active !== undefined && Boolean(payload.active) && !form.active
+    if (isActivating) {
+      await requireUsageAllowed(event, 'forms')
+    }
+
     const updates = {}
     if (payload.name !== undefined) updates.name = String(payload.name || '').trim()
     if (payload.active !== undefined) updates.active = Boolean(payload.active)
@@ -159,6 +183,9 @@ export const updateForm = async (event) => {
     await form.update(updates)
     return success(form)
   } catch (e) {
+    if (e?.statusCode === 403) {
+      return error(403, e?.data?.message || getFormLimitMessage({ action: 'activate more forms' }))
+    }
     return error(500, e?.message || 'Failed to update form')
   }
 }
@@ -257,6 +284,17 @@ export const restoreForms = async (event) => {
   if (!ids.length) return error(400, 'Form id(s) are required')
 
   try {
+    const forms = await FormConfig.findAll({
+      where: { organisationId: orgId, id: { [Op.in]: ids }, softDeleted: true },
+      attributes: ['id', 'active'],
+    })
+    if (!forms.length) return error(404, 'Archived form(s) not found')
+
+    const activeRestoreCount = forms.filter((form) => form.active).length
+    if (activeRestoreCount > 0 && await wouldExceedActiveFormLimit({ orgId, restoringActiveCount: activeRestoreCount })) {
+      return error(403, getFormLimitMessage({ action: 'restore more active forms' }))
+    }
+
     const [count] = await FormConfig.update(
       { softDeleted: false, deletedAt: null },
       { where: { organisationId: orgId, id: { [Op.in]: ids }, softDeleted: true } }

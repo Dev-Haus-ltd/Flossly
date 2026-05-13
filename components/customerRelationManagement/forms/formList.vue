@@ -89,11 +89,39 @@
           variant="flat"
           rounded="lg"
           class="add-task-btn"
-          @click="openBuilder(null)"
+          @click="handleNewFormClick"
         >
           <template #prepend><v-icon size="18">mdi-plus-circle-outline</v-icon></template>
           New Form
         </v-btn>
+      </div>
+
+      <div v-if="isLite" class="px-5 mb-4">
+        <div class="d-flex align-center justify-space-between flex-wrap" style="gap: 12px;">
+          <v-chip
+            v-if="formsUsageSummary"
+            color="primary"
+            variant="tonal"
+            label
+          >
+            {{ formsUsageSummary }}
+          </v-chip>
+          <span
+            v-if="formsUsageHint"
+            style="font-size: 13px; color: #6b7280;"
+          >
+            {{ formsUsageHint }}
+          </span>
+        </div>
+
+        <v-alert
+          v-if="showLiteFormsAlert"
+          :type="isAtLimit('forms') ? 'warning' : 'info'"
+          variant="tonal"
+          class="mt-3"
+        >
+          {{ liteFormsAlertMessage }}
+        </v-alert>
       </div>
 
       <div class="px-5">
@@ -439,11 +467,13 @@
 <script setup>
 import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
+import { resetUsageState, useUsageSummary } from '@/composables/useUsageSummary'
 
 const emit = defineEmits(['builder-open', 'builder-close'])
 
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
+const { usage, isLite, fetchUsage, isAtLimit } = useUsageSummary()
 
 const openedPanels = ref([0])
 
@@ -498,6 +528,45 @@ const confirmBulkDelete = ref(false)
 const archiving = ref(false)
 const restoring = ref(false)
 const deleting = ref(false)
+
+const formsUsage = computed(() => usage.value?.forms || null)
+const formsUsageSummary = computed(() => {
+  if (!isLite.value || !formsUsage.value?.max) return ''
+  return `${formsUsage.value.current}/${formsUsage.value.max} active forms used`
+})
+const formsUsageHint = computed(() => {
+  if (!isLite.value || !formsUsage.value?.max) return ''
+  return isAtLimit('forms')
+    ? 'Lite has reached its active lead form limit.'
+    : 'Lite includes 1 active lead form.'
+})
+const showLiteFormsAlert = computed(() => isLite.value && Boolean(formsUsage.value?.max))
+const liteFormsAlertMessage = computed(() => (
+  isAtLimit('forms')
+    ? 'Lite includes 1 active lead form. Deactivate your current form or upgrade to create or restore more.'
+    : 'Lite includes 1 active lead form. Upgrade to CRM if you need multiple forms.'
+))
+
+const refreshUsage = async () => {
+  resetUsageState()
+  await fetchUsage()
+}
+
+const triggerLeadFormsUpgrade = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('upgrade-required', {
+      detail: { feature: 'leadForms', code: 'LIMIT_REACHED' },
+    }))
+  }
+}
+
+const handleFormLimitReached = (message) => {
+  triggerLeadFormsUpgrade()
+  mainStore.setSnackbar({
+    title: message || 'Lite includes 1 active lead form. Upgrade to add more.',
+    type: 'warning',
+  })
+}
 
 const formatDate = (d) => {
   if (!d) return '--'
@@ -556,7 +625,7 @@ const loadArchivedForms = async () => {
 }
 
 const loadForms = async () => {
-  await Promise.all([loadActiveForms(), loadArchivedForms()])
+  await Promise.all([loadActiveForms(), loadArchivedForms(), fetchUsage()])
 }
 
 watch(searchInput, () => {
@@ -609,6 +678,14 @@ const openBuilder = (form) => {
   emit('builder-open', form?.name || 'New Form')
 }
 
+const handleNewFormClick = () => {
+  if (isLite.value && isAtLimit('forms')) {
+    handleFormLimitReached('Lite includes 1 active lead form. Deactivate your current form or upgrade to create another.')
+    return
+  }
+  openBuilder(null)
+}
+
 const closeBuilder = () => {
   builderOpen.value = false
   selectedForm.value = null
@@ -655,19 +732,32 @@ const toggleAllArchived = () => {
 const onFormSaved = () => {
   activePage.value = 1
   archivedPage.value = 1
-  loadForms()
+  refreshUsage().then(loadForms)
 }
 
 const toggleActive = async (form, newVal) => {
+  if (newVal && !form.active && isLite.value && isAtLimit('forms')) {
+    handleFormLimitReached('Lite includes 1 active lead form. Deactivate your current form or upgrade to activate another.')
+    return
+  }
   try {
     const res = await crmStore.updateForm({ id: form.id, active: newVal })
     if (res?.code === 0) {
       form.active = newVal
+      await refreshUsage()
       mainStore.setSnackbar({ title: newVal ? 'Form activated' : 'Form deactivated', type: 'success' })
     } else {
+      if ((res?.message || '').toLowerCase().includes('active lead form')) {
+        handleFormLimitReached(res?.message)
+        return
+      }
       mainStore.setSnackbar({ title: res?.message || 'Failed to update status', type: 'error' })
     }
   } catch (e) {
+    if ((e?.message || '').toLowerCase().includes('active lead form')) {
+      handleFormLimitReached(e?.message)
+      return
+    }
     mainStore.setSnackbar({ title: e?.message || 'Failed to update status', type: 'error' })
   }
 }
@@ -699,6 +789,7 @@ const doArchive = async () => {
       selectedForms.value = []
       activePage.value = 1
       archivedPage.value = 1
+      await refreshUsage()
       await loadForms()
     } else {
       mainStore.setSnackbar({ title: res?.message || 'Failed to archive forms', type: 'error' })
@@ -722,11 +813,20 @@ const doRestore = async () => {
       selectedArchivedForms.value = []
       activePage.value = 1
       archivedPage.value = 1
+      await refreshUsage()
       await loadForms()
     } else {
+      if ((res?.message || '').toLowerCase().includes('active lead form')) {
+        handleFormLimitReached(res?.message)
+        return
+      }
       mainStore.setSnackbar({ title: res?.message || 'Failed to restore forms', type: 'error' })
     }
   } catch (e) {
+    if ((e?.message || '').toLowerCase().includes('active lead form')) {
+      handleFormLimitReached(e?.message)
+      return
+    }
     mainStore.setSnackbar({ title: e?.message || 'Failed to restore forms', type: 'error' })
   } finally {
     restoring.value = false
@@ -745,6 +845,7 @@ const doDelete = async () => {
       selectedArchivedForms.value = []
       activePage.value = 1
       archivedPage.value = 1
+      await refreshUsage()
       await loadForms()
     } else {
       mainStore.setSnackbar({ title: res?.message || 'Failed to delete forms', type: 'error' })
@@ -756,7 +857,10 @@ const doDelete = async () => {
   }
 }
 
-onMounted(loadForms)
+onMounted(async () => {
+  await refreshUsage()
+  await loadForms()
+})
 onBeforeUnmount(() => {
   if (searchDebounce) clearTimeout(searchDebounce)
 })

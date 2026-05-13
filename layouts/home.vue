@@ -280,7 +280,7 @@
 import { useDisplay } from "vuetify";
 import PricingModal from "@/components/signUpSetup/PricingModal.vue";
 import { useWhapiStream } from "@/composables/useWhapiStream";
-import { useUsageSummary } from "@/composables/useUsageSummary";
+import { resetUsageState, useUsageSummary } from "@/composables/useUsageSummary";
 import { usePostHog } from "@/composables/usePostHog";
 import { useAppTour } from "@/composables/useAppTour";
 import { Post } from "@/services/apiWrapper";
@@ -480,6 +480,8 @@ const handleStartTrial = async () => {
       showStartTrial.value = true
       track('trial_started', { tier: trialTier.value })
       await authStore.profile()
+      resetUsageState()
+      await fetchUsage()
     } else {
       mainStore.setSnackbar({ message: friendlyTrialError(extractApiError(res)), color: 'error' })
     }

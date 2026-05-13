@@ -1,11 +1,27 @@
 import { createError } from 'h3'
 import { getEntitlements } from '../config/entitlements'
-import { CrmLead, UserDocument, UserOrganisation, Organisation, User } from '../models'
+import { CrmLead, UserDocument, UserOrganisation, Organisation, User, FormConfig } from '../models'
+import sequelize from './db'
 
 const RESOURCE_LABELS = {
   leads:     'lead',
   storageMB: 'storage',
   members:   'team member',
+  forms:     'active lead form',
+}
+
+let formSoftDeleteSupported = null
+
+const supportsFormSoftDelete = async () => {
+  if (formSoftDeleteSupported !== null) return formSoftDeleteSupported
+  try {
+    const qi = sequelize.getQueryInterface()
+    const columns = await qi.describeTable('FormConfigs')
+    formSoftDeleteSupported = !!(columns?.softDeleted && columns?.deletedAt)
+  } catch {
+    formSoftDeleteSupported = false
+  }
+  return formSoftDeleteSupported
 }
 
 /**
@@ -13,7 +29,7 @@ const RESOURCE_LABELS = {
  * Returns current usage so callers can show warnings without a second query.
  *
  * @param {object} event - H3 event
- * @param {'leads'|'storageMB'|'members'} resource
+ * @param {'leads'|'storageMB'|'members'|'forms'} resource
  * @returns {{ current: number, max: number, warnAt: number }}
  */
 export const requireUsageAllowed = async (event, resource) => {
@@ -65,6 +81,12 @@ export const getCurrentUsage = async (orgId, resource) => {
   switch (resource) {
     case 'leads':
       return CrmLead.count({ where: { organisationId: orgId, softDeleted: false } })
+
+    case 'forms': {
+      const where = { organisationId: orgId, active: true }
+      if (await supportsFormSoftDelete()) where.softDeleted = false
+      return FormConfig.count({ where })
+    }
 
     case 'storageMB': {
       const bytes = await UserDocument.sum('fileSizeBytes', {

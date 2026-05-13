@@ -189,6 +189,14 @@ const mainStore = useMainStore()
 // If null, the component is being used standalone and renders its own toolbar
 const bridge = inject('crm-builder-bridge', null)
 
+const triggerLeadFormsUpgrade = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('upgrade-required', {
+      detail: { feature: 'leadForms', code: 'LIMIT_REACHED' },
+    }))
+  }
+}
+
 const formName = ref(props.form?.name || 'New Form')
 const formColor = ref(props.form?.color || '#0061FB')
 const settingsPresetColors = [
@@ -269,10 +277,16 @@ const doSave = async () => {
       emit('saved')
       return res.data
     } else {
+      if ((res?.message || '').toLowerCase().includes('active lead form')) {
+        triggerLeadFormsUpgrade()
+      }
       mainStore.setSnackbar({ title: res?.message || 'Failed to save form', type: 'error' })
       return null
     }
   } catch (e) {
+    if ((e?.message || '').toLowerCase().includes('active lead form')) {
+      triggerLeadFormsUpgrade()
+    }
     mainStore.setSnackbar({ title: e?.message || 'Failed to save form', type: 'error' })
     return null
   } finally {

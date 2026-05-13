@@ -52,6 +52,10 @@ const CONTENT_MAP = {
     title: 'Bulk lead upload is on Flossy CRM',
     subtitle: 'Import larger lead lists and manage growth from one place with CRM.',
   },
+  leadForms: {
+    title: 'More lead forms are on Flossy CRM',
+    subtitle: 'Lite includes 1 active lead form. Upgrade to create and run more forms.',
+  },
   googleAds: {
     title: 'Google Ads analytics is on Flossy Pro',
     subtitle: 'Track campaign performance and ROI across Google Ads directly inside Flossly.',

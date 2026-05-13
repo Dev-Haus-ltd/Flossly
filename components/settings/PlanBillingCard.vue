@@ -126,27 +126,52 @@ const billingCycle = computed(() => {
   return authStore.loggedUser?.licenseBillingCycle ?? 'Monthly'
 })
 
-const { usage } = useUsageSummary()
-const usageItems = computed(() => [
-  {
-    label: 'Leads',
-    current: usage.value?.leads?.current ?? 0,
-    max: usage.value?.leads?.max ?? null,
-    pct: usage.value?.leads?.max ? (usage.value.leads.current / usage.value.leads.max) * 100 : 0,
-  },
-  {
-    label: 'Storage',
-    current: usage.value?.storageMB ? `${(usage.value.storageMB.current / 1024).toFixed(1)} GB` : '0 GB',
-    max: usage.value?.storageMB?.max ? `${(usage.value.storageMB.max / 1024).toFixed(0)} GB` : null,
-    pct: usage.value?.storageMB?.max ? (usage.value.storageMB.current / usage.value.storageMB.max) * 100 : 0,
-  },
-  {
-    label: 'Team members',
-    current: usage.value?.members?.current ?? 0,
-    max: usage.value?.members?.max ?? null,
-    pct: usage.value?.members?.max ? (usage.value.members.current / usage.value.members.max) * 100 : 0,
-  },
-])
+const { usage, isLite, fetchUsage } = useUsageSummary()
+const usageItems = computed(() => {
+  if (!isLite.value) {
+    return [
+      { label: 'Leads', current: null, max: null, pct: 0 },
+      { label: 'Storage', current: null, max: null, pct: 0 },
+      { label: 'Team members', current: null, max: null, pct: 0 },
+      { label: 'Lead forms', current: null, max: null, pct: 0 },
+    ]
+  }
+
+  return [
+    {
+      label: 'Leads',
+      current: usage.value?.leads?.current ?? 0,
+      max: usage.value?.leads?.max ?? null,
+      pct: usage.value?.leads?.max ? (usage.value.leads.current / usage.value.leads.max) * 100 : 0,
+    },
+    {
+      label: 'Storage',
+      current: usage.value?.storageMB ? `${(usage.value.storageMB.current / 1024).toFixed(1)} GB` : '0 GB',
+      max: usage.value?.storageMB?.max ? `${(usage.value.storageMB.max / 1024).toFixed(0)} GB` : null,
+      pct: usage.value?.storageMB?.max ? (usage.value.storageMB.current / usage.value.storageMB.max) * 100 : 0,
+    },
+    {
+      label: 'Team members',
+      current: usage.value?.members?.current ?? 0,
+      max: usage.value?.members?.max ?? null,
+      pct: usage.value?.members?.max ? (usage.value.members.current / usage.value.members.max) * 100 : 0,
+    },
+    {
+      label: 'Lead forms',
+      current: usage.value?.forms?.current ?? 0,
+      max: usage.value?.forms?.max ?? null,
+      pct: usage.value?.forms?.max ? (usage.value.forms.current / usage.value.forms.max) * 100 : 0,
+    },
+  ]
+})
+
+onMounted(() => {
+  fetchUsage()
+})
+
+watch(isLite, () => {
+  fetchUsage()
+})
 
 const hasStripeSubscription = computed(() => resolvedTier.value !== 'Lite' && !isTrialAccess.value)
 const portalLoading = ref(false)

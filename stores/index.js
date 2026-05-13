@@ -24,13 +24,13 @@ export const LICENSE_TYPES = {
 // Maps any legacy or current license type to the menu feature set it should see
 const LICENSE_FEATURES = {
   Lite:   new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta"]),
-  CRM:    new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "diary"]),
+  CRM:    new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation"]),
   Pro:    new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "googleAds", "diary", "patientBooking"]),
   // Legacy — mapped to their resolved tier's feature set
   System: new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "googleAds", "diary", "patientBooking"]),
   Trial:  new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta"]),
   Drift:  new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta"]),
-  Glide:  new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "diary"]),
+  Glide:  new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation"]),
   Soar:   new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "googleAds", "diary", "patientBooking"]),
 };
 

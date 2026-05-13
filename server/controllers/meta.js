@@ -39,6 +39,16 @@ const getMetaLimitMessage = (assetType, max) => {
   return 'Your current plan does not support more Meta connections.'
 }
 
+const getMetaSelectionLimitMessage = (assetType, max, selectedCount, remainingSlots = max) => {
+  if (assetType === 'pages') {
+    return `Flossly Lite allows only ${max} Facebook page connection${max === 1 ? '' : 's'}. You selected ${selectedCount} page${selectedCount === 1 ? '' : 's'}, but only ${remainingSlots} can be connected. Please keep just ${remainingSlots} selected or upgrade.`
+  }
+  if (assetType === 'instagramAccounts') {
+    return `Flossly Lite allows only ${max} Instagram connection${max === 1 ? '' : 's'}. You selected ${selectedCount} account${selectedCount === 1 ? '' : 's'}, but only ${remainingSlots} can be connected. Please reduce the selection or upgrade.`
+  }
+  return 'Your current plan does not support that many Meta connections.'
+}
+
 const getOrgMetaLimits = async (orgId) => {
   const org = await Organisation.findByPk(orgId, { attributes: ['id', 'licenseType'] })
   return getMetaAssetLimits(org)
@@ -407,7 +417,15 @@ export const authCallback = async (event) => {
         setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
         return sendRedirect(event, `/crm?error=${encodeURIComponent(getMetaLimitMessage('pages', metaLimits.pages))}`)
       }
-      pagesToConnect = pagesToConnect.slice(0, remainingPageSlots)
+      if (pagesToConnect.length > remainingPageSlots) {
+        const limitedPages = pagesToConnect.slice(0, remainingPageSlots)
+        const connectedPageNames = limitedPages.map((page) => page?.name).filter(Boolean)
+        const warning = connectedPageNames.length
+          ? `${getMetaSelectionLimitMessage('pages', metaLimits.pages, pagesToConnect.length, remainingPageSlots)} Connected page: ${connectedPageNames.join(', ')}.`
+          : getMetaSelectionLimitMessage('pages', metaLimits.pages, pagesToConnect.length, remainingPageSlots)
+        pagesToConnect = limitedPages
+        q.warning = warning
+      }
     }
 
 
@@ -543,7 +561,8 @@ export const authCallback = async (event) => {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
     
     // ✅ FIX: Better success redirect with details
-    return sendRedirect(event, `/crm?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}`)
+    const warningQuery = q.warning ? `&warning=${encodeURIComponent(q.warning)}` : ''
+    return sendRedirect(event, `/crm?meta=connected&pages=${pagesToConnect.length}&user=${encodeURIComponent(fbUserName)}${warningQuery}`)
 
   } catch (e) {
     setCookie(event, 'meta_oauth_state', '', { maxAge: -1 })
@@ -2422,8 +2441,11 @@ export const connectBusinessPages = async (event) => {
       where: { organisationId: orgId, status: 'Active' },
     })
     const remainingPageSlots = Math.max(0, metaLimits.pages - Number(activePageCount || 0))
-    if (pageIds.length > remainingPageSlots) {
+    if (remainingPageSlots <= 0) {
       return error(403, getMetaLimitMessage('pages', metaLimits.pages))
+    }
+    if (pageIds.length > remainingPageSlots) {
+      return error(403, getMetaSelectionLimitMessage('pages', metaLimits.pages, pageIds.length, remainingPageSlots))
     }
   }
 

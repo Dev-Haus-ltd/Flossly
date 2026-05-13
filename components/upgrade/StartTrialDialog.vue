@@ -5,7 +5,7 @@
     :subtitle="subtitle"
     icon="mdi-party-popper"
     primary-label="Got it!"
-    secondary-label="See what's new →"
+    secondary-label="Take a tour →"
     @primary="visible = false"
     @secondary="goToCrm"
     @close="visible = false"
@@ -13,6 +13,8 @@
 </template>
 
 <script setup>
+import { useAppTour } from '@/composables/useAppTour'
+
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   trialEndDate: { type: String, default: '' },
@@ -21,6 +23,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const router = useRouter()
+const { startCrmUpgradeTour } = useAppTour()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -40,11 +43,12 @@ const title = computed(() => `Your 14-day ${props.tier} trial has started!`)
 
 const subtitle = computed(() =>
   `You now have full access to Flossy ${props.tier}${formattedDate.value ? ` until ${formattedDate.value}` : ''}. No card needed — you'll only be asked for payment if you decide to continue after your trial.<br><br>` +
-  `<strong>Included in trial:</strong> Automation · Unlimited leads · WhatsApp messaging<br><strong>Upgrade to Pro to unlock:</strong> Patient booking · Finance · Google Ads`
+  `<strong>Included in trial:</strong> Automation · Unlimited leads<br><strong>Paid CRM/Pro only:</strong> WhatsApp messaging<br><strong>Upgrade to Pro to unlock:</strong> Patient booking · Finance · Google Ads`
 )
 
-const goToCrm = () => {
+const goToCrm = async () => {
   visible.value = false
-  router.push('/crm')
+  await router.push('/crm')
+  setTimeout(() => startCrmUpgradeTour(), 800)
 }
 </script>
