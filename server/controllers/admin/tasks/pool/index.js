@@ -1,5 +1,5 @@
 import { success, error } from '../../../../utils/response';
-import { Task, TaskCategory, Role } from '../../../../models';
+import { Task, TaskCategory, Role, Organisation } from '../../../../models';
 import { getRouterParam, getQuery } from 'h3';
 
 export const getTaskPool = async (event) => {
@@ -92,12 +92,12 @@ export const getTaskPool = async (event) => {
 
 export const getTaskById = async (event) => {
   const admin = event.context.admin;
-  
+
   if (!admin) {
     return error(403, "Admin access required");
   }
 
-  const id = getRouterParam(event, 'taskId');
+  const id = getRouterParam(event, "taskId");
 
   if (!id) {
     return error(400, "Task ID is required");
@@ -109,17 +109,17 @@ export const getTaskById = async (event) => {
       include: [
         {
           model: TaskCategory,
-          as: 'category',
-          attributes: ['id', 'name', 'description', 'color', 'organisationId'],
-          required: false
+          as: "category",
+          attributes: ["id", "name", "description", "color", "organisationId"],
+          required: false,
         },
         {
           model: Role,
-          as: 'role',
-          attributes: ['id', 'title', 'roleType'],
-          required: false
-        }
-      ]
+          as: "role",
+          attributes: ["id", "title", "roleType"],
+          required: false,
+        },
+      ],
     });
 
     if (!task) {
@@ -132,46 +132,48 @@ export const getTaskById = async (event) => {
         title: task.title,
         description: task.description,
         categoryId: task.categoryId,
-        category: task.category ? {
-          id: task.category.id,
-          name: task.category.name,
-          description: task.category.description,
-          color: task.category.color
-        } : null,
+        category: task.category
+          ? {
+              id: task.category.id,
+              name: task.category.name,
+              description: task.category.description,
+              color: task.category.color,
+            }
+          : null,
         roleId: task.roleId,
-        role: task.role ? {
-          id: task.role.id,
-          title: task.role.title,
-          roleType: task.role.roleType
-        } : null,
+        role: task.role
+          ? {
+              id: task.role.id,
+              title: task.role.title,
+              roleType: task.role.roleType,
+            }
+          : null,
         defaultFrequency: task.defaultFrequency,
         isSystemTask: task.isSystemTask,
         createdAt: task.createdAt,
-        updatedAt: task.updatedAt
-      }
+        updatedAt: task.updatedAt,
+      },
     });
   } catch (err) {
-    console.error('Get task by ID error:', err);
+    console.error("Get task by ID error:", err);
     return error(500, err.message);
   }
 };
 
 /**
- * Get global default CRM automation library
- * View all system automation templates available to all practices
+ * Bulk upload tasks from CSV file
  */
-
 export const adminBulkUploadTasks = async (event) => {
   const admin = event.context.admin;
-  
+
   if (!admin) {
     return error(403, "Admin access required");
   }
 
   try {
-    const formidable = (await import('formidable')).default;
-    const fs = await import('fs');
-    const { parse } = await import('csv-parse');
+    const formidable = (await import("formidable")).default;
+    const fs = await import("fs");
+    const { parse } = await import("csv-parse");
 
     const form = formidable({ multiples: false });
     const [fields, files] = await new Promise((resolve, reject) => {
@@ -247,7 +249,7 @@ export const adminBulkUploadTasks = async (event) => {
 
     // If there are validation errors, return them
     if (errors.length > 0 && tasksToInsert.length === 0) {
-      return error(400, `Validation errors: ${errors.join(', ')}`);
+      return error(400, `Validation errors: ${errors.join(", ")}`);
     }
 
     // Insert tasks into database
@@ -260,17 +262,16 @@ export const adminBulkUploadTasks = async (event) => {
       message: `Successfully uploaded ${createdTasks.length} tasks`,
       created: createdTasks.length,
       errors: errors.length > 0 ? errors : undefined,
-      tasks: createdTasks.map(t => ({
+      tasks: createdTasks.map((t) => ({
         id: t.id,
         title: t.title,
         categoryId: t.categoryId,
         roleId: t.roleId,
-        defaultFrequency: t.defaultFrequency
-      }))
+        defaultFrequency: t.defaultFrequency,
+      })),
     });
-
   } catch (err) {
-    console.error('Admin bulk upload tasks error:', err);
+    console.error("Admin bulk upload tasks error:", err);
     return error(500, err.message || "Failed to upload tasks");
   }
 };
