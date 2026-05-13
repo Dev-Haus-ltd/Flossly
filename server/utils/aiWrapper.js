@@ -4,7 +4,7 @@ function getConfig() {
   return useRuntimeConfig();
 }
 
-async function initializeAnthropicClient() {
+export async function initializeAnthropicClient() {
   if (anthropicClient) return anthropicClient;
 
   const config = getConfig();
