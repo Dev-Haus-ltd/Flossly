@@ -60,6 +60,10 @@ const CONTENT_MAP = {
     title: 'Google Ads analytics is on Flossy Pro',
     subtitle: 'Track campaign performance and ROI across Google Ads directly inside Flossly.',
   },
+  diary: {
+    title: 'Flossy Diary is on Flossy Pro',
+    subtitle: 'Manage appointments, patients, and finance all in one place — available on the Pro plan.',
+  },
 }
 
 const content = computed(
@@ -67,7 +71,7 @@ const content = computed(
 )
 
 // Features that require Pro — CRM trial won't unlock these
-const PRO_ONLY_FEATURES = new Set(['patientBooking', 'googleAds'])
+const PRO_ONLY_FEATURES = new Set(['patientBooking', 'googleAds', 'diary'])
 
 const resolvedTier = computed(() => String(authStore.loggedUser?.licenseType || 'Lite').trim())
 const isProOnlyFeature = computed(() => PRO_ONLY_FEATURES.has(props.feature))

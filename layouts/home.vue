@@ -587,11 +587,6 @@ const preloadUsers = async () => {
 };
 const onUpgradeRequired = (e) => {
   const feature = e.detail?.feature || ''
-  const key = `upgrade-lock:${feature || 'default'}`
-  if (typeof window !== 'undefined') {
-    if (sessionStorage.getItem(key)) return
-    sessionStorage.setItem(key, '1')
-  }
   lockedFeature.value = feature
   showFeatureLock.value = true
   track('feature_lock_shown', { feature: lockedFeature.value })
@@ -600,6 +595,11 @@ const onUpgradeRequired = (e) => {
 const onOnboardingUi = () => {
   setTimeout(() => maybeStartTour(), 50)
 }
+
+const route = useRoute()
+watch(() => route.path, () => {
+  showFeatureLock.value = false
+})
 
 onMounted(async () => {
   if (typeof window !== "undefined") {
