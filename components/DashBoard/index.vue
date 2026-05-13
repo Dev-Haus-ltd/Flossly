@@ -2,7 +2,6 @@
   <v-container fluid class="pa-4 bg-white">
     <!-- Dashboard Content -->
     <div>
-      <DashBoardSetupProgressWidget />
       <CommonEventCard
         v-if="showCard"
         class="my-4"
@@ -373,6 +372,7 @@ const showCard = ref(true);
 const isLoading = ref(true);
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
+const authStore = useAuthStore();
 
 const crmStore = useCrmStore();
 const orgStore = useOrgStore();
@@ -385,6 +385,13 @@ const user = ref({});
 const value = ref(null);
 const crmLeads = ref([]);
 const leadSources = ref([]);
+const LEGACY_PLAN_MAP = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' };
+const resolvedTier = computed(() => {
+  const raw = authStore.loggedUser?.licenseType || user.value?.licenseType || 'Lite';
+  const normalized = String(raw || '').trim();
+  return LEGACY_PLAN_MAP[normalized] ?? (normalized || 'Lite');
+});
+const canUseTaskPool = computed(() => ['CRM', 'Pro'].includes(resolvedTier.value));
 const activeCrmLeads = computed(() =>
   (crmLeads.value || []).filter((lead) => !lead?.softDeleted)
 );
@@ -520,7 +527,7 @@ const getRecentDocs = () => {
 };
 const fetchListCategories = async () => {
   try {
-    const res = isPrivilegedUser.value
+    const res = isPrivilegedUser.value && canUseTaskPool.value
       ? await taskStore.getTeamTaskStatsByCategory()
       : await taskStore.getMyTaskStatsByCategory();
     if (res.code === 0) {
@@ -574,7 +581,7 @@ const buildZeroStats = () => [
 const fetchDummyStats = async () => {
   try {
     const categoryId = tab.value || null;
-    if (isPrivilegedUser.value) {
+    if (isPrivilegedUser.value && canUseTaskPool.value) {
       const res = await taskStore.getTeamTaskStatsByStatusAndCategory(categoryId);
       if (res && res.code === 0) {
         const data = res.data || {};

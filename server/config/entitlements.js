@@ -15,44 +15,67 @@ const LEGACY_MAP = {
 
 export const ENTITLEMENTS = {
   [TIERS.LITE]: {
-    taskPool:       false,
-    whatsapp:       false,
-    googleAds:      false,
+    // CRM & messaging
+    metaDms:        true,   // Facebook Messenger + Instagram DMs (1 page connection)
+    whatsapp:       false,  // WhatsApp Business via Whapi — CRM+ only
     automation:     false,
+    googleAds:      false,
+    // Tasks
+    taskPool:       false,
+    // Diary
     patientBooking: false,
-    diary:          'view-only',
+    diary:          false,
+    charting:       true,
+    // Team (rota, holiday tracker available on all tiers)
+    rota:           true,
+    holidayTracker: true,
+    // Lead forms — 1 active form on Lite, unlimited on CRM+
+    leadForms:      true,
     limits: {
       leads:     100,
       storageMB: 1024,
       members:   3,
+      forms:     1,
     },
     warnAt: 0.8,
   },
   [TIERS.CRM]: {
-    taskPool:       true,
+    metaDms:        true,
     whatsapp:       true,
-    googleAds:      false,
     automation:     true,
-    patientBooking: true,
-    diary:          'full',
+    googleAds:      false,
+    taskPool:       true,
+    patientBooking: false, // Patients + Finance diary sections are Pro only
+    diary:          'view-only',
+    charting:       true,
+    rota:           true,
+    holidayTracker: true,
+    leadForms:      true,
     limits: {
       leads:     Infinity,
       storageMB: Infinity,
       members:   Infinity,
+      forms:     Infinity,
     },
     warnAt: 0.8,
   },
   [TIERS.PRO]: {
-    taskPool:       true,
+    metaDms:        true,
     whatsapp:       true,
-    googleAds:      true,
     automation:     true,
+    googleAds:      true,
+    taskPool:       true,
     patientBooking: true,
     diary:          'full',
+    charting:       true,
+    rota:           true,
+    holidayTracker: true,
+    leadForms:      true,
     limits: {
       leads:     Infinity,
       storageMB: Infinity,
       members:   Infinity,
+      forms:     Infinity,
     },
     warnAt: 0.8,
   },

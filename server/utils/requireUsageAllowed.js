@@ -1,6 +1,6 @@
 import { createError } from 'h3'
 import { getEntitlements } from '../config/entitlements'
-import { CrmLead, UserDocument, UserOrganisation, Organisation } from '../models'
+import { CrmLead, UserDocument, UserOrganisation, Organisation, User } from '../models'
 
 const RESOURCE_LABELS = {
   leads:     'lead',
@@ -73,8 +73,16 @@ export const getCurrentUsage = async (orgId, resource) => {
       return Math.ceil((Number(bytes) || 0) / (1024 * 1024))
     }
 
-    case 'members':
-      return UserOrganisation.count({ where: { organisationId: orgId } })
+    case 'members': {
+      const rows = await UserOrganisation.findAll({
+        where: { organisationId: orgId, status: ['Active', 'Invited'] },
+        include: [{ model: User, as: 'user', attributes: ['email'], required: true }],
+      })
+      return rows.filter(uo => {
+        const email = uo.user?.email || ''
+        return !(email.includes('dummy-dentist') && email.includes('@flossly.local'))
+      }).length
+    }
 
     default:
       return 0

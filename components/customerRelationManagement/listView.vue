@@ -1191,24 +1191,7 @@
       @confirm="doDeleteArchived"
       @cancel="confirmArchivedDelete = false"
     />
-    <v-dialog v-model="showBookPlanDialog" max-width="500">
-      <v-card class="pa-4">
-        <v-card-title class="text-subtitle-1 pa-0 mb-2">
-          CRM or Pro Plan Required
-        </v-card-title>
-        <v-card-text class="pa-0">
-          This action is available on CRM and Pro plans. Your current plan is
-          <strong>{{ currentOrgLicenseLabel }}</strong>.
-          Upgrade to CRM or Pro to unlock diary booking, patient auto-creation, lead form sending, and more.
-        </v-card-text>
-        <v-card-actions class="pa-0 mt-4">
-          <v-spacer />
-          <v-btn color="primary" variant="flat" @click="showBookPlanDialog = false">
-            OK
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+
     <TeamFlossSideBarAddNewstaff
       v-model="addStaffDrawer"
       :rolesList="rolesList"
@@ -1632,7 +1615,6 @@ const whatsappTokens = [
 ];
 const rolesList = ref([]);
 const automationSaving = reactive({});
-const showBookPlanDialog = ref(false);
 
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
@@ -1678,11 +1660,13 @@ const currentOrgLicense = computed(() => {
   return String(match?.licenseType || 'Lite').trim();
 });
 
-const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || 'Lite');
-const canBookAppointments = computed(() => {
-  const type = String(currentOrgLicense.value || '').toLowerCase();
-  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type);
+
+const resolvedTier = computed(() => {
+  const raw = String(currentOrgLicense.value || '').trim();
+  const map = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' };
+  return map[raw] ?? (raw || 'Lite');
 });
+const canBookAppointments = computed(() => ['Pro', 'Soar', 'System'].includes(resolvedTier.value));
 
 const renderTemplateWithContext = (input, ctx, lead) => {
   const withMustache = String(input || '')
@@ -2062,7 +2046,7 @@ const onActionClick = (key) => {
   if (!selectedLeads.value.length) return;
   if (key === 'book') {
     if (!canBookAppointments.value) {
-      showBookPlanDialog.value = true;
+      window.dispatchEvent(new CustomEvent('upgrade-required', { detail: { feature: 'patientBooking' } }));
       return;
     }
     emit('book', [...selectedLeads.value])
@@ -2081,7 +2065,10 @@ const onActionClick = (key) => {
   else if (key === 'whatsapp') openWhatsAppCompose();
   else if (key === 'sendPrice') openSendPriceCompose();
   else if (key === 'sendForm') {
-    if (!canBookAppointments.value) { showBookPlanDialog.value = true; return; }
+    if (!canBookAppointments.value) {
+      window.dispatchEvent(new CustomEvent('upgrade-required', { detail: { feature: 'patientBooking' } }));
+      return;
+    }
     openCompose(key)
   }
   else if (['mail','shareLocation'].includes(key)) openCompose(key)

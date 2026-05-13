@@ -7,6 +7,28 @@
       <p class="mr-1">CRM</p>
     </div>
     <div class="mt-5 px-5">
+      <v-card v-if="isLite && usage?.leads" rounded="lg" elevation="0" border class="mb-4 usage-card">
+        <v-card-text class="pa-4">
+          <div class="d-flex align-center justify-space-between flex-wrap ga-3 mb-2">
+            <div>
+              <p class="text-subtitle-2 font-weight-semibold mb-0">Lite lead allowance</p>
+              <p class="text-caption text-medium-emphasis mb-0">
+                {{ leadsUsedLabel }} of {{ leadsLimitLabel }} leads used
+              </p>
+            </div>
+            <v-chip size="small" :color="leadUsageTone" variant="tonal">
+              {{ leadsRemainingLabel }} remaining
+            </v-chip>
+          </div>
+          <v-progress-linear
+            :model-value="leadUsagePct"
+            :color="leadUsageTone"
+            bg-color="#e8eefc"
+            rounded
+            height="8"
+          />
+        </v-card-text>
+      </v-card>
       <v-row class="stat-row" align="stretch">
         <v-col style="flex: 1 1 0;" v-for="(stat, i) in leadStats" :key="i">
           <CommonStatCard
@@ -141,7 +163,7 @@
             variant="flat"
             rounded="lg"
             class="add-task-btn mx-2"
-            @click="bulkLeadUploadDialog = true"
+            @click="openBulkLeadUploadDialog"
           >
             <template #prepend>
               <v-icon size="18">mdi-upload</v-icon>
@@ -498,6 +520,7 @@ import { useMainStore } from '@/stores/index'
 import { useCrmStore } from '@/stores/crm'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
+import { useUsageSummary } from '@/composables/useUsageSummary'
 import searchicon from "@/assets/icons/listView/serach-icon.svg";
 import crmService from '@/services/crmService'
 const crmStore = useCrmStore();
@@ -505,6 +528,7 @@ const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
 const userList = computed(() => storeUsers.value || []);
 const authStore = useAuthStore();
+const { usage, isLite } = useUsageSummary()
 const route = useRoute();
 const router = useRouter();
 const diaryStore = useDiaryStore();
@@ -658,15 +682,35 @@ const currentOrgLicense = computed(() => {
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
   return String(match?.licenseType || 'Lite').trim();
 });
+const resolvedTier = computed(() => {
+  const raw = String(currentOrgLicense.value || '').trim();
+  const map = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' };
+  return map[raw] ?? (raw || 'Lite');
+});
+const leadsUsage = computed(() => usage.value?.leads || null)
+const leadUsagePct = computed(() => {
+  const current = Number(leadsUsage.value?.current || 0)
+  const max = Number(leadsUsage.value?.max || 0)
+  if (!max) return 0
+  return Math.min(100, Math.round((current / max) * 100))
+})
+const leadsUsedLabel = computed(() => Number(leadsUsage.value?.current || 0))
+const leadsLimitLabel = computed(() => Number(leadsUsage.value?.max || 0))
+const leadsRemainingLabel = computed(() =>
+  Math.max(0, Number(leadsUsage.value?.max || 0) - Number(leadsUsage.value?.current || 0))
+)
+const leadUsageTone = computed(() => {
+  if (leadUsagePct.value >= 100) return 'error'
+  if (leadUsagePct.value >= 80) return 'warning'
+  return 'primary'
+})
+const canBulkUploadLeads = computed(() => ['CRM', 'Pro'].includes(resolvedTier.value));
 const canManageWhapi = computed(() => {
   const type = String(currentOrgLicense.value || '').toLowerCase();
   const billingCycle = authStore.loggedUser?.licenseBillingCycle || user.value?.licenseBillingCycle || null;
   return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type) && !!billingCycle;
 });
-const canBookAppointments = computed(() => {
-  const type = String(currentOrgLicense.value || '').toLowerCase();
-  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type);
-});
+const canBookAppointments = computed(() => ['Pro', 'Soar', 'System'].includes(resolvedTier.value));
 watch(bookingPractitionerOptions, (opts) => {
   if (!bookingInitialPractitioner.value && opts.length) {
     bookingInitialPractitioner.value = opts[0];
@@ -1342,7 +1386,9 @@ const onBookLeads = async (selection) => {
     return;
   }
   if (!canBookAppointments.value) {
-    mainStore?.setSnackbar?.({ title: 'Upgrade to CRM or Pro to book leads into the diary', type: 'warning' });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('upgrade-required', { detail: { feature: 'patientBooking' } }));
+    }
     return;
   }
   const lead = picked[0];
@@ -1428,6 +1474,17 @@ const updateLeads = async () => {
 const handleAddLeadClick = () => {
  
   addLeadDrawer.value = true;
+};
+const openBulkLeadUploadDialog = () => {
+  if (canBulkUploadLeads.value) {
+    bulkLeadUploadDialog.value = true;
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('upgrade-required', {
+      detail: { feature: 'leadBulkUpload', code: 'FEATURE_NOT_AVAILABLE' },
+    }));
+  }
 };
 
 const resolveLeadSource = (source) => {

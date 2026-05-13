@@ -195,11 +195,11 @@
           color="tertiary"
           variant="flat"
           rounded="lg"
-          @click="taskPoolDialog = true"
+          @click="openTaskPoolDialog"
           class="add-task-btn"
         >
           <template #prepend>
-            <v-icon size="18">mdi-checkbox-marked-outline</v-icon>
+            <v-icon size="18">{{ canUseTaskPool ? 'mdi-checkbox-marked-outline' : 'mdi-lock-outline' }}</v-icon>
           </template>
           Tasks Pool
         </v-btn>
@@ -207,7 +207,7 @@
           color="secondary"
           variant="flat"
           rounded="lg"
-          @click="bulkTaskUploadDialog = true"
+          @click="openBulkTaskUploadDialog"
           class="add-task-btn mx-2"
         >
           <template #prepend>
@@ -1312,6 +1312,13 @@ const authStore = useAuthStore();
 const { setUser } = useUser();
 const route = useRoute();
 const router = useRouter();
+const LEGACY_PLAN_MAP = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' };
+const resolvedTier = computed(() => {
+  const raw = authStore.loggedUser?.licenseType || 'Lite';
+  const normalized = String(raw || '').trim();
+  return LEGACY_PLAN_MAP[normalized] ?? (normalized || 'Lite');
+});
+const canUseTaskPool = computed(() => ['CRM', 'Pro'].includes(resolvedTier.value));
 const drawerOpen = ref(false);
 const openedPanels = ref([0]);
 const dialogOpen = ref(false);
@@ -1344,6 +1351,28 @@ const openAddTaskDialog = () => {
   selectedStatusForNewTask.value = null;
   selectedCategoryForNewTask.value = null;
   drawerOpen.value = true;
+};
+const openTaskPoolDialog = () => {
+  if (canUseTaskPool.value) {
+    taskPoolDialog.value = true;
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('upgrade-required', {
+      detail: { feature: 'taskPool', code: 'FEATURE_NOT_AVAILABLE' },
+    }));
+  }
+};
+const openBulkTaskUploadDialog = () => {
+  if (canUseTaskPool.value) {
+    bulkTaskUploadDialog.value = true;
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('upgrade-required', {
+      detail: { feature: 'taskBulkUpload', code: 'FEATURE_NOT_AVAILABLE' },
+    }));
+  }
 };
 const openCreateColumnDialog = () => {
   newColumn.value = {

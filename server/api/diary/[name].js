@@ -5,7 +5,16 @@ import { requireFeature } from '~/server/utils/requireFeature'
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
 
-  if (path === 'appointmentCreate' || path === 'appointmentUpdate') await requireFeature(event, 'patientBooking')
+  // All patient/finance/form operations require Pro (patientBooking flag)
+  const PATIENT_BOOKING_ROUTES = new Set([
+    'patients', 'patientsPaged', 'patientStats', 'patientCreate', 'patientUpdate', 'patientGet',
+    'appointmentCreate', 'appointmentUpdate',
+    'notes', 'noteCreate', 'noteDelete',
+    'patientComfortGet', 'patientComfortSave', 'patientComfortUpdate',
+    'surveyGet', 'surveySave', 'surveyUploadPhotos', 'surveyDownload', 'surveyPrint', 'surveyShare', 'surveyStructure',
+    'formsList', 'formGet', 'formSave', 'formUpdate', 'formDelete',
+  ])
+  if (PATIENT_BOOKING_ROUTES.has(path)) await requireFeature(event, 'patientBooking')
   switch (path) {
     case 'treatments':
       return await listTreatments(event)

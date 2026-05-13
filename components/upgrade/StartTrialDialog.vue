@@ -40,7 +40,7 @@ const title = computed(() => `Your 14-day ${props.tier} trial has started!`)
 
 const subtitle = computed(() =>
   `You now have full access to Flossy ${props.tier}${formattedDate.value ? ` until ${formattedDate.value}` : ''}. No card needed — you'll only be asked for payment if you decide to continue after your trial.<br><br>` +
-  `<strong>Included in trial:</strong> Automation · Unlimited leads · Patient booking<br><strong>Upgrade to unlock:</strong> Live WhatsApp connection`
+  `<strong>Included in trial:</strong> Automation · Unlimited leads · WhatsApp messaging<br><strong>Upgrade to Pro to unlock:</strong> Patient booking · Finance · Google Ads`
 )
 
 const goToCrm = () => {

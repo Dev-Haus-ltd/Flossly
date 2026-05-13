@@ -4,7 +4,7 @@ import { Organisation } from '../models/index.js'
 
 /**
  * Throws 403 if the org's plan does not include the requested feature flag.
- * Feature flags: 'whatsapp', 'automation', 'taskPool', 'patientBooking', 'googleAds'
+ * Feature flags: 'whatsapp' | 'automation' | 'taskPool' | 'patientBooking' | 'googleAds' | 'charting' | 'rota' | 'holidayTracker' | 'leadForms'
  * Reads licenseType live from DB so plan changes take effect immediately without re-login.
  */
 export const requireFeature = async (event, feature) => {
