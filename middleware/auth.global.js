@@ -33,10 +33,10 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       to.path !== "/onboarding"
     ) {
       if (from.path === "/login" || from.path === "/signup") {
-        window.location.href = "/setup";
+        window.location.href = "/onboarding";
         return;
       }
-      return navigateTo("/setup");
+      return navigateTo("/onboarding");
     }
   } else {
     const isInvitationPath = to.path.includes('/invitation');

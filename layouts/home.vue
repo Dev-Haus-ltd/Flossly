@@ -584,7 +584,15 @@ const preloadUsers = async () => {
   }
 };
 const onUpgradeRequired = (e) => {
-  lockedFeature.value = e.detail?.feature || ''
+  const feature = e.detail?.feature || ''
+  const now = Date.now()
+  const key = `upgrade-lock:${feature || 'default'}`
+  if (typeof window !== 'undefined') {
+    const lastShown = Number(sessionStorage.getItem(key) || 0)
+    if (lastShown && now - lastShown < 1500) return
+    sessionStorage.setItem(key, String(now))
+  }
+  lockedFeature.value = feature
   showFeatureLock.value = true
   track('feature_lock_shown', { feature: lockedFeature.value })
 }

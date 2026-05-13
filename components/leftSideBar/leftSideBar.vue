@@ -102,47 +102,51 @@
                 <template v-for="child in item.children" :key="child.value">
                   <v-tooltip v-if="rail" location="right">
                     <template #activator="{ props: tooltipProps }">
-                      <v-list-item
-                        v-bind="tooltipProps"
-                        :to="child.to"
-                        :active="isExact(child.to)"
-                        :class="['custom-list-item']"
-                        @click="handleItemClick"
-                      >
-                        <template #prepend>
-                          <img
-                            :src="child.imgPath"
-                            class="list-icon"
-                            alt="icon"
-                          />
-                        </template>
-                      </v-list-item>
-                    </template>
-                    <span>{{ child.title }}</span>
-                  </v-tooltip>
+              <v-list-item
+                v-bind="tooltipProps"
+                :to="child.locked ? undefined : child.to"
+                :active="isExact(child.to)"
+                :class="['custom-list-item']"
+                @click="handleChildClick($event, child)"
+              >
+                <template #prepend>
+                  <img
+                    :src="child.imgPath"
+                    class="list-icon"
+                    alt="icon"
+                  />
+                </template>
+                <template #append>
+                  <v-icon v-if="child.locked" size="16" color="warning">mdi-lock-outline</v-icon>
+                </template>
+              </v-list-item>
+            </template>
+            <span>{{ child.title }}</span>
+          </v-tooltip>
 
-                  <v-list-item
-                    v-else
-                    :title="child.title"
-                    :to="child.to"
-                    :active="isExact(child.to)"
-                    :class="['custom-list-item not-intended']"
-                    @click="handleItemClick"
-                  >
-                    <template #title>
-                      <span>{{ child.title }}</span>
-                      <v-chip
-                        v-if="child.beta"
+          <v-list-item
+            v-else
+            :title="child.title"
+            :to="child.locked ? undefined : child.to"
+            :active="isExact(child.to)"
+            :class="['custom-list-item not-intended']"
+            @click="handleChildClick($event, child)"
+          >
+            <template #title>
+              <span>{{ child.title }}</span>
+              <v-chip
+                v-if="child.beta"
                         size="x-small"
                         color="primary"
                         variant="flat"
-                        class="ml-2 text-capitalize"
-                        style="font-size: 9px; height: 16px; padding: 0 5px;"
-                      >beta</v-chip>
-                    </template>
-                  </v-list-item>
-                </template>
-              </div>
+                class="ml-2 text-capitalize"
+                style="font-size: 9px; height: 16px; padding: 0 5px;"
+              >beta</v-chip>
+              <v-icon v-if="child.locked" size="14" color="warning" class="ml-2">mdi-lock-outline</v-icon>
+            </template>
+          </v-list-item>
+        </template>
+      </div>
             </v-list-group>
           </div>
         </template>
@@ -219,6 +223,22 @@ const handleItemClick = () => {
     emit("update:drawer", false);
   }
 };
+const triggerUpgradeRequired = (feature) => {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('upgrade-required', {
+    detail: { feature: feature || 'upgrade', code: 'FEATURE_NOT_AVAILABLE' },
+  }))
+}
+const handleChildClick = (event, child) => {
+  if (child?.locked) {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    triggerUpgradeRequired(child.lockedFeature || child.featureKey)
+    if (smAndDown.value) emit("update:drawer", false)
+    return
+  }
+  handleItemClick()
+}
 
 // Helper function to get organization data consistently
 const getOrgData = (orgWrapper) => {
@@ -317,7 +337,13 @@ const resolvedPlan = computed(() => {
   const lt = authStore.loggedUser?.licenseType ?? 'Lite'
   return LEGACY_MAP[lt] ?? lt
 })
+const isTrialPlan = computed(() =>
+  ['CRM', 'Pro'].includes(resolvedPlan.value) &&
+  !authStore.loggedUser?.licenseBillingCycle &&
+  !!authStore.loggedUser?.licenseRenewalDate
+)
 const planChipLabel = computed(() => {
+  if (isTrialPlan.value) return `${resolvedPlan.value} Trial`
   const map = { Lite: 'Free Plan', CRM: 'CRM Plan', Pro: 'Pro Plan' }
   return map[resolvedPlan.value] ?? resolvedPlan.value
 })

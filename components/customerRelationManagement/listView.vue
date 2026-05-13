@@ -1191,27 +1191,6 @@
       @confirm="doDeleteArchived"
       @cancel="confirmArchivedDelete = false"
     />
-    <v-dialog v-model="showBookPlanDialog" max-width="500">
-      <v-card class="pa-4">
-        <v-card-title class="text-subtitle-1 pa-0 mb-2">
-          Soar Plan Required
-        </v-card-title>
-        <v-card-text class="pa-0">
-          This action is available on the Soar plan. Your current plan is
-          <strong>{{ currentOrgLicenseLabel }}</strong>.
-          Upgrade to Soar to unlock diary booking, patient auto-creation, lead form sending, and more.
-        </v-card-text>
-        <v-card-actions class="plan-upgrade-dialog__actions">
-          <v-spacer />
-          <v-btn variant="text" @click="showBookPlanDialog = false">
-            Close
-          </v-btn>
-          <v-btn color="primary" variant="flat" @click="showBookPlanDialog = false">
-            Got it
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
     <TeamFlossSideBarAddNewstaff
       v-model="addStaffDrawer"
       :rolesList="rolesList"
@@ -1842,7 +1821,6 @@ const whatsappTokens = [
 ];
 const rolesList = ref([]);
 const automationSaving = reactive({});
-const showBookPlanDialog = ref(false);
 
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
@@ -1896,11 +1874,13 @@ const currentOrgLicense = computed(() => {
   return String(match?.licenseType || 'Trial').trim();
 });
 
-const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || 'Trial');
-const canBookAppointments = computed(() => {
-  const type = String(currentOrgLicense.value || '').toLowerCase();
-  return ['soar', 'system'].includes(type);
+
+const resolvedTier = computed(() => {
+  const raw = String(currentOrgLicense.value || '').trim();
+  const map = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' };
+  return map[raw] ?? (raw || 'Lite');
 });
+const canBookAppointments = computed(() => ['Pro', 'Soar', 'System'].includes(resolvedTier.value));
 
 const renderTemplateWithContext = (input, ctx, lead) => {
   const withMustache = String(input || '')
@@ -2280,7 +2260,7 @@ const onActionClick = (key) => {
   if (!selectedLeads.value.length) return;
   if (key === 'book') {
     if (!canBookAppointments.value) {
-      showBookPlanDialog.value = true;
+      window.dispatchEvent(new CustomEvent('upgrade-required', { detail: { feature: 'patientBooking' } }));
       return;
     }
     emit('book', [...selectedLeads.value])
@@ -2299,7 +2279,10 @@ const onActionClick = (key) => {
   else if (key === 'whatsapp') openWhatsAppCompose();
   else if (key === 'sendPrice') openSendPriceCompose();
   else if (key === 'sendForm') {
-    if (!canBookAppointments.value) { showBookPlanDialog.value = true; return; }
+    if (!canBookAppointments.value) {
+      window.dispatchEvent(new CustomEvent('upgrade-required', { detail: { feature: 'patientBooking' } }));
+      return;
+    }
     openConsentFormSelect()
   }
   else if (['mail','shareLocation'].includes(key)) openCompose(key)

@@ -1,10 +1,9 @@
 import { listDmConversations, listDmMessages, sendDmMessage, markDmRead, processDmQueue, uploadDmAttachment, refreshDmProfile, refreshAllDmProfiles, getDmConnectionStatus } from "../../controllers/dms";
-import { requireFeature } from "../../utils/requireFeature";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, "name");
-
-  if (name === 'send' || name === 'processQueue') await requireFeature(event, 'whatsapp')
+  // Meta DMs (Messenger + Instagram) are available on all plans — no feature gate here.
+  // WhatsApp Business messaging is gated separately in server/api/whapi/[name].js.
 
   switch (name) {
     case "conversations":

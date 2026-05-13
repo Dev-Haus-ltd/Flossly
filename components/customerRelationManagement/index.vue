@@ -57,87 +57,68 @@
         </v-btn>
       </template>
     </div>
-
-    <!-- Forms view -->
-    <div v-if="showForms">
-      <CustomerRelationManagementFormsFormList />
+    <CustomerRelationManagementFormsFormList v-if="showForms" />
+    <template v-else>
+    <div class="mt-5 px-5">
+      <v-row class="stat-row" align="stretch">
+        <v-col style="flex: 1 1 0;" v-for="(stat, i) in leadStats" :key="i">
+          <CommonStatCard
+            :icon="stat.icon"
+            :label="stat.label"
+            :value="stat.value"
+            :value-color="stat.valueColor"
+            :uid="i"
+            hide-chip
+          />
+        </v-col>
+      </v-row>
     </div>
-
-    <!-- Default CRM view -->
-    <div v-else>
-      <div class="mt-5 px-5">
-        <v-row class="stat-row" align="stretch">
-          <v-col style="flex: 1 1 0" v-for="(stat, i) in leadStats" :key="i">
-            <CommonStatCard
-              :icon="stat.icon"
-              :label="stat.label"
-              :value="stat.value"
-              :value-color="stat.valueColor"
-              :uid="i"
-              hide-chip
-            />
-          </v-col>
-        </v-row>
-      </div>
-      <div class="mt-5 px-5">
-        <v-alert
-          v-if="activeMetaFilter"
-          type="info"
-          variant="tonal"
-          density="compact"
-          rounded="lg"
-          class="mb-3"
-          closable
-          @click:close="clearMetaFilter"
-        >
-          Showing leads filtered by {{ activeMetaFilter.type }}:
-          <strong>{{ activeMetaFilter.label }}</strong>
-        </v-alert>
-        <div
-          class="d-flex align-center mb-2"
-          style="
-            flex-wrap: nowrap;
-            justify-content: space-between;
-            overflow-x: auto;
-          "
-        >
-          <!-- Left: Search + Filters -->
-          <div
-            class="d-inline-flex align-center toolbar-wrapper"
-            style="flex-wrap: nowrap"
-          >
-            <div style="width: 120px">
-              <v-text-field
-                v-model="searchInput"
-                placeholder="Search"
-                clearable
-                @click:clear="clearSearch"
-                variant="solo"
-                :elevation="0"
-                density="compact"
-                hide-details
-                bg-color="#F3F4F6"
-                flat
-                class="custom-search"
-              >
-                <template #append-inner>
-                  <img
-                    :src="searchicon"
-                    alt="search icon"
-                    width="14"
-                    height="14"
-                  />
-                </template>
-              </v-text-field>
-            </div>
-            <CustomerRelationManagementFilterMenu
-              :leadSources="leadSources"
-              :treatmentSources="treatmentSources"
-              :alertOptions="
-                alertOptions.length ? alertOptions : DEFAULT_ALERT_OPTIONS
-              "
-              @update:filters="onLeadsFilterUpdate"
-            />
+    <div class="mt-5 px-5">
+      <v-alert
+        v-if="activeMetaFilter"
+        type="info"
+        variant="tonal"
+        density="compact"
+        rounded="lg"
+        class="mb-3"
+        closable
+        @click:close="clearMetaFilter"
+      >
+        Showing leads filtered by {{ activeMetaFilter.type }}: <strong>{{ activeMetaFilter.label }}</strong>
+      </v-alert>
+      <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
+        <!-- Left: Search + Filters -->
+        <div class="d-inline-flex align-center toolbar-wrapper" style="flex-wrap: nowrap;">
+          <div style="width: 120px">
+            <v-text-field
+            v-model="searchInput"
+              placeholder="Search"
+              clearable
+              @click:clear="clearSearch"
+              variant="solo"
+              :elevation="0"
+              density="compact"
+              hide-details
+              bg-color="#F3F4F6"
+              flat
+              class="custom-search"
+            >
+              <template #append-inner>
+                <img
+                  :src="searchicon"
+                  alt="search icon"
+                  width="14"
+                  height="14"
+                />
+              </template>
+            </v-text-field>
+          </div>
+          <CustomerRelationManagementFilterMenu
+            :leadSources="leadSources"
+            :treatmentSources="treatmentSources"
+            :alertOptions="alertOptions.length ? alertOptions : DEFAULT_ALERT_OPTIONS"
+            @update:filters="onLeadsFilterUpdate"
+          />
 
             <v-menu :close-on-content-click="false">
               <template #activator="{ props: menuProps }">
@@ -224,18 +205,18 @@
               Lead Forms
             </v-btn>
 
-            <v-btn
-              color="secondary"
-              variant="flat"
-              rounded="lg"
-              class="add-task-btn mx-2"
-              @click="bulkLeadUploadDialog = true"
-            >
-              <template #prepend>
-                <v-icon size="18">mdi-upload</v-icon>
-              </template>
-              Upload bulk leads
-            </v-btn>
+          <v-btn
+            color="secondary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn mx-2"
+            @click="openBulkLeadUploadDialog"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-upload</v-icon>
+            </template>
+            Upload bulk leads
+          </v-btn>
 
             <v-btn
               color="primary"
@@ -615,25 +596,21 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
-      </div>
     </div>
+    </template>
     <!-- end v-else CRM default view -->
   </v-sheet>
 </template>
 
 <script setup>
-import { storeToRefs } from "pinia";
-import AddAppointment from "@/components/diary/addAppointment.vue";
-import CustomerRelationManagementMetaHealthDialog from "@/components/customerRelationManagement/metaHealthDialog.vue";
-import { useDiaryStore } from "@/stores/diary";
-import {
-  LICENSE_TYPES,
-  resolveUserLicenseType,
-  useMainStore,
-} from "@/stores/index";
-import { useCrmStore } from "@/stores/crm";
-import { useUserStore } from "@/stores/user";
-import { useAuthStore } from "@/stores/auth";
+import { storeToRefs } from 'pinia'
+import AddAppointment from '@/components/diary/addAppointment.vue'
+import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
+import { useDiaryStore } from '@/stores/diary'
+import { useMainStore } from '@/stores/index'
+import { useCrmStore } from '@/stores/crm'
+import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
 import searchicon from "@/assets/icons/listView/serach-icon.svg";
 import crmService from "@/services/crmService";
 const crmStore = useCrmStore();
@@ -641,6 +618,7 @@ const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
 const userList = computed(() => storeUsers.value || []);
 const authStore = useAuthStore();
+const { usage, isLite } = useUsageSummary()
 const route = useRoute();
 const router = useRouter();
 const diaryStore = useDiaryStore();
@@ -832,15 +810,35 @@ const currentOrgLicense = computed(() => {
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
   return String(match?.licenseType || 'Lite').trim();
 });
+const resolvedTier = computed(() => {
+  const raw = String(currentOrgLicense.value || '').trim();
+  const map = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' };
+  return map[raw] ?? (raw || 'Lite');
+});
+const leadsUsage = computed(() => usage.value?.leads || null)
+const leadUsagePct = computed(() => {
+  const current = Number(leadsUsage.value?.current || 0)
+  const max = Number(leadsUsage.value?.max || 0)
+  if (!max) return 0
+  return Math.min(100, Math.round((current / max) * 100))
+})
+const leadsUsedLabel = computed(() => Number(leadsUsage.value?.current || 0))
+const leadsLimitLabel = computed(() => Number(leadsUsage.value?.max || 0))
+const leadsRemainingLabel = computed(() =>
+  Math.max(0, Number(leadsUsage.value?.max || 0) - Number(leadsUsage.value?.current || 0))
+)
+const leadUsageTone = computed(() => {
+  if (leadUsagePct.value >= 100) return 'error'
+  if (leadUsagePct.value >= 80) return 'warning'
+  return 'primary'
+})
+const canBulkUploadLeads = computed(() => ['CRM', 'Pro'].includes(resolvedTier.value));
 const canManageWhapi = computed(() => {
   const type = String(currentOrgLicense.value || '').toLowerCase();
   const billingCycle = authStore.loggedUser?.licenseBillingCycle || user.value?.licenseBillingCycle || null;
   return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type) && !!billingCycle;
 });
-const canBookAppointments = computed(() => {
-  const type = String(currentOrgLicense.value || '').toLowerCase();
-  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type);
-});
+const canBookAppointments = computed(() => ['Pro', 'Soar', 'System'].includes(resolvedTier.value));
 watch(bookingPractitionerOptions, (opts) => {
   if (!bookingInitialPractitioner.value && opts.length) {
     bookingInitialPractitioner.value = opts[0].value;
@@ -1627,7 +1625,9 @@ const onBookLeads = async (selection) => {
     return;
   }
   if (!canBookAppointments.value) {
-    mainStore?.setSnackbar?.({ title: 'Upgrade to CRM or Pro to book leads into the diary', type: 'warning' });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('upgrade-required', { detail: { feature: 'patientBooking' } }));
+    }
     return;
   }
   const lead = picked[0];
@@ -1735,6 +1735,17 @@ const updateLeads = async () => {
 
 const handleAddLeadClick = () => {
   addLeadDrawer.value = true;
+};
+const openBulkLeadUploadDialog = () => {
+  if (canBulkUploadLeads.value) {
+    bulkLeadUploadDialog.value = true;
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('upgrade-required', {
+      detail: { feature: 'leadBulkUpload', code: 'FEATURE_NOT_AVAILABLE' },
+    }));
+  }
 };
 
 const resolveLeadSource = (source) => {
