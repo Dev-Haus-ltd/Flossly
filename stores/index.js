@@ -10,11 +10,15 @@ import settingsIcon from '@/assets/icons/mainDrawerIcons/settings.svg'
 import { DEVELOPER_EMAILS } from '@/composables/useDeveloperAccess';
 
 export const LICENSE_TYPES = {
+  LITE:   "Lite",
+  CRM:    "CRM",
+  PRO:    "Pro",
+  // Legacy values still present in DB — kept for backwards compatibility during transition
   SYSTEM: "System",
-  TRIAL: "Trial",
-  DRIFT: "Drift",
-  GLIDE: "Glide",
-  SOAR: "Soar",
+  TRIAL:  "Trial",
+  DRIFT:  "Drift",
+  GLIDE:  "Glide",
+  SOAR:   "Soar",
 };
 
 export const resolveUserLicenseType = (user) => {
@@ -22,54 +26,33 @@ export const resolveUserLicenseType = (user) => {
     ? user.preferences[0]
     : user?.preferences;
 
-  return preference?.licenseType || LICENSE_TYPES.TRIAL;
+  return preference?.licenseType || LICENSE_TYPES.LITE;
 };
 
+// Maps any legacy or current license type to the menu feature set it should see
 const LICENSE_FEATURES = {
-  [LICENSE_TYPES.TRIAL]: new Set([
-    "dashboard",
-    "tasks",
-    "docs",
-    "team",
-    "crm",
-    "diary",
-  ]),
-  [LICENSE_TYPES.DRIFT]: new Set(["dashboard", "tasks", "docs"]),
-  [LICENSE_TYPES.GLIDE]: new Set(["dashboard", "tasks", "docs", "team", "crm"]),
-  [LICENSE_TYPES.SOAR]: new Set([
-    "dashboard",
-    "tasks",
-    "docs",
-    "team",
-    "crm",
-    "diary",
-  ]),
-  [LICENSE_TYPES.SYSTEM]: new Set([
-    "dashboard",
-    "tasks",
-    "docs",
-    "team",
-    "crm",
-    // "diary",
-  ]),
+  Lite:   new Set(["dashboard", "crm"]),
+  CRM:    new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
+  Pro:    new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
+  // Legacy — mapped to their resolved tier's feature set
+  System: new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
+  Trial:  new Set(["dashboard", "crm"]),
+  Drift:  new Set(["dashboard", "crm"]),
+  Glide:  new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
+  Soar:   new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
 };
 
 export const getLicenseTypeFromStorage = () => {
-  if (typeof localStorage === "undefined") {
-    return LICENSE_TYPES.TRIAL;
-  }
-
   try {
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
-    return resolveUserLicenseType(user);
+    const authStore = useAuthStore();
+    return authStore.loggedUser?.licenseType ?? LICENSE_TYPES.LITE;
   } catch {
-    return LICENSE_TYPES.TRIAL;
+    return LICENSE_TYPES.LITE;
   }
 };
 
 const filterMenuByLicense = (menuItems, licenseType) => {
-  const allowed =
-    LICENSE_FEATURES[licenseType] || LICENSE_FEATURES[LICENSE_TYPES.TRIAL];
+  const allowed = LICENSE_FEATURES[licenseType] ?? LICENSE_FEATURES[LICENSE_TYPES.LITE];
 
   return menuItems.reduce((acc, item) => {
     if (!allowed.has(item.featureKey)) {

@@ -200,8 +200,8 @@ const folderStack = ref([]);
 // Computed property for current depth (0 = root, 1 = first level, 2 = second level)
 const currentDepth = computed(() => folderStack.value.length);
 
-// Check if we can create more subfolders (only allowed at depth 0 and 1)
-const canCreateSubfolder = computed(() => currentDepth.value < 2);
+// Check if we can create more subfolders (only allowed at depth 0, 1, and 2)
+const canCreateSubfolder = computed(() => currentDepth.value < 3);
 
 onMounted(async () => {
   await Promise.all([

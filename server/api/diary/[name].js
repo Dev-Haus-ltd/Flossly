@@ -1,9 +1,12 @@
 import { listTreatments, createTreatment, updateTreatment, deleteTreatment, listPatients, createPatient, updatePatient, deletePatient, listAppointments, createAppointment, updateAppointment, deleteAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats, getPatientChart, savePatientChart, savePatientChartTooth, getPatientChartMeta, savePatientChartMeta, listTreatmentPlans, createTreatmentPlan, updateTreatmentPlan, deleteTreatmentPlan, listTreatmentPlanItems, createTreatmentPlanItem, updateTreatmentPlanItem, deleteTreatmentPlanItem, reorderTreatmentPlanItems, appointmentConflictCheck, bookFromTreatmentPlan, uploadChartImage, generateTreatmentPlanContent, listClinicalNoteTemplates, applyClinicalNoteTemplate, listZones, createZone, updateZone, deleteZone, patientCommunication, sendEmail } from '~/server/controllers/diary'
 import { getAccountStats, listInvoices, createInvoice, updateInvoice, deleteInvoice, generateInvoiceFromTreatments, listPayments, createPayment, allocatePayment, deletePayment } from '~/server/controllers/accounts'
 import { success } from '~/server/utils/response'
+import { requireFeature } from '~/server/utils/requireFeature'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
+
+  if (path === 'appointmentCreate' || path === 'appointmentUpdate') await requireFeature(event, 'patientBooking')
   switch (path) {
     case 'treatments':
       return await listTreatments(event)

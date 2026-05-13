@@ -13,6 +13,19 @@
     <!-- Primary View - Card Grid -->
     <div v-if="!selectedSetting" class="settings-grid pa-8">
       <v-row>
+        <!-- Plan & Billing Card -->
+        <v-col cols="12" sm="6" md="4" lg="3">
+          <div class="settings-card" @click="selectedSetting = 'billing'">
+            <div class="card-content">
+              <div class="card-icon-wrapper" style="background-color: #0061FB;">
+                <v-icon color="white" size="28">mdi-credit-card-outline</v-icon>
+              </div>
+              <p class="card-title">Plan &amp; Billing</p>
+              <p class="card-subtitle">Manage your subscription</p>
+            </div>
+          </div>
+        </v-col>
+
         <!-- SMTP Settings Card -->
         <v-col cols="12" sm="6" md="4" lg="3">
           <div class="settings-card" @click="selectedSetting = 'smtp'">
@@ -51,37 +64,35 @@
       </v-row>
     </div>
 
-    <!-- Secondary View - Detailed Settings with Tabs -->
+    <!-- Secondary View -->
     <div v-else style="background-color: white" class="px-5 rounded-lg">
 
-      <!-- All Settings Tabs -->
-      <v-tabs
-        v-model="currentTab"
-        class="custom-tabs"
-        slider-color="primary"
-      >
-        <v-tab class="tab-text" value="smtp">
-          <img src="@/assets/icons/mainDrawerIcons/settings.svg" alt="SMTP Settings" class="tab-icon" />
-          SMTP Settings
-        </v-tab>
-        <v-tab class="tab-text" value="diary">
-          <img src="@/assets/images/diary/diary.svg" alt="Diary Settings" class="tab-icon" />
-          Diary Settings
-        </v-tab>
-      </v-tabs>
+      <!-- Plan & Billing — standalone, no tabs -->
+      <div v-if="selectedSetting === 'billing'">
+        <SettingsPlanBillingCard @upgrade="openPricing" />
+      </div>
 
-      <!-- Tab Content -->
-      <v-tabs-window v-model="currentTab">
-        <v-tabs-window-item value="smtp">
-          <SettingsItSupport />
-        </v-tabs-window-item>
+      <!-- Other settings with tabs -->
+      <template v-else>
+        <v-tabs v-model="currentTab" class="custom-tabs" slider-color="primary">
+          <v-tab class="tab-text" value="smtp">
+            <img src="@/assets/icons/mainDrawerIcons/settings.svg" alt="SMTP Settings" class="tab-icon" />
+            SMTP Settings
+          </v-tab>
+          <v-tab class="tab-text" value="diary">
+            <img src="@/assets/images/diary/diary.svg" alt="Diary Settings" class="tab-icon" />
+            Diary Settings
+          </v-tab>
+        </v-tabs>
+        <v-tabs-window v-model="currentTab">
+          <v-tabs-window-item value="smtp">
+            <SettingsItSupport />
+          </v-tabs-window-item>
           <v-tabs-window-item value="diary">
-  <SettingsDiary />
-</v-tabs-window-item>
-          <!-- <div class="pa-8 text-center">
-            <p class="text-h6 text-grey">Diary settings coming soon...</p>
-          </div> -->
-      </v-tabs-window>
+            <SettingsDiary />
+          </v-tabs-window-item>
+        </v-tabs-window>
+      </template>
     </div>
   </div>
 </template>
@@ -97,19 +108,16 @@ const route = useRoute();
 // Get setting title for breadcrumb
 const getSettingTitle = (setting) => {
   const titles = {
+    billing: 'Plan & Billing',
     smtp: 'SMTP Settings',
-    diary: 'Diary Settings'
+    diary: 'Diary Settings',
   };
   return titles[setting] || '';
 };
 
-// When clicking a card, set the appropriate tab
 watch(selectedSetting, (newVal) => {
-  if (newVal === 'smtp') {
-    currentTab.value = 'smtp';
-  } else if (newVal === 'diary') {
-    currentTab.value = 'diary';
-  }
+  if (newVal === 'smtp') currentTab.value = 'smtp';
+  else if (newVal === 'diary') currentTab.value = 'diary';
 });
 
 watch(
@@ -126,6 +134,12 @@ watch(
   },
   { immediate: true }
 );
+
+const { open: openPricingModal } = usePricingModal();
+const openPricing = () => {
+  selectedSetting.value = null;
+  openPricingModal();
+};
 </script>
 
 <style scoped lang="scss">

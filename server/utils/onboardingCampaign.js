@@ -7,7 +7,7 @@ import { renderOnboardingTokens } from "./templateTokens.js";
 export { ONBOARDING_EMAIL_TEMPLATES, ONBOARDING_INAPP_MESSAGES };
 
 const DEFAULT_FROM = "Flossly <helloflossly@gmail.com>";
-const DEFAULT_PRICING = { drift: 149, glide: 249, soar: 449, currency: "£" };
+const DEFAULT_PRICING = { lite: 0, crm: 199, pro: 499, currency: "£" };
 const DEFAULT_IMPACT = {
   adminHours: 12,
   hoursSaved: 10,
@@ -57,6 +57,7 @@ export const buildOnboardingInAppMessages = ({
   now = new Date(),
   ctx,
   seenKeys = new Set(),
+  pendingEventKeys = new Set(),
 }) => {
   if (!startAt) return [];
   const startDate = new Date(startAt);
@@ -68,14 +69,18 @@ export const buildOnboardingInAppMessages = ({
   const diffDays = Math.floor((today - startDay) / (24 * 60 * 60 * 1000));
   if (!Number.isFinite(diffDays)) return [];
 
-  const isTrialPlan = String(ctx?.planName || "").toLowerCase() === "trial";
+  const isTrialPlan = ['Trial', 'CRM', 'Pro'].includes(String(ctx?.planName || ''));
   const trialDaysRemaining = Number(ctx?.trialDaysRemaining || 0);
   const trialOnlyKeys = new Set([
     "onboarding_inapp_day7_trial",
     "onboarding_inapp_day13_trial",
   ]);
 
-  return ONBOARDING_INAPP_MESSAGES.filter((msg) => msg.offsetDays === diffDays)
+  return ONBOARDING_INAPP_MESSAGES
+    .filter((msg) => {
+      if (msg.triggerType === 'event') return pendingEventKeys.has(msg.key);
+      return msg.offsetDays === diffDays;
+    })
     .filter((msg) => {
       if (!trialOnlyKeys.has(msg.key)) return true;
       if (!isTrialPlan) return false;
@@ -105,12 +110,13 @@ export const buildOnboardingContext = ({
 }) => {
   const baseUrlRaw = config?.public?.BASE_URL || "";
   const baseUrl = baseUrlRaw.endsWith("/") ? baseUrlRaw.slice(0, -1) : baseUrlRaw;
-  const trialEndDate = formatDate(userPreference?.licenseRenewalDate);
+  const renewalDate = organisation?.licenseRenewalDate ?? userPreference?.licenseRenewalDate;
+  const trialEndDate = formatDate(renewalDate);
   const watchVideoUrl =
     config?.public?.ONBOARDING_WELCOME_VIDEO_URL ||
     "https://youtu.be/gEuICxXisnw?si=1L-7jdiwwnr_VpDC";
-  const licenseType = String(userPreference?.licenseType || "").trim();
-  const planName = ["Drift", "Glide", "Soar"].includes(licenseType) ? licenseType : "Trial";
+  const licenseType = String(organisation?.licenseType || userPreference?.licenseType || "").trim();
+  const planName = licenseType || "Lite";
 
   const normalizeDate = (value) => {
     if (!value) return null;
@@ -123,7 +129,7 @@ export const buildOnboardingContext = ({
   const msPerDay = 24 * 60 * 60 * 1000;
   const today = normalizeDate(now);
   const startDay = normalizeDate(startAt || userPreference?.createdAt || user?.createdAt);
-  const endDay = normalizeDate(userPreference?.licenseRenewalDate);
+  const endDay = normalizeDate(organisation?.licenseRenewalDate ?? userPreference?.licenseRenewalDate);
 
   let trialDaysRemaining = "";
   let trialDaysUsed = "";
@@ -189,22 +195,22 @@ export const buildOnboardingContext = ({
     ? `${chairCountRaw || baseChairs} chairs, ${teamCountRaw || baseTeam} staff`
     : "your practice";
 
-  const planDriftPrice = formatNumber(DEFAULT_PRICING.drift);
-  const planGlidePrice = formatNumber(DEFAULT_PRICING.glide);
-  const planSoarPrice = formatNumber(DEFAULT_PRICING.soar);
+  const planLitePrice = formatNumber(DEFAULT_PRICING.lite);
+  const planCrmPrice = formatNumber(DEFAULT_PRICING.crm);
+  const planProPrice = formatNumber(DEFAULT_PRICING.pro);
+  // Legacy aliases kept to avoid broken token render in old email bodies
+  const planDriftPrice = "";
+  const planGlidePrice = "";
+  const planSoarPrice = "";
   const pricingCurrency = DEFAULT_PRICING.currency;
-  const pricingFromLabel = `From ${pricingCurrency}${Math.min(
-    DEFAULT_PRICING.drift,
-    DEFAULT_PRICING.glide,
-    DEFAULT_PRICING.soar
-  )}/month`;
+  const pricingFromLabel = `From ${pricingCurrency}${DEFAULT_PRICING.crm}/month`;
 
   return {
     name: user?.fullName || "there",
     practiceName: organisation?.name || "your practice",
     email: user?.email || "",
-    founderName: config?.public?.ONBOARDING_FOUNDER_NAME || "Saba",
-    successManagerName: config?.public?.ONBOARDING_SUCCESS_MANAGER_NAME || "FlosslyOS Team",
+    founderName: config?.public?.ONBOARDING_FOUNDER_NAME || "The Flossy Team",
+    successManagerName: config?.public?.ONBOARDING_SUCCESS_MANAGER_NAME || "Flossy Team",
     trialEndDate,
     planName,
     trialDaysRemaining,
@@ -213,6 +219,9 @@ export const buildOnboardingContext = ({
     trialDaysUsedUnit,
     trialTotalDays,
     trialTotalDaysUnit,
+    planLitePrice,
+    planCrmPrice,
+    planProPrice,
     planDriftPrice,
     planGlidePrice,
     planSoarPrice,
@@ -237,8 +246,8 @@ export const buildOnboardingContext = ({
     valueCreated: metrics?.valueCreated ?? "0",
     baseUrl,
     watchVideoUrl,
-    startSetupUrl: `${baseUrl}/onboarding`,
-    completeSetupUrl: `${baseUrl}/onboarding`,
+    startSetupUrl: `${baseUrl}/setup`,
+    completeSetupUrl: `${baseUrl}/setup`,
     scheduleCallUrl: "https://calendly.com/helloflossly/flossly-training",
     connectMetaAdsUrl: `${baseUrl}/crm`,
     automationBuilderUrl: `${baseUrl}/crm`,

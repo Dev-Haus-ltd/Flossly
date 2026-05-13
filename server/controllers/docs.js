@@ -15,6 +15,8 @@ import { sendS3Object } from "../utils/s3";
 import { uploadTempFile, uploadBufferFile, deleteLink } from "../utils/storage";
 import { convertDocToDocx } from "../utils/docConversion";
 import { parseJsonBody } from "../utils/body";
+import { requireUsageAllowed } from "../utils/requireUsageAllowed";
+import { success, error } from "../utils/response";
 
 export const createFolder = async (event) => {
   const body = await readBody(event);
@@ -22,15 +24,18 @@ export const createFolder = async (event) => {
   const { name, color, description, parentId } = parseJsonBody(body);
   if (!name) throw createError({ message: "Folder name required" });
   try {
-    // If parentId is provided, validate depth (max 2 levels: root -> level 1 -> level 2)
+    // If parentId is provided, validate depth (max 3 levels: root -> level 1 -> level 2 -> level 3)
     if (parentId) {
       const parentFolder = await UserDocumentFolder.findByPk(parentId);
       if (!parentFolder) {
         throw createError({ message: "Parent folder not found" });
       }
-      // Check if parent folder already has a parent (meaning it's level 2, can't go deeper)
+      // Block if parent is already at level 3 (its parent also has a parent)
       if (parentFolder.parentId) {
-        throw createError({ message: "Maximum folder nesting depth reached (2 levels)" });
+        const grandparentFolder = await UserDocumentFolder.findByPk(parentFolder.parentId);
+        if (grandparentFolder?.parentId) {
+          throw createError({ message: "Maximum folder nesting depth reached (3 levels)" });
+        }
       }
     }
     const folder = await UserDocumentFolder.create({
@@ -272,16 +277,19 @@ export const moveFolder = async (event) => {
         throw createError({ message: "Cannot move folder into its own subfolder" });
       }
 
-      // Check depth constraint (max 2 levels)
-      // If target has a parent, it's at level 2, so we can't add more children
+      // Check depth constraint (max 3 levels)
+      // Block if target is at level 3 (target's parent has a parent)
       if (targetFolder.parentId) {
-        throw createError({ message: "Maximum folder nesting depth reached (2 levels)" });
+        const targetGrandparent = await UserDocumentFolder.findByPk(targetFolder.parentId);
+        if (targetGrandparent?.parentId) {
+          throw createError({ message: "Maximum folder nesting depth reached (3 levels)" });
+        }
       }
 
-      // If the folder being moved has subfolders, it can only go to root
+      // If the folder being moved has subfolders, check it won't exceed depth
       const hasSubfolders = await UserDocumentFolder.count({ where: { parentId: folderId } });
-      if (hasSubfolders > 0) {
-        throw createError({ message: "Folder with subfolders can only be moved to root level" });
+      if (hasSubfolders > 0 && targetFolder.parentId) {
+        throw createError({ message: "Folder with subfolders can only be moved to root or level 1" });
       }
     }
 
@@ -362,6 +370,7 @@ export const listSystemFolders = async (event) => {
 export const addDocument = async (event) => {
   const loggedUser = event.context.user;
   try {
+    await requireUsageAllowed(event, 'storageMB')
     const form = formidable({
       multiples: true,
       uploadDir: os.tmpdir(),
@@ -425,6 +434,7 @@ export const addDocument = async (event) => {
         tags: fields.tags ? fields.tags[0] : null,
         link: filePath,
         folderId: fields.folderId ? fields.folderId[0] : null,
+        fileSizeBytes: file.size || 0,
         lastViewedOn: new Date(),
       });
       createdDocuments.push(document);

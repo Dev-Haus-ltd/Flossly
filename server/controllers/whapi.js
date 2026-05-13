@@ -5,20 +5,20 @@ import {
   WhapiChannelConfig,
   UserOrganisation,
   Organisation,
-  UserPreference,
   OrganisationTreatment,
   DiaryPatientCommunicationLogs,
 } from "../models";
 import { normalizeWhatsAppNumber, logWhatsAppMessage, isWhatsAppLimitExceeded } from "../utils/whatsapp";
 import { success, error } from "../utils/response";
+import { requireFeature } from "../utils/requireFeature";
 import { addWhapiClient, broadcastWhapiEvent } from "../utils/whapiStream";
 import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
 import { getWhapiEnvConfig, getWhapiPartnerConfig, resolveWhapiConfig } from "../utils/whatsappProvider";
 import { uploadBufferFile, downloadUrlToS3 } from "../utils/storage";
 import { chat, generateAutoReply } from "../utils/aiWrapper";
-import { readBody } from "h3";
-import { parseJsonBody } from "../utils/body";
+import { createError } from "h3";
+import { canUsePaidWhatsApp } from "../utils/commercialPolicy.js";
 
 const extractTimestamp = (value) => {
   if (!value) return Date.now();
@@ -40,16 +40,6 @@ const isWhapiCreateAllowed = () => {
   return true;
 };
 
-const isPaidWhapiAllowed = async (userId, orgId) => {
-  if (!userId || !orgId) return false;
-  const pref = await UserPreference.findOne({
-    where: { userId: Number(userId), organisationId: Number(orgId) },
-  });
-  const license = String(pref?.licenseType || "").trim().toLowerCase();
-  if (!license) return false;
-  if (license === "trial") return false;
-  return ["drift", "glide", "soar", "system"].includes(license);
-};
 
 const findLeadByPhone = async (phoneDigits, orgId = null) => {
   if (!phoneDigits) return null;
@@ -742,12 +732,18 @@ const fetchPartnerChannelStatus = async (channelId) => {
 };
 
 export const connect = async (event) => {
+  await requireFeature(event, 'whatsapp')
   const { orgId, userId } = event.context.user || {};
   if (!orgId || !userId) return error(401, "Unauthenticated");
-
-  const hasPaidLicense = await isPaidWhapiAllowed(userId, orgId);
-  if (!hasPaidLicense) {
-    return error(403, "WhatsApp connection is available on paid plans only.");
+  if (!(await isPaidWhapiAllowed(userId, orgId))) {
+    throw createError({
+      statusCode: 403,
+      data: {
+        code: "FEATURE_NOT_AVAILABLE",
+        feature: "whatsapp",
+        message: "WhatsApp connection is only available on a paid CRM or Pro subscription.",
+      },
+    });
   }
 
   const bodyRaw = await readBody(event);

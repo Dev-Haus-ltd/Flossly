@@ -13,24 +13,17 @@
     <label class="lbl">Logo Upload </label>
     <imgUpload v-model="clinic.logo" class="my-2"/>
     <label class="lbl required">Contact</label>
-    <v-text-field
-      variant="solo"
+    <CommonPhoneNumberField
       v-model="clinic.contact"
-      :rules="[required]"
-      single-line
-      density="comfortable"
-      class="input-bordered mt-2"
-      flat
+      class="mt-2"
+      :error-message="contactError"
+      @update:phone-object="onPhoneObjectUpdate"
     />
     <label class="lbl required">Location Address</label>
-    <v-text-field
-      variant="solo"
-      v-model="clinic.address"
-      :rules="[required]"
-      single-line
-      density="comfortable"
-      class="input-bordered mt-2"
-      flat
+    <CommonAddressAutocompleteField
+      v-model="clinicAddress"
+      class="mt-2"
+      :required="true"
     />
     <!-- <label class="mb-2 lbl"> Clinic Type</label>
     <v-select
@@ -52,13 +45,59 @@ import imgUpload from "./imgUpload.vue";
 const clinic = defineModel();
 const valid = ref(false);
 const form = ref(null);
+const phoneObject = ref(null)
+const contactError = ref("")
 
 const required = (v) => !!v || "Required.";
+
+const clinicAddress = computed({
+  get: () => ({
+    address: clinic.value?.address || "",
+    postalCode: clinic.value?.postalCode || "",
+  }),
+  set: (value) => {
+    clinic.value = {
+      ...clinic.value,
+      address: value?.address || "",
+      postalCode: value?.postalCode || "",
+    }
+  },
+})
+
+const normalizeText = (value) => String(value || "").trim()
+
+const validatePhone = () => {
+  const val = normalizeText(clinic.value?.contact)
+  if (!val) {
+    contactError.value = "Contact is required"
+    return false
+  }
+  if (!phoneObject.value?.valid) {
+    contactError.value = "Enter a valid contact number"
+    return false
+  }
+  contactError.value = ""
+  return true
+}
+
+const onPhoneObjectUpdate = (value) => {
+  phoneObject.value = value
+  if (contactError.value) validatePhone()
+}
+
+watch(
+  () => clinic.value?.contact,
+  (value) => {
+    if (!normalizeText(value)) phoneObject.value = null
+    if (contactError.value) validatePhone()
+  }
+)
 
 defineExpose({
   validate: async () => {
     const result = await form.value.validate();
-    return result.valid;
+    const phoneValid = validatePhone()
+    return result.valid && phoneValid;
   },
   valid,
 });

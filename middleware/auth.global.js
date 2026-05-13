@@ -18,19 +18,25 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       }
     }
 
-    // Only redirect to onboarding if user is the organisation creator
+    // Redirect new org creators to the setup wizard until their profile is complete
     const user = authStore?.loggedUser;
+    const preference = Array.isArray(user?.preferences)
+      ? user.preferences[0]
+      : user?.preferences || null;
+    const hasStartedSetup = Number(preference?.setupStepsCompleted || 0) > 0;
     if (
       profileCompletion() <= 1 &&
+      !hasStartedSetup &&
       (userRole() === 8 || userRole() === 1) &&
       user?.isOrganisationCreator &&
+      to.path !== "/setup" &&
       to.path !== "/onboarding"
     ) {
       if (from.path === "/login" || from.path === "/signup") {
-        window.location.href = "/onboarding";
+        window.location.href = "/setup";
         return;
       }
-      return navigateTo("/onboarding");
+      return navigateTo("/setup");
     }
   } else {
     const isInvitationPath = to.path.includes('/invitation');
