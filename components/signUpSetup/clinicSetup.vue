@@ -20,10 +20,14 @@
       @update:phone-object="onPhoneObjectUpdate"
     />
     <label class="lbl required">Location Address</label>
-    <CommonAddressAutocompleteField
-      v-model="clinicAddress"
+    <v-text-field
+      variant="solo"
+      v-model="clinic.address"
+      :rules="[required]"
+      single-line
+      density="comfortable"
       class="mt-2"
-      :required="true"
+      flat
     />
     <!-- <label class="mb-2 lbl"> Clinic Type</label>
     <v-select
@@ -49,20 +53,6 @@ const phoneObject = ref(null)
 const contactError = ref("")
 
 const required = (v) => !!v || "Required.";
-
-const clinicAddress = computed({
-  get: () => ({
-    address: clinic.value?.address || "",
-    postalCode: clinic.value?.postalCode || "",
-  }),
-  set: (value) => {
-    clinic.value = {
-      ...clinic.value,
-      address: value?.address || "",
-      postalCode: value?.postalCode || "",
-    }
-  },
-})
 
 const normalizeText = (value) => String(value || "").trim()
 
