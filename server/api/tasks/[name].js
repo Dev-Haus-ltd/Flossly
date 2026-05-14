@@ -42,9 +42,20 @@ import {
   deleteCustomColumn,
   sendTaskDetailsByEmail,
 } from "~/server/controllers/task";
+import { requireFeature } from '~/server/utils/requireFeature'
+
+const TASK_POOL_CASES = new Set([
+  'teamTasks', 'teamTaskCounts', 'viewTeamTasksTaskWise', 'groupedByTask',
+  'statsByCategory', 'teamTasksCountByCategory',
+])
+const TASK_POOL_WRITE_CASES = new Set(['bulkUpload'])
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, "name");
+
+  if (TASK_POOL_CASES.has(path)) await requireFeature(event, 'taskPool')
+  if (TASK_POOL_WRITE_CASES.has(path)) await requireFeature(event, 'taskPool')
+
   switch (path) {
     case "bulkUpload":
       return await bulkUploadTasks(event);

@@ -81,6 +81,7 @@ import GroupImg from "@/assets/icons/practiceProfile/group.svg";
 import ImportantPeopleImg from "@/assets/icons/practiceProfile/importantPeople.svg";
 
 const { mdAndDown } = useDisplay();
+import { useMainStore } from '@/stores/index'
 
 const props = defineProps({
   initialSection: {
@@ -93,6 +94,7 @@ const showMobileSidebar = ref(false);
 const practiceDetails = ref({});
 const selectedSection = ref(props.initialSection);
 const orgStore = useOrgStore();
+const mainStore = useMainStore();
 
 // Sidebar menu items
 const menuItems = [
@@ -135,6 +137,8 @@ const getDetails = async () => {
 
     if (res.code === 0) {
       practiceDetails.value = res.data;
+         // important
+      mainStore.organisation = res.data; // Update global store with latest practice details
     } else {
       // Handle error with snackbar
       return null;

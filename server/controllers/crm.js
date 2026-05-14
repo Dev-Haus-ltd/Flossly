@@ -5,6 +5,7 @@ import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crm
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
+import { requireUsageAllowed } from '../utils/requireUsageAllowed'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
 import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
@@ -16,6 +17,7 @@ import { uploadBufferFile } from '../utils/storage'
 import { getS3Object } from '../utils/s3'
 import DB from '../utils/db'
 import { parseJsonBody } from "../utils/body";
+import { createEventNotification } from '../utils/notificationService.js';
 
 const EMAIL_REGEX = /^(?:[a-zA-Z0-9_'^&+\-]+(?:\.[a-zA-Z0-9_'^&+\-]+)*|".+")@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
 const SEND_NOW_JOB_TTL_MS = 30 * 60 * 1000
@@ -554,6 +556,7 @@ export const listLeads = async (event) => {
 export const createLead = async (event) => {
   try {
     const logged = event.context.user
+    await requireUsageAllowed(event, 'leads')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']
@@ -652,11 +655,20 @@ export const createLead = async (event) => {
     }
 
     try {
+      const leadCount = await CrmLead.count({ where: { organisationId: logged.orgId } })
+      if (leadCount === 80) {
+        await createEventNotification(logged.orgId, logged.userId, 'upgrade_f1_leads_80pct')
+      } else if (leadCount >= 100) {
+        await createEventNotification(logged.orgId, logged.userId, 'upgrade_f2_leads_limit')
+      }
+    } catch {}
+
+    try {
       await sendImmediateCrmAutomationsForLead(created)
     } catch (automationErr) {
       console.error('[CRM] Immediate automation dispatch failed:', automationErr?.message || automationErr)
     }
-    
+
     return success(created)
   } catch (e) {
     return error(500, e.message)
@@ -840,6 +852,16 @@ export const bulkUploadLeads = async (event) => {
         message: `0 leads added successfully, ${results.length} failed`,
         results,
       })
+    }
+
+    if (!admin) {
+      const { current, max } = await requireUsageAllowed(event, 'leads')
+      if (max !== Infinity && current + validLeads.length > max) {
+        return error(
+          403,
+          `Lead limit reached. Your current plan allows ${max} leads and you already have ${current}.`
+        )
+      }
     }
 
     const transaction = await DB.transaction()
@@ -1446,6 +1468,9 @@ export const uploadLeadWhatsAppMedia = async (event) => {
     return error(500, e.message || 'Failed to upload media')
   }
 }
+
+// Alias so legacy route 'whatsappUploadAttachment' still works
+export const uploadWhatsAppAttachment = uploadLeadWhatsAppMedia
 
 export const getLeadPriceAttachmentRecent = async (event) => {
   try {

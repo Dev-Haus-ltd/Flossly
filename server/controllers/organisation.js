@@ -10,6 +10,8 @@ import {
   OrganisationSurgery,
   OrganisationScript,
   DictionaryScript,
+  ClinicalNoteTemplate,
+  ClinicalNoteTemplateVersion,
   User,
   Role,
   OrganisationReferral,
@@ -26,7 +28,7 @@ import formidable from "formidable";
 import path from "path";
 import DB from "../utils/db";
 import { success, error } from "../utils/response";
-import { readBody, createError } from "h3";
+import { readBody, createError, getQuery } from "h3";
 import {
   sendTrialActivatedEmail,
   sendOrganisationReferralEmail,
@@ -36,6 +38,16 @@ import bcrypt from "bcrypt";
 import { Op } from "sequelize";
 import { uploadTempFile } from "../utils/storage";
 import { parseJsonBody } from "../utils/body";
+import {
+  cloneClinicalTemplateToOrg,
+  createClinicalTemplateWithVersion,
+  getClinicalTemplateByIdForOrg,
+  sanitizeClinicalNoteTemplatePayload,
+  serializeClinicalTemplate,
+  serializeClinicalTemplateVersion,
+  updateClinicalTemplateWithVersion,
+} from "../utils/clinicalNoteTemplates";
+import { TRIAL_DAYS } from "@shared/defaults/commercialPolicy.js";
 
 // Role constants for access control
 // Role ID 1 = Practice Manager, Role ID 8 = Principal Dentist / Practice Owner
@@ -127,11 +139,13 @@ export const updateOrganisationDetails = async (event) => {
     const name = firstNonEmpty(fields, 'name');
     const address = firstNonEmpty(fields, 'address');
     const contact = firstNonEmpty(fields, 'contact');
+    const postalCode = firstNonEmpty(fields, 'postalCode');
     const typeVal = firstNonEmpty(fields, 'type');
 
     if (name !== undefined) organisation.name = name;
     if (address !== undefined) organisation.address = address;
     if (contact !== undefined) organisation.contact = contact;
+    if (postalCode !== undefined) organisation.postalCode = postalCode;
 
     // Validate enum against model allowed values (Sequelize stores them on rawAttributes)
     if (typeVal !== undefined) {
@@ -178,6 +192,68 @@ export const updateOrganisationDetails = async (event) => {
         organisation.automationPlaceholders = automationPlaceholdersRaw;
       } else {
         return error(400, 'automationPlaceholders must be an object');
+      }
+    }
+
+    // Handle non-working days
+    const nonWorkingDaysRaw = firstNonEmpty(fields, 'nonWorkingDays');
+    if (nonWorkingDaysRaw !== undefined) {
+      try {
+        let parsedNonWorkingDays = nonWorkingDaysRaw;
+        if (typeof nonWorkingDaysRaw === 'string') {
+          parsedNonWorkingDays = JSON.parse(nonWorkingDaysRaw);
+        }
+        
+        // Validate structure: should be an array
+        if (!Array.isArray(parsedNonWorkingDays)) {
+          return error(400, 'nonWorkingDays must be an array');
+        }
+        
+        const validNonWorkingDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        for (const day of parsedNonWorkingDays) {
+          if (!validNonWorkingDays.includes(day)) {
+            return error(400, `Invalid non-working day: ${day}. Allowed values: ${validNonWorkingDays.join(', ')}`);
+          }
+        }
+        
+        organisation.nonWorkingDays = parsedNonWorkingDays;
+      } catch (err) {
+        return error(400, 'nonWorkingDays must be valid JSON array with day abbreviations (Mon, Tue, Wed, Thu, Fri, Sat, Sun)');
+      }
+    }
+
+    // Handle working day timings
+    const workingTimingsRaw = firstNonEmpty(fields, 'workingTimings');
+    if (workingTimingsRaw !== undefined) {
+      try {
+        let parsedTimings = workingTimingsRaw;
+        if (typeof workingTimingsRaw === 'string') {
+          parsedTimings = JSON.parse(workingTimingsRaw);
+        }
+        
+        // Validate structure: should have days as keys with startTime and endTime
+        if (!parsedTimings || typeof parsedTimings !== 'object') {
+          return error(400, 'workingTimings must be a valid object');
+        }
+        
+        const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/; // HH:MM format
+        
+        for (const day of validDays) {
+          if (!parsedTimings[day]) {
+            return error(400, `Missing timings for ${day}`);
+          }
+          if (!parsedTimings[day].startTime || !parsedTimings[day].endTime) {
+            return error(400, `startTime and endTime required for ${day}`);
+          }
+          if (!timeRegex.test(parsedTimings[day].startTime) || !timeRegex.test(parsedTimings[day].endTime)) {
+            return error(400, `Invalid time format for ${day}. Use HH:MM format.`);
+          }
+        }
+        
+        organisation.workingTimings = parsedTimings;
+      } catch (err) {
+        return error(400, 'workingTimings must be valid JSON with proper time format (HH:MM)');
       }
     }
 
@@ -811,6 +887,213 @@ export const seedScripts = async (event) => {
   }
 };
 
+export const listClinicalNoteTemplateVersions = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = Number(loggedUser?.orgId || 0);
+  try {
+    const query = getQuery(event) || {};
+    const template = await getClinicalTemplateByIdForOrg({
+      id: Number(query.id || 0),
+      organisationId,
+      includeArchived: true,
+    });
+    const versions = await ClinicalNoteTemplateVersion.findAll({
+      where: { templateId: template.id },
+      order: [['versionNumber', 'DESC'], ['id', 'DESC']],
+    });
+    return success(versions.map(serializeClinicalTemplateVersion));
+  } catch (err) {
+    console.error('Error listing clinical note template versions:', err);
+    return error(500, err.message || 'Failed to list template versions');
+  }
+};
+
+export const createClinicalNoteTemplate = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = Number(loggedUser?.orgId || 0);
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    const next = sanitizeClinicalNoteTemplatePayload(payload, { defaultScope: 'organisation' });
+    const created = await createClinicalTemplateWithVersion({
+      scope: 'organisation',
+      organisationId,
+      type: next.type,
+      category: next.category,
+      key: next.key,
+      title: next.title,
+      content: next.content,
+      status: next.status,
+      sourceTemplateId: next.sourceTemplateId,
+      sortOrder: next.sortOrder,
+      isDefault: next.isDefault === true,
+      actorUserId: loggedUser?.userId || null,
+      changeNote: next.changeNote,
+    });
+    return success(serializeClinicalTemplate(created));
+  } catch (err) {
+    console.error('Error creating clinical note template:', err);
+    return error(500, err.message || 'Failed to create template');
+  }
+};
+
+export const updateClinicalNoteTemplate = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = Number(loggedUser?.orgId || 0);
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    if (!payload?.id) return error(400, 'id is required');
+    const sourceTemplate = await getClinicalTemplateByIdForOrg({
+      id: Number(payload.id),
+      organisationId,
+      includeArchived: true,
+    });
+    let template = sourceTemplate;
+    if (sourceTemplate.scope === 'system') {
+      template = await ClinicalNoteTemplate.findOne({
+        where: {
+          scope: 'organisation',
+          organisationId,
+          type: sourceTemplate.type,
+          [Op.or]: [
+            { sourceTemplateId: sourceTemplate.id },
+            { key: sourceTemplate.key },
+          ],
+        },
+        include: [{ model: ClinicalNoteTemplateVersion, as: 'currentVersion' }],
+      });
+    }
+    const next = sanitizeClinicalNoteTemplatePayload(payload, { existing: template || sourceTemplate, defaultScope: 'organisation' });
+
+    if (!template && sourceTemplate.scope === 'system') {
+      const created = await createClinicalTemplateWithVersion({
+        scope: 'organisation',
+        organisationId,
+        type: sourceTemplate.type,
+        category: next.category,
+        key: next.key,
+        title: next.title,
+        content: next.content !== undefined ? next.content : sourceTemplate.currentVersion?.content || '',
+        status: next.status,
+        sourceTemplateId: sourceTemplate.id,
+        sortOrder: next.sortOrder,
+        isDefault: next.isDefault === true,
+        actorUserId: loggedUser?.userId || null,
+        changeNote: next.changeNote || `Customized from ${sourceTemplate.title}`,
+      });
+      return success(serializeClinicalTemplate(created));
+    }
+
+    if (!template) return error(404, 'Template not found');
+    const updated = await updateClinicalTemplateWithVersion({
+      template,
+      title: next.title,
+      key: next.key,
+      category: next.category,
+      content: next.content,
+      status: next.status,
+      sortOrder: next.sortOrder,
+      isDefault: next.isDefault,
+      actorUserId: loggedUser?.userId || null,
+      changeNote: next.changeNote,
+    });
+    return success(serializeClinicalTemplate(updated));
+  } catch (err) {
+    console.error('Error updating clinical note template:', err);
+    return error(500, err.message || 'Failed to update template');
+  }
+};
+
+export const cloneClinicalNoteTemplate = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = Number(loggedUser?.orgId || 0);
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    const sourceTemplate = await getClinicalTemplateByIdForOrg({
+      id: Number(payload?.sourceTemplateId || 0),
+      organisationId,
+      includeArchived: true,
+    });
+    const created = await cloneClinicalTemplateToOrg({
+      sourceTemplate,
+      organisationId,
+      actorUserId: loggedUser?.userId || null,
+      title: payload?.title ? String(payload.title).trim() : null,
+      changeNote: payload?.changeNote ? String(payload.changeNote).trim() : null,
+    });
+    return success(serializeClinicalTemplate(created));
+  } catch (err) {
+    console.error('Error cloning clinical note template:', err);
+    return error(500, err.message || 'Failed to clone template');
+  }
+};
+
+export const setDefaultClinicalNoteTemplate = async (event) => {
+  const loggedUser = event.context.user;
+  const organisationId = Number(loggedUser?.orgId || 0);
+  try {
+    const body = await readBody(event);
+    const payload = typeof body === "string" ? parseJsonBody(body) : body;
+    if (!payload?.id) return error(400, 'id is required');
+    const sourceTemplate = await getClinicalTemplateByIdForOrg({
+      id: Number(payload.id),
+      organisationId,
+      includeArchived: true,
+    });
+    let template = sourceTemplate;
+    if (sourceTemplate.scope === 'system') {
+      template = await ClinicalNoteTemplate.findOne({
+        where: {
+          scope: 'organisation',
+          organisationId,
+          type: sourceTemplate.type,
+          [Op.or]: [
+            { sourceTemplateId: sourceTemplate.id },
+            { key: sourceTemplate.key },
+          ],
+        },
+        include: [{ model: ClinicalNoteTemplateVersion, as: 'currentVersion' }],
+      });
+      if (!template) {
+        template = await createClinicalTemplateWithVersion({
+          scope: 'organisation',
+          organisationId,
+          type: sourceTemplate.type,
+          category: sourceTemplate.category || 'user',
+          key: sourceTemplate.key,
+          title: sourceTemplate.title,
+          content: sourceTemplate.currentVersion?.content || '',
+          status: sourceTemplate.status || 'active',
+          sourceTemplateId: sourceTemplate.id,
+          sortOrder: Number(sourceTemplate.sortOrder || 0),
+          isDefault: payload.isDefault !== false,
+          actorUserId: loggedUser?.userId || null,
+          changeNote: payload?.changeNote ? String(payload.changeNote).trim() : `Customized default from ${sourceTemplate.title}`,
+        });
+        return success(serializeClinicalTemplate(template));
+      }
+    }
+    if (!template) return error(404, 'Template not found');
+    const updated = await updateClinicalTemplateWithVersion({
+      template,
+      title: template.title,
+      key: template.key,
+      category: template.category,
+      status: template.status,
+      sortOrder: Number(template.sortOrder || 0),
+      isDefault: payload.isDefault !== false,
+      actorUserId: loggedUser?.userId || null,
+      changeNote: payload?.changeNote ? String(payload.changeNote).trim() : 'Updated default selection',
+    });
+    return success(serializeClinicalTemplate(updated));
+  } catch (err) {
+    console.error('Error setting default clinical note template:', err);
+    return error(500, err.message || 'Failed to set default template');
+  }
+};
+
 export const createOrganisationReferral = async (event) => {
   try {
     const loggedUser = event.context.user;
@@ -953,6 +1236,7 @@ export const createOrganisationForUser = async (event) => {
   const contact = firstNonEmpty(fields, 'contact');
   const address = firstNonEmpty(fields, 'address');
   const typeVal = firstNonEmpty(fields, 'type');
+  const postalCode = firstNonEmpty(fields, 'postalCode');
 
   if (!organisationName) {
     return error(400, "Organisation name is required");
@@ -980,6 +1264,7 @@ export const createOrganisationForUser = async (event) => {
     // Add optional fields if provided (for full creation mode)
     if (contact) orgData.contact = contact;
     if (address) orgData.address = address;
+    if (postalCode) orgData.postalCode = postalCode;
     if (typeVal) {
       const enumValues =
         Organisation.rawAttributes &&
@@ -1028,7 +1313,7 @@ export const createOrganisationForUser = async (event) => {
     }
 
     trialEndDate = new Date();
-    trialEndDate.setDate(trialEndDate.getDate() + 15);
+    trialEndDate.setDate(trialEndDate.getDate() + TRIAL_DAYS);
 
     await UserPreference.create(
       {
@@ -1173,7 +1458,7 @@ export const createOrganisationForUser = async (event) => {
         email: user.email,
         fullName: user.fullName,
         organisationName: org.name,
-        trialDays: 15,
+        trialDays: TRIAL_DAYS,
         trialEndsOn: trialEndDate,
       });
     } catch (emailErr) {

@@ -2,6 +2,13 @@ import { success, error } from '../utils/response'
 import { parseJsonBody } from '../utils/body'
 import { Organisation } from '../models'
 import { generateAutomations } from '../utils/aiWrapper'
+import { createError } from 'h3'
+import {
+  getTrialAiAutomationRemaining,
+  getTrialAiAutomationUsage,
+  setTrialAiAutomationUsage,
+  TRIAL_AI_AUTOMATION_LIMIT,
+} from '../utils/commercialPolicy.js'
 
 export const generateAutomationsWithAI = async (event) => {
   try {
@@ -16,10 +23,25 @@ export const generateAutomationsWithAI = async (event) => {
     }
 
     const org = await Organisation.findByPk(Number(orgId), {
-      attributes: ['id', 'name', 'type', 'practiceAnniversaryDate']
+      attributes: ['id', 'name', 'type', 'practiceAnniversaryDate', 'licenseType', 'licenseBillingCycle', 'licenseRenewalDate', 'automationPlaceholders']
     })
 
     if (!org) return error(404, 'Organisation not found')
+
+    const trialRemaining = getTrialAiAutomationRemaining(org)
+    if (trialRemaining !== null && trialRemaining <= 0) {
+      throw createError({
+        statusCode: 403,
+        data: {
+          code: 'LIMIT_REACHED',
+          feature: 'automation',
+          resource: 'ai_automation_generations',
+          current: getTrialAiAutomationUsage(org),
+          max: TRIAL_AI_AUTOMATION_LIMIT,
+          message: `Your free trial includes ${TRIAL_AI_AUTOMATION_LIMIT} AI automation generations. Upgrade to continue using AI automation generation.`,
+        },
+      })
+    }
 
     const automations = await generateAutomations({
       organisationName: org.name,
@@ -29,8 +51,15 @@ export const generateAutomationsWithAI = async (event) => {
       existingAutomations: existingAutomations || null,
     })
 
+    if (trialRemaining !== null) {
+      setTrialAiAutomationUsage(org, getTrialAiAutomationUsage(org) + 1)
+      await org.save()
+    }
+
     return success({
       automations,
+      trialAiGenerationsRemaining:
+        trialRemaining !== null ? Math.max(0, trialRemaining - 1) : null,
       message: followUp
         ? `Refined ${automations.length} automations based on your feedback`
         : `Generated ${automations.length} automations based on your idea`,

@@ -3,19 +3,34 @@ import vuetify from "vite-plugin-vuetify";
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-04-14",
+
   alias: {
     "@shared": resolve(__dirname, "shared"),
   },
+
+  routeRules: {
+    '/form/**': {
+      headers: {
+        'X-Frame-Options': 'ALLOWALL',
+        'Content-Security-Policy': "frame-ancestors *",
+      },
+    },
+  },
+
   router: {
     prefetchLinks: true,
   },
+
   experimental: {
     payloadExtraction: true,
     renderJsonPayloads: true,
   },
+
   runtimeConfig: {
     public: {
       BASE_URL: process.env.NUXT_PUBLIC_BASE_URL || process.env.BASE_URL,
+      GOOGLE_MAPS_API_KEY: process.env.NUXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '',
+      POSTHOG_KEY: process.env.NUXT_PUBLIC_POSTHOG_KEY || '',
       CHATBOT_URL: process.env.NUXT_PUBLIC_CHATBOT_URL || process.env.CHATBOT_URL,
       META_APP_ID: process.env.NUXT_PUBLIC_META_APP_ID || process.env.META_APP_ID,
       META_WA_EMBEDDED_CONFIG_ID: process.env.NUXT_PUBLIC_META_WA_EMBEDDED_CONFIG_ID || process.env.META_WA_EMBEDDED_CONFIG_ID,
@@ -42,8 +57,8 @@ export default defineNuxtConfig({
         "primary-light": "#008AFE",
         secondary: "#171952",
         "secondary-dark": "#171952",
-        "secondary-light": "#263AAD", 
-        tertiary: "#7D77FF",      
+        "secondary-light": "#263AAD",
+        tertiary: "#7D77FF",
         "tertiary-dark": "#6C63E7",
         "tertiary-light": "#8A82FF"
       },
@@ -78,6 +93,14 @@ export default defineNuxtConfig({
     WHAPI_CHANNEL_MODE: process.env.NUXT_WHAPI_CHANNEL_MODE || process.env.WHAPI_CHANNEL_MODE,
     WHAPI_ALLOW_CREATE_CHANNEL: process.env.NUXT_WHAPI_ALLOW_CREATE_CHANNEL || process.env.WHAPI_ALLOW_CREATE_CHANNEL,
     WHAPI_EXTEND_DAYS: process.env.NUXT_WHAPI_EXTEND_DAYS || process.env.WHAPI_EXTEND_DAYS,
+    // GSC and Buisness and ads (Analytics)
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI,
+    GOOGLE_ADS_DEVELOPER_TOKEN: process.env.GOOGLE_ADS_DEVELOPER_TOKEN,
+    GOOGLE_ADS_WEBHOOK_SECRET: process.env.GOOGLE_ADS_WEBHOOK_SECRET,
+
+
     //file size
     MAX_FILE_SIZE_FOR_TASK_SHEET: process.env.MAX_FILE_SIZE_FOR_TASK_SHEET,
     MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
@@ -103,6 +126,7 @@ export default defineNuxtConfig({
     DB_PORT: process.env.NUXT_DB_PORT || process.env.DB_PORT,
     DB_SCHEMA: process.env.NUXT_DB_SCHEMA || process.env.DB_SCHEMA,
   },
+
   modules: [
     async (options, nuxt) => {
       nuxt.hooks.hook("vite:extendConfig", (config) =>
@@ -115,6 +139,7 @@ export default defineNuxtConfig({
     "@vite-pwa/nuxt",
     // "vue-social-sharing/nuxt"
   ],
+
   pwa: {
     registerType: "autoUpdate",
     manifest: {
@@ -169,9 +194,11 @@ export default defineNuxtConfig({
       enabled: false,
     },
   },
+
   build: {
     transpile: ["v-phone-input"],
   },
+
   css: [
     "vuetify/lib/styles/main.sass",
     "@/assets/css/fonts.css",
@@ -179,6 +206,7 @@ export default defineNuxtConfig({
     "v-phone-input/styles",
     "flag-icons/css/flag-icons.min.css",
   ],
+
   // Add loading indicator for page transitions
   loading: {
     color: '#0061FB',
@@ -186,6 +214,7 @@ export default defineNuxtConfig({
     continuous: true,
     duration: 3000
   },
+
   app: {
     head: {
       title: "Flossly",
@@ -202,11 +231,13 @@ export default defineNuxtConfig({
       link: [
         // Favicon
         { rel: "icon", type: "image/png", href: "/Logoicon2.svg" },
-      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon-180x180.png" },
-      { rel: "apple-touch-icon", sizes: "152x152", href: "/apple-touch-icon-152x152.png" },
-      { rel: "apple-touch-icon", sizes: "120x120", href: "/apple-touch-icon-120x120.png" },
-      { rel: "apple-touch-icon", sizes: "76x76", href: "/apple-touch-icon-76x76.png" },
-    ],
+        // PWA manifest
+        { rel: "manifest", href: "/manifest.webmanifest" },
+        { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon-180x180.png" },
+        { rel: "apple-touch-icon", sizes: "152x152", href: "/apple-touch-icon-152x152.png" },
+        { rel: "apple-touch-icon", sizes: "120x120", href: "/apple-touch-icon-120x120.png" },
+        { rel: "apple-touch-icon", sizes: "76x76", href: "/apple-touch-icon-76x76.png" },
+      ],
       script: [
         { src: "https://js.stripe.com/v3/", defer: true },
         // Load lottie-player synchronously in head - no defer so it loads immediately
@@ -264,17 +295,21 @@ export default defineNuxtConfig({
       }
     },
   },
+
   imports: {
     dirs: ["./stores"],
   },
+
   pinia: {
     autoImports: ["defineStore", "acceptHMRUpdate"],
   },
+
   nitro: {
     externals: {
       inline: ['xlsx', '@anthropic-ai/sdk'],
     },
   },
+
   vue: {
     compilerOptions: {
       // Treat registered web components as custom elements during SSR/component resolution.
@@ -284,13 +319,19 @@ export default defineNuxtConfig({
         tag === "lottie-player",
     },
   },
+
   vite: {
     ssr: {
       noExternal: ["vuetify", "v-phone-input", "@anthropic-ai/sdk"], // add the vuetify vite plugin
     },
   },
+
   devServer: {
     port: 3000,
     host: "0.0.0.0",
+  },
+
+  devtools: {
+    enabled: true,
   },
 });

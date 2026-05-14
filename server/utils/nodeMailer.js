@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { OrganisationSmtp } from "../models";
+import { OrganisationSmtp, Organisation, User, UserOrganisation } from "../models";
 
 const transporterCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
@@ -67,4 +67,29 @@ function getFromAddress(orgId) {
   return "Flossly <helloflossly@gmail.com>";
 }
 
-export { getOrgTransporter, getFromAddress, defaultTransporter };
+function isCustomSmtp(orgId) {
+  const cached = transporterCache.get(orgId);
+  return !!(cached && Date.now() - cached.timestamp < CACHE_TTL);
+}
+
+export async function getOrgEmailIdentity(orgId) {
+  if (isCustomSmtp(orgId)) {
+    return { from: getFromAddress(orgId), replyTo: undefined };
+  }
+
+  const org = await Organisation.findByPk(orgId, { attributes: ['id', 'name'] });
+  const owner = await User.findOne({
+    include: [{ model: UserOrganisation, as: 'userOrganisations',
+      where: { organisationId: orgId, status: 'Active' } }],
+    order: [['id', 'ASC']],
+    attributes: ['email'],
+  });
+
+  const practiceName = org?.name || 'Your Practice';
+  return {
+    from: `"${practiceName}" <helloflossly@gmail.com>`,
+    replyTo: owner?.email || undefined,
+  };
+}
+
+export { getOrgTransporter, getFromAddress, isCustomSmtp, defaultTransporter };

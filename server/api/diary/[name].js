@@ -1,11 +1,31 @@
-import { listTreatments, listPatients, createPatient, updatePatient, listAppointments, createAppointment, updateAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats } from '~/server/controllers/diary'
+import { listTreatments, createTreatment, updateTreatment, deleteTreatment, listPatients, createPatient, updatePatient, deletePatient, listAppointments, createAppointment, updateAppointment, deleteAppointment, listDentistsForDate, getStats, getPatient, listNotes, createNote, deleteNote, getPatientComfort, savePatientComfort, updatePatientComfort, getPatientSurvey, savePatientSurvey, uploadSurveyPhotos, downloadPatientSurvey, printPatientSurvey, sharePatientSurvey, getSurveyStructure, listPatientForms, getPatientForm, savePatientForm, updatePatientForm, deletePatientForm, listPatientsPaged, getPatientStats, getPatientChart, savePatientChart, savePatientChartTooth, getPatientChartMeta, savePatientChartMeta, listTreatmentPlans, createTreatmentPlan, updateTreatmentPlan, deleteTreatmentPlan, listTreatmentPlanItems, createTreatmentPlanItem, updateTreatmentPlanItem, deleteTreatmentPlanItem, reorderTreatmentPlanItems, appointmentConflictCheck, bookFromTreatmentPlan, uploadChartImage, generateTreatmentPlanContent, listClinicalNoteTemplates, applyClinicalNoteTemplate, listZones, createZone, updateZone, deleteZone, patientCommunication, sendEmail } from '~/server/controllers/diary'
+import { getAccountStats, listInvoices, createInvoice, updateInvoice, deleteInvoice, generateInvoiceFromTreatments, listPayments, createPayment, allocatePayment, deletePayment } from '~/server/controllers/accounts'
 import { success } from '~/server/utils/response'
+import { requireFeature } from '~/server/utils/requireFeature'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
+
+  // Full patient management section (Patients tab, Finance tab) — CRM/Pro only
+  // Basic patient CRUD and appointment create/update are allowed on all tiers (including Lite)
+  // so that calendar appointment booking works for new signups.
+  const PATIENT_BOOKING_ROUTES = new Set([
+    'patientsPaged', 'patientStats',
+    'notes', 'noteCreate', 'noteDelete',
+    'patientComfortGet', 'patientComfortSave', 'patientComfortUpdate',
+    'surveyGet', 'surveySave', 'surveyUploadPhotos', 'surveyDownload', 'surveyPrint', 'surveyShare', 'surveyStructure',
+    'formsList', 'formGet', 'formSave', 'formUpdate', 'formDelete',
+  ])
+  if (PATIENT_BOOKING_ROUTES.has(path)) await requireFeature(event, 'patientBooking')
   switch (path) {
     case 'treatments':
       return await listTreatments(event)
+    case 'treatments-create':
+      return await createTreatment(event)
+    case 'treatments-update':
+      return await updateTreatment(event)
+    case 'treatments-delete':
+      return await deleteTreatment(event)
     case 'patients':
       return await listPatients(event)
     case 'patientsPaged':
@@ -16,12 +36,16 @@ export default defineEventHandler(async (event) => {
       return await createPatient(event)
     case 'patientUpdate':
       return await updatePatient(event)
+    case 'patientDelete':
+      return await deletePatient(event)
     case 'appointments':
       return await listAppointments(event)
     case 'appointmentCreate':
       return await createAppointment(event)
     case 'appointmentUpdate':
       return await updateAppointment(event)
+    case 'appointmentDelete':
+      return await deleteAppointment(event)
     case 'dentists':
       return await listDentistsForDate(event)
     case 'stats':
@@ -64,6 +88,79 @@ export default defineEventHandler(async (event) => {
       return await updatePatientForm(event)
     case 'formDelete':
       return await deletePatientForm(event)
+    case 'chart':
+      return await getPatientChart(event)
+    case 'chartSave':
+      return await savePatientChart(event)
+    case 'chartToothSave':
+      return await savePatientChartTooth(event)
+    case 'chartMeta':
+      return await getPatientChartMeta(event)
+    case 'chartMetaSave':
+      return await savePatientChartMeta(event)
+    case 'treatmentPlans':
+      return await listTreatmentPlans(event)
+    case 'treatmentPlanCreate':
+      return await createTreatmentPlan(event)
+    case 'treatmentPlanUpdate':
+      return await updateTreatmentPlan(event)
+    case 'treatmentPlanGenerateContent':
+      return await generateTreatmentPlanContent(event)
+    case 'clinicalNoteTemplates':
+      return await listClinicalNoteTemplates(event)
+    case 'clinicalNoteTemplateApply':
+      return await applyClinicalNoteTemplate(event)
+    case 'treatmentPlanDelete':
+      return await deleteTreatmentPlan(event)
+    case 'treatmentPlanItems':
+      return await listTreatmentPlanItems(event)
+    case 'treatmentPlanItemCreate':
+      return await createTreatmentPlanItem(event)
+    case 'treatmentPlanItemUpdate':
+      return await updateTreatmentPlanItem(event)
+    case 'treatmentPlanItemDelete':
+      return await deleteTreatmentPlanItem(event)
+    case 'treatmentPlanReorder':
+      return await reorderTreatmentPlanItems(event)
+    case 'appointmentConflictCheck':
+      return await appointmentConflictCheck(event)
+    case 'bookFromTreatmentPlan':
+      return await bookFromTreatmentPlan(event)
+    case 'chartImageUpload':
+      return await uploadChartImage(event)
+    case 'zones':
+      return await listZones(event)
+    case 'zoneCreate':
+      return await createZone(event)
+    case 'zoneUpdate':
+      return await updateZone(event)
+    case 'zoneDelete':
+      return await deleteZone(event)
+    case 'communication':
+      return await patientCommunication(event)
+    case 'sendEmail':
+      return await sendEmail(event)
+    // Accounts
+    case 'accountsStats':
+      return await getAccountStats(event)
+    case 'invoicesList':
+      return await listInvoices(event)
+    case 'invoiceCreate':
+      return await createInvoice(event)
+    case 'invoiceUpdate':
+      return await updateInvoice(event)
+    case 'invoiceDelete':
+      return await deleteInvoice(event)
+    case 'generateInvoiceFromTreatments':
+      return await generateInvoiceFromTreatments(event)
+    case 'paymentsList':
+      return await listPayments(event)
+    case 'paymentCreate':
+      return await createPayment(event)
+    case 'paymentAllocate':
+      return await allocatePayment(event)
+    case 'paymentDelete':
+      return await deletePayment(event)
     default:
       return { code: 1, message: 'Not found' }
   }

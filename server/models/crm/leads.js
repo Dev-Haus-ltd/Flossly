@@ -12,6 +12,12 @@ export const CrmLead = sequelize.define(
     campaignId: { type: DataTypes.STRING(50), allowNull: true },
     adSetId: { type: DataTypes.STRING(50), allowNull: true },
     adId: { type: DataTypes.STRING(50), allowNull: true },
+
+    // Google Ads Attribution
+    gclid: { type: DataTypes.STRING(100), allowNull: true },
+    googleCampaignId: { type: DataTypes.STRING(50), allowNull: true },
+    googleAdGroupId: { type: DataTypes.STRING(50), allowNull: true },
+    googleAdId: { type: DataTypes.STRING(50), allowNull: true },
     alert: { type: DataTypes.STRING(50), allowNull: true },
     name: { type: DataTypes.STRING(200), allowNull: true },
     email: { type: DataTypes.STRING(200), allowNull: true },

@@ -150,10 +150,15 @@ service.json
 
 
 .gemini
+.claude
 .nvmrc
+.claude/settings.local.json
 
 /public/documents/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Internal docs — shared manually, not tracked in git
+/docs/
 

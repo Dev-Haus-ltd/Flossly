@@ -1,7 +1,13 @@
 import { listJourneyAutomationGroups, listJourneyAutomationTemplates, saveJourneyAutomationTemplate, toggleJourneyAutomationGroup } from '~/server/controllers/patientJourney'
+import { requireFeature } from '~/server/utils/requireFeature'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
+
+  if (path === 'automationSave' || path === 'automationToggle') {
+    await requireFeature(event, 'automation')
+  }
+
   switch (path) {
     case 'automationGroups':
       return await listJourneyAutomationGroups(event)

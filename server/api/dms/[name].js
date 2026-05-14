@@ -2,6 +2,9 @@ import { listDmConversations, listDmMessages, sendDmMessage, markDmRead, process
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, "name");
+  // Meta DMs (Messenger + Instagram) are available on all plans — no feature gate here.
+  // WhatsApp Business messaging is gated separately in server/api/whapi/[name].js.
+
   switch (name) {
     case "conversations":
       return await listDmConversations(event);

@@ -1,23 +1,19 @@
 import { Op } from "sequelize";
 import { CrmWhatsAppMessageLog } from "../models/index.js";
-import { UserPreference, UserSubscription } from "../models/index.js";
+import { Organisation } from "../models/index.js";
 
 const WHATSAPP_LIMITS_BY_PLAN = {
-  drift: 250,
-  glide: 750,
-  soar: 1500,
-  trial: 250,
+  lite: 250,
+  crm: 750,
+  pro: 1500,
 };
-const TRIAL_TOTAL_LIMIT = 250;
-const TRIAL_WINDOW_DAYS = 15;
 
 const normalizePlanKey = (value) => {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return null;
-  if (raw.includes("soar")) return "soar";
-  if (raw.includes("glide")) return "glide";
-  if (raw.includes("drift")) return "drift";
-  if (raw.includes("trial")) return "trial";
+  if (raw.includes("pro") || raw.includes("soar") || raw.includes("system")) return "pro";
+  if (raw.includes("crm") || raw.includes("glide")) return "crm";
+  if (raw.includes("lite") || raw.includes("drift") || raw.includes("trial")) return "lite";
   return null;
 };
 
@@ -110,54 +106,23 @@ export const getWhatsAppUsageInWindow = async (organisationId, start, end) => {
   }
 };
 
-const getTrialWindowForOrg = async (organisationId) => {
-  if (!organisationId) return null;
-  try {
-    const pref = await UserPreference.findOne({
-      where: { organisationId: Number(organisationId), licenseType: "Trial" },
-      order: [["createdAt", "DESC"]],
-    });
-    if (!pref) return null;
-    const end = pref.licenseRenewalDate ? new Date(pref.licenseRenewalDate) : null;
-    if (!end) return null;
-    const start = pref.createdAt ? new Date(pref.createdAt) : new Date(end.getTime() - TRIAL_WINDOW_DAYS * 86400000);
-    const now = new Date();
-    if (now > end) return null;
-    return { start, end };
-  } catch {
-    return null;
-  }
-};
-
 export const getOrganisationWhatsAppLimit = async (organisationId, userId = null) => {
   let licenseType = null;
   try {
-    if (userId) {
-      const pref = await UserPreference.findOne({
-        where: { organisationId: Number(organisationId), userId: Number(userId) },
-      });
-      licenseType = pref?.licenseType || null;
-    }
-    if (!licenseType) {
-      const sub = await UserSubscription.findOne({
-        where: { organisationId: Number(organisationId) },
-      });
-      licenseType = sub?.licenseType || sub?.stripeSubscriptionStatus || null;
+    const org = await Organisation.findByPk(Number(organisationId), {
+      attributes: ["licenseType"],
+    });
+    if (org) {
+      licenseType = org.licenseType || null;
     }
   } catch {
     licenseType = null;
   }
-  const planKey = normalizePlanKey(licenseType) || "trial";
-  return WHATSAPP_LIMITS_BY_PLAN[planKey] || WHATSAPP_LIMITS_BY_PLAN.trial;
+  const planKey = normalizePlanKey(licenseType) || "lite";
+  return WHATSAPP_LIMITS_BY_PLAN[planKey] || WHATSAPP_LIMITS_BY_PLAN.lite;
 };
 
 export const isWhatsAppLimitExceeded = async (organisationId, userId = null) => {
-  const trialWindow = await getTrialWindowForOrg(organisationId);
-  if (trialWindow) {
-    const { count } = await getWhatsAppUsageInWindow(organisationId, trialWindow.start, trialWindow.end);
-    return { exceeded: count >= TRIAL_TOTAL_LIMIT, count, limit: TRIAL_TOTAL_LIMIT, window: trialWindow, isTrial: true };
-  }
-
   const [{ count }, limit] = await Promise.all([
     getMonthlyWhatsAppUsage(organisationId),
     getOrganisationWhatsAppLimit(organisationId, userId),

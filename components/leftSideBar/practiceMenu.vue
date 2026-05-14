@@ -1,5 +1,5 @@
 <template>
-  <div class="header-container" :class="!rail ? 'pl-2' : ''">
+  <div id="tour-practice-menu" class="header-container" :class="!rail ? 'pl-2' : ''">
     <!-- Left: Avatar + Title -->
     <div class="left-content">
       <CommonAvatar v-if="currentOrg?.name" :user="currentOrg" />
@@ -65,6 +65,8 @@
 </template>
 
 <script setup>
+import { resetUsageState } from '~/composables/useUsageSummary';
+
 const { currentOrg, rail } = defineProps({
   currentOrg: Object,
   rail: Boolean,
@@ -137,6 +139,7 @@ const handleOrgClick = async (org) => {
       });
       menu.value = false;
       crmStore.resetMetaAnalyticsState();
+      resetUsageState();
       // Clear all query params so stale leadId/campaignId from previous org don't trigger warnings
       await router.replace({ path: route.path, query: {} });
       await getProfile();
@@ -175,9 +178,13 @@ const handleAddWorkspace = () => {
 };
 
 const getProfile = async () => {
-  const res = await authStore.profile();
-  if (res.code === 0 && res.data) {
-    setUser(res.data);
+  try {
+    const res = await authStore.profile();
+    if (res.code === 0 && res.data) {
+      setUser(res.data);
+    }
+  } catch {
+    // Profile refresh failed — page will reload on next navigation
   }
 };
 </script>

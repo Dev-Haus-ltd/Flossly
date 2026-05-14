@@ -1,8 +1,9 @@
 <script setup>
 import { useFCM } from "~/composables/useFCM";
+import { resetUsageState } from "~/composables/useUsageSummary";
 
 definePageMeta({
-  layout: "default",
+  layout: false,
 });
 
 const { setUser } = useUser();
@@ -26,6 +27,7 @@ const clearAuthState = () => {
   authStore.$reset();
   userStore.resetUsers();
   setUser(null);
+  resetUsageState();
 
   if (import.meta.client) {
     savedRoute = localStorage.getItem("route") || "/login";

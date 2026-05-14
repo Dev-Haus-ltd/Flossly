@@ -5,17 +5,20 @@ import {
   WhapiChannelConfig,
   UserOrganisation,
   Organisation,
-  UserPreference,
   OrganisationTreatment,
+  DiaryPatientCommunicationLogs,
 } from "../models";
 import { normalizeWhatsAppNumber, logWhatsAppMessage, isWhatsAppLimitExceeded } from "../utils/whatsapp";
 import { success, error } from "../utils/response";
+import { requireFeature } from "../utils/requireFeature";
 import { addWhapiClient, broadcastWhapiEvent } from "../utils/whapiStream";
 import { sendNotificationToMultipleUsers } from "../utils/fcmNotification";
 import { encrypt, decrypt } from "../utils/crypto";
 import { getWhapiEnvConfig, getWhapiPartnerConfig, resolveWhapiConfig } from "../utils/whatsappProvider";
 import { uploadBufferFile, downloadUrlToS3 } from "../utils/storage";
 import { chat, generateAutoReply } from "../utils/aiWrapper";
+import { createError } from "h3";
+import { canUsePaidWhatsApp } from "../utils/commercialPolicy.js";
 
 const extractTimestamp = (value) => {
   if (!value) return Date.now();
@@ -37,16 +40,6 @@ const isWhapiCreateAllowed = () => {
   return true;
 };
 
-const isPaidWhapiAllowed = async (userId, orgId) => {
-  if (!userId || !orgId) return false;
-  const pref = await UserPreference.findOne({
-    where: { userId: Number(userId), organisationId: Number(orgId) },
-  });
-  const license = String(pref?.licenseType || "").trim().toLowerCase();
-  if (!license) return false;
-  if (license === "trial") return false;
-  return ["drift", "glide", "soar", "system"].includes(license);
-};
 
 const findLeadByPhone = async (phoneDigits, orgId = null) => {
   if (!phoneDigits) return null;
@@ -381,6 +374,134 @@ const isWhapiActivationBlocked = (status) => {
   return false;
 };
 
+const resolveMessageAttachmentType = (item = {}) => {
+  const mime = String(item?.mimeType || item?.contentType || "").toLowerCase();
+  if (item?.type) return String(item.type).toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  return "document";
+};
+
+export const sendMessage = async (event) => {
+  try {
+    const { orgId, userId } = event.context.user || {};
+    if (!orgId) return error(401, "Unauthenticated");
+
+    const raw = await readBody(event);
+    const body = typeof raw === "string" ? parseJsonBody(raw) : raw || {};
+    const phone = String(body.phone || body.to || "").trim();
+    const messageText = String(body.message || "").trim();
+    const attachments = Array.isArray(body.attachments) ? body.attachments : [];
+
+    if (!phone) return error(400, "phone is required");
+    if (!messageText && !attachments.length) return error(400, "message or attachments required");
+
+    const normalizedPhone = normalizeWhatsAppNumber(phone);
+    if (!normalizedPhone) return error(400, "Invalid phone number");
+
+    const whapiConfig = await resolveWhapiConfig(orgId);
+    if (!whapiConfig?.token) return error(400, "Whapi channel not configured or token missing");
+
+    const limitStatus = await isWhatsAppLimitExceeded(orgId, userId);
+    if (limitStatus.exceeded) {
+      return error(402, `WhatsApp monthly limit reached (${limitStatus.count}/${limitStatus.limit})`);
+    }
+
+    const whapiBase = String(whapiConfig.baseUrl || "").replace(/\/+$/, "");
+    const headers = {
+      Authorization: `Bearer ${whapiConfig.token}`,
+      "Content-Type": "application/json",
+    };
+
+    let sent = 0;
+    const failures = [];
+
+    if (messageText) {
+      const resp = await $fetch(`${whapiBase}/messages/text`, {
+        method: "POST",
+        headers,
+        body: {
+          to: normalizedPhone,
+          body: messageText,
+        },
+      });
+      const providerMessageId = resp?.message?.id || resp?.id || null;
+      await logWhatsAppMessage({
+        organisationId: orgId,
+        to: normalizedPhone,
+        direction: "outbound",
+        type: "text",
+        status: "sent",
+        providerMessageId,
+        content: messageText,
+      });
+      sent += 1;
+    }
+
+    if (attachments.length) {
+      for (let idx = 0; idx < attachments.length; idx += 1) {
+        const att = attachments[idx] || {};
+        const type = resolveMessageAttachmentType(att);
+        const endpoint = type === "image" ? "image" : type === "video" ? "video" : type === "audio" ? "audio" : "document";
+        const media = String(att.url || att.link || att.path || "").trim();
+        if (!media) continue;
+
+        try {
+          const resp = await $fetch(`${whapiBase}/messages/${endpoint}`, {
+            method: "POST",
+            headers,
+            body: {
+              to: normalizedPhone,
+              media,
+              ...(endpoint === "document" && att.name ? { filename: att.name } : {}),
+            },
+          });
+
+          const providerMessageId = resp?.message?.id || resp?.id || null;
+          await logWhatsAppMessage({
+            organisationId: orgId,
+            to: normalizedPhone,
+            direction: "outbound",
+            type,
+            status: "sent",
+            providerMessageId,
+            content: att.name || `Attachment ${idx + 1}`,
+            attachments: [{ ...att }],
+          });
+          sent += 1;
+        } catch (sendErr) {
+          failures.push({ attachment: att.name || att.url || `#${idx + 1}`, error: sendErr?.message || "Failed to send attachment" });
+        }
+      }
+    }
+
+    await DiaryPatientCommunicationLogs.create({
+      organisationId: Number(orgId),
+      patientId: body.patientId ? Number(body.patientId) : null,
+      practitionerId: userId,
+      type: "WhatsApp",
+      subject: `WhatsApp message${messageText ? ": " + messageText.slice(0, 40) : ""}`,
+      content: messageText || `Sent ${attachments.length} attachment(s)`,
+      status: failures.length > 0 ? "Pending" : "Sent",
+      sentAt: new Date(),
+      metadata: {
+        recipientPhone: normalizedPhone,
+        attachments: attachments.map((item) => ({ ...item })),
+        failedAttachments: failures.length ? failures : undefined,
+      },
+    });
+
+    if (failures.length) {
+      return error(500, failures.map((item) => item.error).join(", "));
+    }
+
+    return success({ sent, failures });
+  } catch (e) {
+    return error(500, e.message || "Failed to send WhatsApp message");
+  }
+};
+
 const createPartnerChannel = async ({ name, webhookUrl }) => {
   const partner = getWhapiPartnerConfig();
   if (!partner.partnerToken || !partner.projectId) {
@@ -611,12 +732,18 @@ const fetchPartnerChannelStatus = async (channelId) => {
 };
 
 export const connect = async (event) => {
+  await requireFeature(event, 'whatsapp')
   const { orgId, userId } = event.context.user || {};
   if (!orgId || !userId) return error(401, "Unauthenticated");
-
-  const hasPaidLicense = await isPaidWhapiAllowed(userId, orgId);
-  if (!hasPaidLicense) {
-    return error(403, "WhatsApp connection is available on paid plans only.");
+  if (!(await isPaidWhapiAllowed(userId, orgId))) {
+    throw createError({
+      statusCode: 403,
+      data: {
+        code: "FEATURE_NOT_AVAILABLE",
+        feature: "whatsapp",
+        message: "WhatsApp connection is only available on a paid CRM or Pro subscription.",
+      },
+    });
   }
 
   const bodyRaw = await readBody(event);

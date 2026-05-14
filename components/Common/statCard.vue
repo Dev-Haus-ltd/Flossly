@@ -2,7 +2,14 @@
   <div class="task-div" :id="`stat-card-${uid}`">
     <div class="d-flex justify-space-between w-100 border-b pb-3">
       <div class="d-flex align-center title-row">
+        <img
+          v-if="resolvedIconType === 'image'"
+          :src="icon"
+          alt=""
+          class="stat-icon"
+        />
         <lord-icon
+          v-else
           :src="icon"
           trigger="hover"
           :target="`#stat-card-${uid}`"
@@ -64,6 +71,7 @@ import { computed } from 'vue';
 const props = defineProps({
   cols: { type: Number, default: 3 },
   icon: { type: String, required: true },
+  iconType: { type: String, default: 'auto' },
   label: { type: String, required: true },
   value: { type: [Number, String], default: 0 },
   bonus: { type: String, default: "+10" },
@@ -80,6 +88,11 @@ const emit = defineEmits(['update:select']);
 const selectModel = computed({
   get: () => props.select,
   set: (value) => emit('update:select', value),
+});
+
+const resolvedIconType = computed(() => {
+  if (props.iconType !== 'auto') return props.iconType;
+  return props.icon?.toLowerCase?.().endsWith('.svg') ? 'image' : 'lord-icon';
 });
 </script>
 <style scoped lang="scss">
@@ -98,6 +111,13 @@ const selectModel = computed({
   img {
     width: 50px;
     height: 50px;
+  }
+
+  .stat-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    object-fit: contain;
   }
 
   :deep(.stat-label-text) {

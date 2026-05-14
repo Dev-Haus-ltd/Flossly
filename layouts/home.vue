@@ -3,19 +3,35 @@
     <v-layout>
       <div v-if="showTrialBanner" ref="trialBanner" class="trial-banner trial-banner--fixed">
         <div class="trial-banner__content">
-          We've upgraded you to a free trial{{ trialPlanName ? ` of our ${trialPlanName} plan` : "" }}. Explore all the features Flossly has to offer and decide what works best for you
-          <span class="trial-banner__pill">{{ daysLeft }} days left on trial!</span>
+          <template v-if="isCrmTrial">
+            🎉 CRM trial active — <span class="trial-banner__pill">{{ daysLeft }} days remaining</span>. No card needed yet.
+          </template>
+          <template v-else>
+            We've upgraded you to a free trial{{ trialPlanName ? ` of our ${trialPlanName} plan` : "" }}. Explore all the features Flossly has to offer and decide what works best for you
+            <span class="trial-banner__pill">{{ daysLeft }} days left on trial!</span>
+          </template>
         </div>
         <v-btn
           size="small"
           variant="outlined"
           class="trial-banner__cta"
-          @click="openPricingModal"
+          @click="router.push('/settings?setting=billing')"
         >
-          Upgrade
+          {{ isCrmTrial ? 'Upgrade to keep CRM' : 'Upgrade' }}
         </v-btn>
       </div>
-      <!-- App Bar -->
+      <!-- App Bar (Feature Lock + Start Trial dialogs) -->
+      <UpgradeFeatureLockModal
+        v-model="showFeatureLock"
+        :feature="lockedFeature"
+        @start-trial="handleStartTrial"
+        @upgrade="openPricingModal"
+      />
+      <UpgradeStartTrialDialog
+        v-model="showStartTrial"
+        :trial-end-date="trialStartEndDate"
+        :tier="trialTier"
+      />
       <appBar
         :rail="rail"
         :drawer="drawer"
@@ -32,6 +48,7 @@
         @update:rail="updateRail"
       />
       <v-main>
+        <UpgradeUsageWarningBanner @start-trial="handleStartTrial" />
         <slot />
       </v-main>
     </v-layout>
@@ -263,8 +280,15 @@
 import { useDisplay } from "vuetify";
 import PricingModal from "@/components/signUpSetup/PricingModal.vue";
 import { useWhapiStream } from "@/composables/useWhapiStream";
+import { resetUsageState, useUsageSummary } from "@/composables/useUsageSummary";
+import { usePostHog } from "@/composables/usePostHog";
+import { useAppTour } from "@/composables/useAppTour";
+import { Post } from "@/services/apiWrapper";
 
 const { smAndDown } = useDisplay();
+const { fetchUsage } = useUsageSummary();
+const { track } = usePostHog();
+const { maybeStartTour } = useAppTour();
 
 // ── WhatsApp activation state (shared with overview.vue via composable) ──────
 const {
@@ -319,26 +343,26 @@ const authStore = useAuthStore();
 const router = useRouter()
 const trialBanner = ref(null);
 const pricingModalRef = ref(null);
-const showPricingDialog = ref(false);
+const { showPricing: showPricingDialog } = usePricingModal();
+provide("pricingModalRef", pricingModalRef);
 const trialExpiredDialog = ref(false);
 const DEFAULT_TRIAL_BANNER_HEIGHT = 36;
 
-const resolvePreference = () => {
-  const raw = user.value || {};
-  const pref = raw?.preferences;
-  if (Array.isArray(pref)) return pref[0] || {};
-  if (pref && typeof pref === "object") return pref;
-  return {};
-};
+// Upgrade UX state
+const showFeatureLock = ref(false);
+const lockedFeature = ref('');
+const showStartTrial = ref(false);
+const trialStartEndDate = ref('');
+const trialTier = ref('CRM');
 
-const licenseType = computed(() => resolvePreference().licenseType || null);
+const licenseType = computed(() => user.value?.licenseType || null);
 const trialPlanName = computed(() => {
-  const license = String(resolvePreference().licenseType || "").trim();
+  const license = String(user.value?.licenseType || "").trim();
   if (["Drift", "Glide", "Soar"].includes(license)) return license;
   return "";
 });
 
-const trialEndsOn = computed(() => resolvePreference().licenseRenewalDate || null);
+const trialEndsOn = computed(() => user.value?.licenseRenewalDate || null);
 
 const daysLeft = computed(() => {
   if (!trialEndsOn.value) return 14;
@@ -348,8 +372,15 @@ const daysLeft = computed(() => {
   return Math.max(1, Math.ceil(diff / (24 * 60 * 60 * 1000)));
 });
 
+const isCrmTrial = computed(() => {
+  const lt = String(licenseType.value || '').toLowerCase()
+  if (lt !== 'crm' && lt !== 'pro') return false
+  if (!trialEndsOn.value) return false
+  return new Date(trialEndsOn.value) > Date.now()
+})
+
 const showTrialBanner = computed(
-  () => String(licenseType.value || "").toLowerCase() === "trial"
+  () => String(licenseType.value || "").toLowerCase() === "trial" || isCrmTrial.value
 );
 
 const isTrialExpired = computed(() => {
@@ -421,6 +452,44 @@ const handleOrgSwitch = async (org) => {
     });
   }
 };
+
+const extractApiError = (err) =>
+  err?.data?.message || err?.statusMessage || err?.message || null
+
+const TRIAL_ERROR_MAP = {
+  'already used its free trial': 'Your practice has already used its free CRM trial.',
+  'only available on the free Lite plan': 'The free CRM trial is only available on the Lite plan.',
+  'not found': 'Account not found. Please contact support.',
+  'unauthenticated': 'Your session has expired — please log in again.',
+}
+
+const friendlyTrialError = (raw) => {
+  if (!raw) return 'Something went wrong starting your trial. Please try again.'
+  const lower = raw.toLowerCase()
+  for (const [fragment, friendly] of Object.entries(TRIAL_ERROR_MAP)) {
+    if (lower.includes(fragment)) return friendly
+  }
+  return raw
+}
+
+const handleStartTrial = async () => {
+  try {
+    const res = await Post('/stripe/startTrial', { tier: 'CRM' })
+    if (res?.code === 0) {
+      trialStartEndDate.value = res.data?.trialEndDate || ''
+      trialTier.value = res.data?.tier || 'CRM'
+      showStartTrial.value = true
+      track('trial_started', { tier: trialTier.value })
+      await authStore.profile()
+      resetUsageState()
+      await fetchUsage()
+    } else {
+      mainStore.setSnackbar({ message: friendlyTrialError(extractApiError(res)), color: 'error' })
+    }
+  } catch (err) {
+    mainStore.setSnackbar({ message: friendlyTrialError(extractApiError(err)), color: 'error' })
+  }
+}
 
 const handleBuyNow = () => {
   if (!pricingModalRef.value) {
@@ -496,6 +565,8 @@ onBeforeUnmount(() => {
   setBannerHeight(0);
   if (typeof window !== "undefined") {
     window.removeEventListener("resize", updateBannerHeight);
+    window.removeEventListener("upgrade-required", onUpgradeRequired);
+    window.removeEventListener("onboarding:ui", onOnboardingUi);
   }
   stopWhapiStatusStream();
   stopAllQrTimers();
@@ -515,9 +586,27 @@ const preloadUsers = async () => {
     console.error('Failed to preload users', e);
   }
 };
+const onUpgradeRequired = (e) => {
+  const feature = e.detail?.feature || ''
+  lockedFeature.value = feature
+  showFeatureLock.value = true
+  track('feature_lock_shown', { feature: lockedFeature.value })
+}
+
+const onOnboardingUi = () => {
+  setTimeout(() => maybeStartTour(), 50)
+}
+
+const route = useRoute()
+watch(() => route.path, () => {
+  showFeatureLock.value = false
+})
+
 onMounted(async () => {
   if (typeof window !== "undefined") {
     window.addEventListener("resize", updateBannerHeight, { passive: true });
+    window.addEventListener("upgrade-required", onUpgradeRequired);
+    window.addEventListener("onboarding:ui", onOnboardingUi);
     if (document?.fonts?.ready) {
       document.fonts.ready.then(() => updateBannerHeight()).catch(() => {});
     }
@@ -535,6 +624,10 @@ onMounted(async () => {
   }
   // Start SSE here so it persists across page navigation
   startWhapiStatusStream();
+  // Fetch usage summary for Lite users
+  await fetchUsage();
+  // Show first-login product tour (only once, tracked in localStorage)
+  maybeStartTour();
 });
 
 watch(
@@ -559,6 +652,118 @@ watch(
 <style scopped>
 .v-list-item__overlay {
   opacity: 0 !important;
+}
+</style>
+
+<style>
+/* ── Flossy App Tour — driver.js custom theme ── */
+.flossly-tour-popover {
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 97, 251, 0.14), 0 2px 8px rgba(0,0,0,0.08);
+  border: none;
+  min-width: 280px;
+  max-width: 320px;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+.flossly-tour-popover .driver-popover-title {
+  background: linear-gradient(135deg, #0061FB 0%, #4f9fff 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 14px 18px 12px;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.flossly-tour-popover .driver-popover-description {
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 14px 18px 4px;
+  margin: 0;
+}
+
+.flossly-tour-popover .driver-popover-progress-text {
+  color: #9ca3af;
+  font-size: 11px;
+  padding: 0 18px 2px;
+}
+
+.flossly-tour-popover .driver-popover-footer {
+  padding: 10px 18px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 8px;
+}
+
+.flossly-tour-popover .driver-popover-prev-btn,
+.flossly-tour-popover .driver-popover-next-btn,
+.flossly-tour-popover .driver-popover-close-btn {
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  border: none;
+  outline: none;
+}
+
+.flossly-tour-popover .driver-popover-prev-btn {
+  background: #f1f5f9;
+  color: #374151;
+}
+.flossly-tour-popover .driver-popover-prev-btn:hover {
+  background: #e2e8f0;
+}
+
+.flossly-tour-popover .driver-popover-next-btn {
+  background: linear-gradient(135deg, #0061FB 0%, #4f9fff 100%);
+  color: #ffffff;
+}
+.flossly-tour-popover .driver-popover-next-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 97, 251, 0.35);
+}
+
+.flossly-tour-popover .driver-popover-close-btn {
+  background: transparent;
+  color: rgba(255,255,255,0.8);
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  font-size: 16px;
+  line-height: 1;
+}
+.flossly-tour-popover .driver-popover-close-btn:hover {
+  color: #ffffff;
+}
+
+/* Arrow colours */
+.driver-popover-arrow-side-left .driver-popover-arrow {
+  border-right-color: #0061FB !important;
+}
+.driver-popover-arrow-side-right .driver-popover-arrow {
+  border-left-color: #0061FB !important;
+}
+.driver-popover-arrow-side-top .driver-popover-arrow {
+  border-bottom-color: #0061FB !important;
+}
+.driver-popover-arrow-side-bottom .driver-popover-arrow {
+  border-top-color: #0061FB !important;
+}
+
+/* Highlight overlay */
+.driver-overlay {
+  background: rgba(17, 24, 39, 0.55) !important;
 }
 </style>
 

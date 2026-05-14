@@ -356,12 +356,12 @@ export const bulkUploadChecklists = async (event) => {
 
     // Group records by task title
     const taskGroups = new Map();
-    records.forEach((record, index) => {
+    records.forEach((record) => {
       const taskTitle = (record.taskTitle || '').trim();
       const itemTitle = (record.itemTitle || '').trim();
       
       if (!taskTitle || !itemTitle) {
-        return; // Skip invalid rows
+        return;
       }
 
       const key = taskTitle.toLowerCase();
@@ -386,7 +386,7 @@ export const bulkUploadChecklists = async (event) => {
     const transaction = await sequelize.transaction();
     
     try {
-      for (const [key, group] of taskGroups) {
+      for (const [, group] of taskGroups) {
         const taskTitle = group.taskTitle;
         const items = group.items;
 
@@ -403,7 +403,7 @@ export const bulkUploadChecklists = async (event) => {
           task = await Task.create({
             title: taskTitle,
             description: `Auto-created from admin checklist upload`,
-            categoryId: 2, // Default category
+            categoryId: 2,
             roleId: null,
             defaultFrequency: null,
             isSystemTask: true
@@ -510,7 +510,6 @@ export const adminBulkUploadChecklistsForOrg = async (event) => {
       return error(404, "Organisation not found");
     }
 
-    // Fetch all category IDs that belong to this org — used to validate task ownership
     const orgCategories = await TaskCategory.findAll({
       where: { isDeleted: false, organisationId },
       attributes: ["id"],
@@ -549,15 +548,13 @@ export const adminBulkUploadChecklistsForOrg = async (event) => {
 
     const rowErrors = [];
     const checklistsToInsert = [];
-
-    // Cache resolved tasks within this request to avoid repeated DB hits
     const taskCache = new Map();
 
     const resolveTask = async (rawId, rawTitle, rowNum) => {
       if (rawId) {
         const taskId = Number(rawId);
         if (Number.isNaN(taskId)) {
-          rowErrors.push(`Row ${rowNum}: Invalid taskId — must be a number`);
+          rowErrors.push(`Row ${rowNum}: Invalid taskId - must be a number`);
           return null;
         }
         if (taskCache.has(taskId)) return taskCache.get(taskId);
@@ -715,4 +712,3 @@ Opening Checks,Check waiting room,Admin,Comments / Notes,Ensure clean and tidy,,
     return error(500, err.message || "Failed to download template");
   }
 };
-

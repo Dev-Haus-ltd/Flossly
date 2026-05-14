@@ -1,6 +1,6 @@
 <template>
   <div
-    :class="['upload-box', { 'drag-over': isDragOver }]"
+    :class="['upload-box', { 'drag-over': isDragOver, 'upload-box--disabled': disabled }]"
     @dragenter.prevent="handleDragEnter"
     @dragover.prevent="handleDragOver"
     @dragleave.prevent="handleDragLeave"
@@ -27,12 +27,20 @@
 </template>
 
 <script setup>
+const props = defineProps({
+  disabled: { type: Boolean, default: false },
+})
+const { disabled } = toRefs(props)
+
 const emit = defineEmits(["upload"]);
 
 const fileInput = ref(null);
 const isDragOver = ref(false);
 
-const triggerFileInput = () => fileInput.value?.click();
+const triggerFileInput = () => {
+  if (props.disabled) return
+  fileInput.value?.click()
+}
 const resetDragState = () => (isDragOver.value = false);
 
 const emitFiles = (fileList) => {
@@ -42,13 +50,16 @@ const emitFiles = (fileList) => {
 
 const handleFileChange = (e) => {
   emitFiles(e.target.files);
+  if (fileInput.value) fileInput.value.value = "";
 };
 
 const handleDragEnter = () => {
+  if (props.disabled) return
   isDragOver.value = true;
 };
 
 const handleDragOver = (e) => {
+  if (props.disabled) return
   e.dataTransfer.dropEffect = "copy";
   isDragOver.value = true;
 };
@@ -60,6 +71,7 @@ const handleDragLeave = (e) => {
 };
 
 const handleDrop = (e) => {
+  if (props.disabled) return
   const { files } = e.dataTransfer;
   resetDragState();
   emitFiles(files);
@@ -85,6 +97,11 @@ const handleDrop = (e) => {
   border-color: #266df0;
   background-color: #f4f7ff;
   box-shadow: 0 0 0 3px rgba(38, 109, 240, 0.1);
+}
+
+.upload-box--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .upload-text {

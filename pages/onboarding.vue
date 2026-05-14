@@ -1,8 +1,11 @@
 <template>
-    <SignUpSetupScreen />
+  <div>
+    <sign-up-setup-screen />
+  </div>
 </template>
+
 <script setup>
 onMounted(() => {
-    console.log('started...')
+  console.log('started...')
 })
 </script>

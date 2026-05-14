@@ -68,21 +68,48 @@ import { MetaCampaign } from "./crm/MetaCampaign";
 import { MetaAdSet } from "./crm/MetaAdSet";
 import { MetaAd } from "./crm/MetaAd";
 import { MetaInsight } from "./crm/MetaInsights";
+import { GoogleAdsAccount } from "./crm/google_Ads_analytics/googleAdsAccounts";
+import { GoogleAdsCampaign } from "./crm/google_Ads_analytics/googleAdsCampaigns";
+import { GoogleAdsAdGroup } from "./crm/google_Ads_analytics/googleAdsAdGroups";
+import { GoogleAdsAd } from "./crm/google_Ads_analytics/googleAdsAds";
+import { GoogleAdsInsight } from "./crm/google_Ads_analytics/googleAdsInsights";
 
 // Chatbot Support
 import { ChatbotConversation } from "./chatbot/chatbotConversations";
 import { ChatbotMessage } from "./chatbot/chatbotMessages";
 import { ChatbotMessageAttachment } from "./chatbot/chatbotMessageAttachments";
 
+// Google Analytics (GSC & Business Profile)
+import { GoogleOAuthToken } from "./crm/google_analytics/googleOAuthTokens";
+import { GoogleSearchConsoleSite } from "./crm/google_analytics/googleSearchConsoleSites";
+import { GoogleSearchConsoleSitePage } from "./crm/google_analytics/googleSearchConsoleSitePages";
+import { GoogleSearchConsolePerformance } from "./crm/google_analytics/googleSearchConsolePerformance";
+import { GoogleBusinessProfile } from "./crm/google_business_analytics/googleBusinessProfiles";
+
 // Diary
-import { DiaryTreatment } from "./diary/treatments";
 import { DiaryPatient } from "./diary/patients";
 import { DiaryAppointment } from "./diary/appointments";
+import { PatientInvoice } from "./diary/patientInvoices";
+import { PatientInvoiceItem } from "./diary/patientInvoiceItems";
+import { PatientPayment } from "./diary/patientPayments";
+import { PatientPaymentAllocation } from "./diary/patientPaymentAllocations";
 import { DiaryNote } from "./diary/notes";
 import { DiaryPatientComfort } from "./diary/patientComfort";
 import { DiaryPatientSurvey } from "./diary/patientSurvey";
 import { DiaryPatientForm } from "./diary/patientForm";
-// Organisation dictionary
+import { DiaryPatientChart } from "./diary/patientCharts";
+import { DiaryTreatmentPlan } from "./diary/treatmentPlans";
+import { DiaryTreatmentPlanItem } from "./diary/treatmentPlanItems";
+import { ClinicalNoteTemplate } from "./diary/clinicalNoteTemplates";
+import { ClinicalNoteTemplateVersion } from "./diary/clinicalNoteTemplateVersions";
+import { ConsentFormTemplate } from "./diary/consentFormTemplate";
+import { ConsentFormDocument } from "./diary/consentFormDocument";
+import { ConsentFormSignatureAudit } from "./diary/consentFormSignatureAudit";
+import { DiaryZone } from "./diary/diaryZones";
+import { DiaryPatientCommunicationLogs } from "./diary/patientCommunicationLogs";
+import { GCMandate } from "./diary/gcMandates";
+import { GCPayment } from "./diary/gcPayments";
+import { GCWebhookLog } from "./diary/gcWebhookLogs";
 import { OrganisationTreatment } from "./organisations/organisationTreatments";
 import { CrmLeadTreatment } from "./crm/leadTreatments";
 import { CrmLeadNote } from "./crm/leadNotes";
@@ -94,6 +121,7 @@ import { CrmAutomationGroup } from "./crm/automationGroups";
 import { CrmAutomationGroupTemplate } from "./crm/automationGroupTemplates";
 import { CrmAutomationDictionaryGroup } from "./crm/crmAutomationDictionaryGroups";
 import { CrmAutomationDictionaryTemplate } from "./crm/crmAutomationDictionaryTemplates";
+import { FormConfig } from "./crm/formConfig";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 import { OrganisationReferral } from "./organisationReferrals";
@@ -232,7 +260,6 @@ DiaryPatient.hasMany(DiaryAppointment, { foreignKey: 'patientId', as: 'appointme
 DiaryAppointment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryAppointment.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
 DiaryAppointment.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
-DiaryAppointment.belongsTo(DiaryTreatment, { foreignKey: 'treatmentId', as: 'treatment' });
 
 DiaryNote.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryNote.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
@@ -252,8 +279,91 @@ DiaryPatientForm.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'or
 DiaryPatientForm.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'CASCADE', hooks: true });
 User.hasMany(DiaryPatientForm, { foreignKey: 'createdBy', as: 'createdForms', onDelete: 'CASCADE', hooks: true });
 
+DiaryPatient.hasOne(DiaryPatientChart, { foreignKey: 'patientId', as: 'chart', onDelete: 'CASCADE', hooks: true });
+DiaryPatientChart.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryPatientChart.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
+DiaryPatient.hasMany(DiaryTreatmentPlanItem, { foreignKey: 'patientId', as: 'treatmentPlanItems', onDelete: 'CASCADE', hooks: true });
+
+// Patient Accounts — invoices, payments
+DiaryPatient.hasMany(PatientInvoice, { foreignKey: 'patientId', as: 'invoices', onDelete: 'CASCADE', hooks: true });
+PatientInvoice.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+PatientInvoice.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+PatientInvoice.hasMany(PatientInvoiceItem, { foreignKey: 'invoiceId', as: 'items', onDelete: 'CASCADE', hooks: true });
+PatientInvoiceItem.belongsTo(PatientInvoice, { foreignKey: 'invoiceId', as: 'invoice', onDelete: 'CASCADE', hooks: true });
+PatientInvoiceItem.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
+DiaryPatient.hasMany(PatientPayment, { foreignKey: 'patientId', as: 'payments', onDelete: 'CASCADE', hooks: true });
+PatientPayment.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+PatientPayment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+PatientPayment.hasMany(PatientPaymentAllocation, { foreignKey: 'paymentId', as: 'allocations', onDelete: 'CASCADE', hooks: true });
+PatientPaymentAllocation.belongsTo(PatientPayment, { foreignKey: 'paymentId', as: 'payment', onDelete: 'CASCADE', hooks: true });
+PatientPaymentAllocation.belongsTo(PatientInvoice, { foreignKey: 'invoiceId', as: 'invoice', onDelete: 'CASCADE', hooks: true });
+PatientPaymentAllocation.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+
+// Patient Communication Logs
+DiaryPatient.hasMany(DiaryPatientCommunicationLogs, { foreignKey: 'patientId', as: 'communicationLogs', onDelete: 'CASCADE', hooks: true });
+DiaryPatientCommunicationLogs.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryPatientCommunicationLogs.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+DiaryPatientCommunicationLogs.belongsTo(User, { foreignKey: 'practitionerId', as: 'practitioner', onDelete: 'SET NULL', hooks: true });
+User.hasMany(DiaryPatientCommunicationLogs, { foreignKey: 'practitionerId', as: 'communicationLogs', onDelete: 'SET NULL', hooks: true });
+DiaryTreatmentPlanItem.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryTreatmentPlanItem.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+DiaryTreatmentPlanItem.belongsTo(DiaryAppointment, { foreignKey: 'appointmentId', as: 'appointment', onDelete: 'SET NULL' });
+DiaryTreatmentPlanItem.belongsTo(ClinicalNoteTemplate, { foreignKey: 'templateId', as: 'clinicalNoteTemplate', onDelete: 'SET NULL' });
+DiaryAppointment.hasMany(DiaryTreatmentPlanItem, { foreignKey: 'appointmentId', as: 'treatmentPlanItems' });
+DiaryPatient.hasMany(DiaryTreatmentPlan, { foreignKey: 'patientId', as: 'treatmentPlans', onDelete: 'CASCADE', hooks: true });
+DiaryTreatmentPlan.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+DiaryTreatmentPlan.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(ClinicalNoteTemplate, { foreignKey: 'organisationId', as: 'clinicalNoteTemplates', onDelete: 'CASCADE', hooks: true });
+ClinicalNoteTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+ClinicalNoteTemplate.belongsTo(ClinicalNoteTemplate, { foreignKey: 'sourceTemplateId', as: 'sourceTemplate', onDelete: 'SET NULL' });
+ClinicalNoteTemplate.hasMany(ClinicalNoteTemplate, { foreignKey: 'sourceTemplateId', as: 'derivedTemplates' });
+ClinicalNoteTemplate.hasMany(ClinicalNoteTemplateVersion, { foreignKey: 'templateId', as: 'versions', onDelete: 'CASCADE', hooks: true });
+ClinicalNoteTemplate.belongsTo(ClinicalNoteTemplateVersion, { foreignKey: 'currentVersionId', as: 'currentVersion', onDelete: 'SET NULL' });
+ClinicalNoteTemplateVersion.belongsTo(ClinicalNoteTemplate, { foreignKey: 'templateId', as: 'template', onDelete: 'CASCADE', hooks: true });
+User.hasMany(ClinicalNoteTemplate, { foreignKey: 'createdBy', as: 'createdClinicalNoteTemplates', onDelete: 'SET NULL' });
+User.hasMany(ClinicalNoteTemplate, { foreignKey: 'updatedBy', as: 'updatedClinicalNoteTemplates', onDelete: 'SET NULL' });
+User.hasMany(ClinicalNoteTemplateVersion, { foreignKey: 'createdBy', as: 'clinicalNoteTemplateVersions', onDelete: 'SET NULL' });
+ClinicalNoteTemplate.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'SET NULL' });
+ClinicalNoteTemplate.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater', onDelete: 'SET NULL' });
+ClinicalNoteTemplateVersion.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'SET NULL' });
+
+// Consent Form Associations
+ConsentFormTemplate.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+ConsentFormTemplate.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'SET NULL' });
+ConsentFormTemplate.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater', onDelete: 'SET NULL' });
+Organisation.hasMany(ConsentFormTemplate, { foreignKey: 'organisationId', as: 'consentFormTemplates', onDelete: 'CASCADE', hooks: true });
+User.hasMany(ConsentFormTemplate, { foreignKey: 'createdBy', as: 'createdConsentTemplates', onDelete: 'SET NULL' });
+
+ConsentFormDocument.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+ConsentFormDocument.belongsTo(ConsentFormTemplate, { foreignKey: 'templateId', as: 'template', onDelete: 'RESTRICT' });
+ConsentFormDocument.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+ConsentFormDocument.belongsTo(User, { foreignKey: 'sentBy', as: 'sentByUser', onDelete: 'SET NULL' });
+ConsentFormDocument.belongsTo(User, { foreignKey: 'voidedBy', as: 'voidedByUser', onDelete: 'SET NULL' });
+DiaryPatient.hasMany(ConsentFormDocument, { foreignKey: 'patientId', as: 'consentDocuments', onDelete: 'CASCADE', hooks: true });
+ConsentFormTemplate.hasMany(ConsentFormDocument, { foreignKey: 'templateId', as: 'documents' });
+Organisation.hasMany(ConsentFormDocument, { foreignKey: 'organisationId', as: 'consentDocuments', onDelete: 'CASCADE', hooks: true });
+User.hasMany(ConsentFormDocument, { foreignKey: 'sentBy', as: 'sentConsentDocuments', onDelete: 'SET NULL' });
+
+ConsentFormSignatureAudit.belongsTo(ConsentFormDocument, { foreignKey: 'documentId', as: 'document', onDelete: 'CASCADE', hooks: true });
+ConsentFormSignatureAudit.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
+ConsentFormSignatureAudit.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+ConsentFormSignatureAudit.belongsTo(User, { foreignKey: 'performedBy', as: 'performedByUser', onDelete: 'SET NULL' });
+ConsentFormDocument.hasMany(ConsentFormSignatureAudit, { foreignKey: 'documentId', as: 'signatureAudit', onDelete: 'CASCADE', hooks: true });
+User.hasMany(ConsentFormSignatureAudit, { foreignKey: 'performedBy', as: 'signatureAuditTrail', onDelete: 'SET NULL' });
+
+// Diary Zones Associations
+DiaryZone.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+DiaryZone.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
+DiaryZone.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'SET NULL' });
+DiaryZone.belongsTo(User, { foreignKey: 'updatedBy', as: 'updater', onDelete: 'SET NULL' });
+Organisation.hasMany(DiaryZone, { foreignKey: 'organisationId', as: 'zones', onDelete: 'CASCADE', hooks: true });
+User.hasMany(DiaryZone, { foreignKey: 'dentistId', as: 'diaryZones', onDelete: 'CASCADE', hooks: true });
+
 // OrganisationTreatment
 OrganisationTreatment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(OrganisationTreatment, { foreignKey: 'organisationId', as: 'organisationTreatments', onDelete: 'CASCADE', hooks: true });
 
 // Organisation Contacts / Equipment / Surgeries / Groups / Scripts (ORG_DELETE)
 Organisation.hasMany(OrganisationContact, { foreignKey: "organisationId", as: "contacts" });
@@ -480,6 +590,49 @@ MetaAd.hasMany(MetaInsight, {
 })
 
 
+// Google Ads Associations
+Organisation.hasOne(GoogleAdsAccount, { foreignKey: 'organisationId', as: 'googleAdsAccounts' })
+GoogleAdsAccount.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true })
+
+GoogleAdsAccount.hasMany(GoogleAdsCampaign, { foreignKey: 'googleCustomerId', sourceKey: 'googleCustomerId', as: 'campaigns' })
+GoogleAdsCampaign.belongsTo(GoogleAdsAccount, { foreignKey: 'googleCustomerId', targetKey: 'googleCustomerId', as: 'account', onDelete: 'CASCADE', hooks: true })
+
+GoogleAdsCampaign.hasMany(GoogleAdsAdGroup, { foreignKey: 'campaignId', as: 'adGroups' })
+GoogleAdsAdGroup.belongsTo(GoogleAdsCampaign, { foreignKey: 'campaignId', as: 'campaign', onDelete: 'CASCADE', hooks: true })
+
+GoogleAdsAdGroup.hasMany(GoogleAdsAd, { foreignKey: 'adGroupId', as: 'ads' })
+GoogleAdsAd.belongsTo(GoogleAdsAdGroup, { foreignKey: 'adGroupId', as: 'adGroup', onDelete: 'CASCADE', hooks: true })
+
+// Insights (Polymorphic-style, no FK constraints)
+GoogleAdsAccount.hasMany(GoogleAdsInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'googleCustomerId',
+  constraints: false,
+  scope: { entityType: 'account' },
+})
+
+GoogleAdsCampaign.hasMany(GoogleAdsInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'campaignId',
+  constraints: false,
+  scope: { entityType: 'campaign' },
+})
+
+GoogleAdsAdGroup.hasMany(GoogleAdsInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'adGroupId',
+  constraints: false,
+  scope: { entityType: 'adgroup' },
+})
+
+GoogleAdsAd.hasMany(GoogleAdsInsight, {
+  foreignKey: 'entityId',
+  sourceKey: 'adId',
+  constraints: false,
+  scope: { entityType: 'ad' },
+})
+
+
 // CPD Associations
 Course.hasMany(CourseQuestionaire, { foreignKey: "courseId", as: "questions" });
 CourseQuestionaire.belongsTo(Course, { foreignKey: "courseId", as: "course", onDelete: 'CASCADE', hooks: true });
@@ -507,6 +660,32 @@ User.hasMany(OrganisationReferral, {
   foreignKey: "referredBy",
   as: "organisationReferrals",
 });
+
+// Google Analytics (GSC & Business Profile) Associations
+GoogleOAuthToken.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+GoogleOAuthToken.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
+Organisation.hasOne(GoogleOAuthToken, { foreignKey: 'organisationId', as: 'googleOAuthToken', onDelete: 'CASCADE', hooks: true });
+User.hasMany(GoogleOAuthToken, { foreignKey: 'userId', as: 'googleOAuthTokens', onDelete: 'CASCADE', hooks: true });
+
+GoogleSearchConsoleSite.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+GoogleSearchConsoleSite.belongsTo(GoogleOAuthToken, { foreignKey: 'googleOAuthTokenId', as: 'oauthToken', onDelete: 'CASCADE', hooks: true });
+Organisation.hasOne(GoogleSearchConsoleSite, { foreignKey: 'organisationId', as: 'googleSearchConsoleSite', onDelete: 'CASCADE', hooks: true });
+GoogleOAuthToken.hasOne(GoogleSearchConsoleSite, { foreignKey: 'googleOAuthTokenId', as: 'searchConsoleSite', onDelete: 'CASCADE', hooks: true });
+
+GoogleSearchConsoleSitePage.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+GoogleSearchConsoleSitePage.belongsTo(GoogleSearchConsoleSite, { foreignKey: 'siteId', as: 'site', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(GoogleSearchConsoleSitePage, { foreignKey: 'organisationId', as: 'googleSearchConsoleSitePages', onDelete: 'CASCADE', hooks: true });
+GoogleSearchConsoleSite.hasMany(GoogleSearchConsoleSitePage, { foreignKey: 'siteId', as: 'pages', onDelete: 'CASCADE', hooks: true });
+
+GoogleSearchConsolePerformance.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+GoogleSearchConsolePerformance.belongsTo(GoogleSearchConsoleSite, { foreignKey: 'siteId', as: 'site', onDelete: 'CASCADE', hooks: true });
+Organisation.hasMany(GoogleSearchConsolePerformance, { foreignKey: 'organisationId', as: 'googleSearchConsolePerformance', onDelete: 'CASCADE', hooks: true });
+GoogleSearchConsoleSite.hasMany(GoogleSearchConsolePerformance, { foreignKey: 'siteId', as: 'performanceData', onDelete: 'CASCADE', hooks: true });
+
+GoogleBusinessProfile.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+GoogleBusinessProfile.belongsTo(GoogleOAuthToken, { foreignKey: 'googleOAuthTokenId', as: 'oauthToken', onDelete: 'CASCADE', hooks: true });
+Organisation.hasOne(GoogleBusinessProfile, { foreignKey: 'organisationId', as: 'googleBusinessProfile', onDelete: 'CASCADE', hooks: true });
+GoogleOAuthToken.hasOne(GoogleBusinessProfile, { foreignKey: 'googleOAuthTokenId', as: 'businessProfile', onDelete: 'CASCADE', hooks: true });
 
 // Export models
 export {
@@ -575,6 +754,7 @@ export {
   CrmAutomationGroupTemplate,
   CrmAutomationDictionaryGroup,
   CrmAutomationDictionaryTemplate,
+  FormConfig,
   CrmWhatsAppMessageLog,
   CrmDmConversation,
   CrmDmMessage,
@@ -587,19 +767,46 @@ export {
   MetaAdSet,
   MetaAd,
   MetaInsight,
+  GoogleAdsAccount,
+  GoogleAdsCampaign,
+  GoogleAdsAdGroup,
+  GoogleAdsAd,
+  GoogleAdsInsight,
   // Chatbot Support
   ChatbotConversation,
   ChatbotMessage,
   ChatbotMessageAttachment,
+  // Google Analytics (GSC & Business Profile)
+  GoogleOAuthToken,
+  GoogleSearchConsoleSite,
+  GoogleSearchConsoleSitePage,
+  GoogleSearchConsolePerformance,
+  GoogleBusinessProfile,
   // Diary
-  DiaryTreatment,
   DiaryPatient,
   DiaryAppointment,
   DiaryNote,
   DiaryPatientComfort,
   DiaryPatientSurvey,
   DiaryPatientForm,
+  DiaryPatientChart,
+  DiaryTreatmentPlan,
+  DiaryTreatmentPlanItem,
+  ClinicalNoteTemplate,
+  ClinicalNoteTemplateVersion,
+  ConsentFormTemplate,
+  ConsentFormDocument,
+  ConsentFormSignatureAudit,
+  DiaryZone,
+  DiaryPatientCommunicationLogs,
+  GCMandate,
+  GCPayment,
+  GCWebhookLog,
   OrganisationTreatment,
+  PatientInvoice,
+  PatientInvoiceItem,
+  PatientPayment,
+  PatientPaymentAllocation,
   DictionaryScript,
   OrganisationScript,
   PatientAutomationDictionary,
@@ -631,3 +838,9 @@ ChatbotMessageAttachment.belongsTo(ChatbotConversation, { foreignKey: "conversat
 ChatbotMessageAttachment.belongsTo(User, { foreignKey: "uploadedBy", as: "uploader", onDelete: "SET NULL" });
 
 // Bug reports and feature requests removed - using conversation metadata instead
+
+// --------------------------
+// FormConfig -> Organisation
+// --------------------------
+Organisation.hasMany(FormConfig, { foreignKey: 'organisationId', as: 'formConfigs', onDelete: 'CASCADE', hooks: true });
+FormConfig.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });

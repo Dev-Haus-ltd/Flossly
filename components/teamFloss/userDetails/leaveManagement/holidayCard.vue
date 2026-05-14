@@ -1,42 +1,29 @@
 <template>
-  <v-card class="holiday-card pa-4 d-flex justify-space-between align-start" flat>
-    <!-- Left Section -->
-    <div class="d-flex flex-column align-start">
-      <!-- Icon -->
-      <img :src="iconImg" class="holiday-icon mb-2" />
-
-      <!-- Title -->
-      <p class="holiday-title mb-1">{{ title }}</p>
-
-      <!-- Days -->
-      <div class="d-flex align-baseline">
-        <p class="holiday-days">{{ total }}</p>
-        <p class="holiday-days-text ml-2">days</p>
+  <v-card class="holiday-card pa-4" flat>
+    <div class="d-flex align-center gap-3 mb-3">
+      <img :src="iconImg" class="holiday-icon" />
+      <div>
+        <p class="holiday-title mb-0">{{ title }}</p>
+        <div class="d-flex align-baseline">
+          <p class="holiday-days mb-0">{{ total }}</p>
+          <p class="holiday-days-text ml-1 mb-0">days</p>
+        </div>
       </div>
-    </div>  
+    </div>
 
-    <!-- Right Section (Chips with gap) -->
-    <div class="d-flex flex-column" style="gap: 20px;">
-        <v-chip :color="color" variant="flat" class="chip-item w-100">
-  <div class="d-flex justify-space-between w-100">
-    <span class="chip-title">Entitlement</span>
-    <span class="chip-count">{{ total }}</span>
-  </div>
-</v-chip>
-
-<v-chip :color="color" variant="flat" class="chip-item mt-2 w-100">
-  <div class="d-flex justify-space-between w-100">
-    <span class="chip-title">Taken</span>
-    <span class="chip-count">{{ taken }}</span>
-  </div>
-</v-chip>
-
-<v-chip :color="color" variant="flat" class="chip-item mt-2">
-  <div class="d-flex justify-space-between w-100">
-    <span class="chip-title">Remaining</span>
-    <span class="chip-count">{{ total - taken || 0 }}</span>
-  </div>
-</v-chip>
+    <div class="d-flex flex-column gap-2">
+      <div class="stat-row">
+        <span class="stat-label">Entitlement</span>
+        <v-chip :color="color" variant="flat" size="small" class="stat-chip">{{ total }}</v-chip>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Taken</span>
+        <v-chip :color="color" variant="flat" size="small" class="stat-chip">{{ taken }}</v-chip>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Remaining</span>
+        <v-chip :color="color" variant="flat" size="small" class="stat-chip">{{ Math.max(0, total - taken) }}</v-chip>
+      </div>
     </div>
   </v-card>
 </template>
@@ -57,58 +44,56 @@
     border: 1px solid #DBDBDB;
     background: white;
     border-radius: 8px;
-    min-height: 160px;
   }
-  
+
   .holiday-icon {
-    width: 50px;
-    height: 50px;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
     object-fit: contain;
   }
-  
+
   .holiday-title {
-    
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
     color: #1e1e1e;
   }
-  
+
   .holiday-days {
-    
     font-weight: 700;
-    font-size: 40px;
-    line-height: 130%;
+    font-size: 32px;
+    line-height: 1.2;
     color: #101010;
   }
-  
+
   .holiday-days-text {
-    
     font-weight: 400;
-    font-size: 14px;
+    font-size: 13px;
     color: #6e6e6e;
   }
-  
-  .chip-item {
-  border-radius: 6px;
-  padding: 0 8px;
-  height: 28px;
-  font-size: 14px;
-  width: 160px; /* fixed width */
-}
-  
-  .chip-title {
-    
+
+  .stat-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .stat-label {
+    font-size: 13px;
     font-weight: 400;
-    font-size: 14px;
+    color: #4a4a4a;
+    white-space: nowrap;
   }
-  
-  .chip-count {
-    
+
+  .stat-chip {
+    font-size: 12px;
     font-weight: 600;
-    font-size: 14px;
+    min-width: 36px;
+    justify-content: center;
   }
-  ::v-deep(.v-chip__content) {
-  width: 100% !important;
-}
+
+  .gap-2 { gap: 8px; }
+  .gap-3 { gap: 12px; }
   </style>
   
