@@ -297,7 +297,7 @@ const getProfile = () => {
           user.isOrganisationCreator &&
           !hasStartedSetup
         ) {
-          window.location.href = "/setup";
+          window.location.href = "/onboarding";
         } else {
           router.push("/");
         }

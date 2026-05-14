@@ -44,7 +44,7 @@ onMounted(async () => {
       const setupComplete = res.data?.setupComplete ?? true
       const setupStepsCompleted = res.data?.setupStepsCompleted ?? 5
       if (!setupComplete || setupStepsCompleted < 5) {
-        router.push('/setup')
+        router.push('/onboarding')
       } else {
         router.push('/')
       }

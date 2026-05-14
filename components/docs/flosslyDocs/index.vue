@@ -85,8 +85,8 @@
     </div>
 
     <div v-else>
-      <!-- subfolders (only when depth < 3) -->
-      <div class="mt-5 px-5" v-if="folderStack.length < 3">
+      <!-- subfolders (only when depth < 6) -->
+      <div class="mt-5 px-5" v-if="folderStack.length < 6">
         <DocsMyDocsFolders
           :folders="foldersList"
           :hideAddFolderButton="true"
@@ -113,6 +113,7 @@
 
 <script setup>
 import { downloadFile } from "~/lib/misc";
+import { resetUsageState } from "~/composables/useUsageSummary";
 
 const viewFileDialog = ref(false);
 const selectedDoc = ref(null);
@@ -146,6 +147,7 @@ const storageTone = computed(() => {
 const selectedFolder = computed(() => folderStack.value[folderStack.value.length - 1] ?? null);
 
 onMounted(() => {
+  resetUsageState();
   fetchUsage();
   getSystemFolders();
   getRecentDocs();

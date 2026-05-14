@@ -337,11 +337,18 @@ const apptStyleFor = (status) => {
   return { background: c.bg, borderColor: c.border, color: c.text }
 }
 
+const { isLite } = useUsageSummary()
+
 const openPatient = (appt) => {
-  if(appt.patientId) {
-    router.push(`/patients/${appt.patientId}`)
+  if (!appt.patientId) return
+  if (isLite.value) {
+    window.dispatchEvent(new CustomEvent('upgrade-required', {
+      detail: { feature: 'patientBooking', code: 'FEATURE_NOT_AVAILABLE' },
+    }))
+    return
   }
-  }
+  router.push(`/patients/${appt.patientId}`)
+}
 
 const buildDragPayload = (appt, dentistId) => ({
   dentistId,

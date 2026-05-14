@@ -24,15 +24,22 @@ export const createFolder = async (event) => {
   const { name, color, description, parentId } = parseJsonBody(body);
   if (!name) throw createError({ message: "Folder name required" });
   try {
-    // If parentId is provided, validate depth (max 2 levels: root -> level 1 -> level 2)
+    // If parentId is provided, validate depth (max 6 levels)
     if (parentId) {
       const parentFolder = await UserDocumentFolder.findByPk(parentId);
       if (!parentFolder) {
         throw createError({ message: "Parent folder not found" });
       }
-      // Check if parent folder already has a parent (meaning it's level 2, can't go deeper)
-      if (parentFolder.parentId) {
-        throw createError({ message: "Maximum folder nesting depth reached (2 levels)" });
+      // Walk up the tree to count current depth
+      let depth = 1;
+      let current = parentFolder;
+      while (current.parentId) {
+        depth++;
+        if (depth >= 6) {
+          throw createError({ message: "Maximum folder nesting depth reached (6 levels)" });
+        }
+        current = await UserDocumentFolder.findByPk(current.parentId, { attributes: ["id", "parentId"] });
+        if (!current) break;
       }
     }
     const folder = await UserDocumentFolder.create({
@@ -274,16 +281,16 @@ export const moveFolder = async (event) => {
         throw createError({ message: "Cannot move folder into its own subfolder" });
       }
 
-      // Check depth constraint (max 2 levels)
-      // If target has a parent, it's at level 2, so we can't add more children
-      if (targetFolder.parentId) {
-        throw createError({ message: "Maximum folder nesting depth reached (2 levels)" });
-      }
-
-      // If the folder being moved has subfolders, it can only go to root
-      const hasSubfolders = await UserDocumentFolder.count({ where: { parentId: folderId } });
-      if (hasSubfolders > 0) {
-        throw createError({ message: "Folder with subfolders can only be moved to root level" });
+      // Check depth constraint (max 6 levels): walk up from target to count its depth
+      let targetDepth = 1;
+      let cur = targetFolder;
+      while (cur.parentId) {
+        targetDepth++;
+        if (targetDepth >= 6) {
+          throw createError({ message: "Maximum folder nesting depth reached (6 levels)" });
+        }
+        cur = await UserDocumentFolder.findByPk(cur.parentId, { attributes: ["id", "parentId"] });
+        if (!cur) break;
       }
     }
 

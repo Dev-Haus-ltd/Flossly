@@ -24,7 +24,7 @@ export const ENTITLEMENTS = {
     taskPool:       false,
     // Diary
     patientBooking: false,
-    diary:          false,
+    diary:          'view-only', // calendar only — Patients and Finance are Pro/CRM+
     charting:       true,
     // Team (rota, holiday tracker available on all tiers)
     rota:           true,
