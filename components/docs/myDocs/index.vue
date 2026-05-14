@@ -100,7 +100,7 @@
       </div>
     </div>
     <div v-else>
-      <!-- Show folders section when inside a folder (at depth < 2 for subfolder creation) -->
+      <!-- Show folders section when inside a folder (up to 6 nested levels) -->
       <div class="mt-5 px-5" v-if="canCreateSubfolder">
         <DocsMyDocsFolders
           :folders="foldersList"
@@ -241,14 +241,14 @@ const deleteLoading = ref(false);
 const itemToDelete = ref(null);
 const isDeleteFolder = ref(false);
 
-// Track folder navigation stack for breadcrumb and depth (max 2 levels)
+// Track folder navigation stack for breadcrumb and depth (max 6 levels)
 const folderStack = ref([]);
 
-// Computed property for current depth (0 = root, 1 = first level, 2 = second level)
+// Computed property for current depth (0 = root, 1 = first level, etc.)
 const currentDepth = computed(() => folderStack.value.length);
 
-// Check if we can create more subfolders (only allowed at depth 0, 1, and 2)
-const canCreateSubfolder = computed(() => currentDepth.value < 3);
+// Check if we can create more subfolders (allow nesting through level 6)
+const canCreateSubfolder = computed(() => currentDepth.value < 6);
 
 onMounted(async () => {
   fetchUsage();

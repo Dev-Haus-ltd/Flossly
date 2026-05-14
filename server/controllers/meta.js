@@ -376,25 +376,33 @@ export const authCallback = async (event) => {
     const pagesResp = await $fetch(pagesUrl, { method: 'GET' })
     const pages = Array.isArray(pagesResp?.data) ? pagesResp.data : []
 
-    // Enforce one active org per page to avoid lead routing ambiguity
+    // Block same user from connecting the same page across their own orgs.
+    // Different user accounts connecting the same page to their own orgs is allowed (fan-out delivery).
     const pageIds = pages.map((p) => p?.id).filter(Boolean)
     let conflictsById = new Set()
     let conflictsByPage = new Map()
     if (pageIds.length) {
-      const conflicts = await MetaPage.findAll({
-        where: {
-          pageId: { [Op.in]: pageIds },
-          organisationId: { [Op.ne]: orgId },
-          status: 'Active',
-        },
-        include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name'] }],
-      })
-      if (conflicts.length) {
-        conflictsById = new Set(conflicts.map((c) => String(c.pageId)))
-        conflicts.forEach((c) => {
-          const orgName = c.organisation?.name || `Org ${c.organisationId}`
-          conflictsByPage.set(String(c.pageId), orgName)
+      const userOrgIds = (await UserOrganisation.findAll({
+        where: { userId, status: 'Active' },
+        attributes: ['organisationId'],
+      })).map((r) => String(r.organisationId)).filter((id) => id !== String(orgId))
+
+      if (userOrgIds.length) {
+        const conflicts = await MetaPage.findAll({
+          where: {
+            pageId: { [Op.in]: pageIds },
+            organisationId: { [Op.in]: userOrgIds },
+            status: 'Active',
+          },
+          include: [{ model: Organisation, as: 'organisation', attributes: ['id', 'name'] }],
         })
+        if (conflicts.length) {
+          conflictsById = new Set(conflicts.map((c) => String(c.pageId)))
+          conflicts.forEach((c) => {
+            const orgName = c.organisation?.name || `Org ${c.organisationId}`
+            conflictsByPage.set(String(c.pageId), orgName)
+          })
+        }
       }
     }
 
@@ -442,7 +450,7 @@ export const authCallback = async (event) => {
       return sendRedirect(
         event,
         `/crm?error=${encodeURIComponent(
-          `Meta connection failed. The following page(s) are already connected to another organisation: ${conflictNames}`
+          `Meta connection failed. The following page(s) are already connected to another of your organisations: ${conflictNames}`
         )}`
       )
     }
@@ -1717,29 +1725,37 @@ export const webhook = async (event) => {
           const formId = v.form_id || v.formId
           
           if (!leadId || !pageId) continue
-          
-          const mp = await MetaPage.findOne({ 
-            where: { pageId, status: 'Active' } 
+
+          // Fan-out: deliver to all orgs that have this page connected
+          const mps = await MetaPage.findAll({
+            where: { pageId, status: 'Active' },
           })
-          if (!mp) {
+          if (!mps.length) {
             console.warn('[META WEBHOOK]', reqId, 'No active MetaPage for pageId', pageId)
+            continue
           }
-          if (!mp) continue
-          
-          const pageToken = decrypt(mp.accessTokenEnc)
-          if (!pageToken) {
-            console.warn('[META WEBHOOK]', reqId, 'Missing page token for pageId', pageId)
+
+          // Fetch lead data once using the first valid page token
+          let leadData = null
+          for (const candidate of mps) {
+            const token = decrypt(candidate.accessTokenEnc)
+            if (!token) continue
+            try {
+              const url = `https://graph.facebook.com/${META_VERSION}/${leadId}?fields=created_time,field_data,ad_id,adset_id,campaign_id&access_token=${encodeURIComponent(token)}`
+              leadData = await $fetch(url, { method: 'GET' })
+              break
+            } catch {}
           }
-          if (!pageToken) continue
-          
-          const url = `https://graph.facebook.com/${META_VERSION}/${leadId}?fields=created_time,field_data,ad_id,adset_id,campaign_id&access_token=${encodeURIComponent(pageToken)}`
-          const leadData = await $fetch(url, { method: 'GET' })
-          
+          if (!leadData) {
+            console.warn('[META WEBHOOK]', reqId, 'Could not fetch lead data for leadId', leadId)
+            continue
+          }
+
           const fld = (leadData?.field_data || []).reduce((acc, f) => {
             acc[f.name] = Array.isArray(f.values) ? f.values[0] : f.values
             return acc
           }, {})
-          
+
           const fullName = fld.full_name || fld.name || ''
           const email = fld.email || fld.email_address || ''
           const phone = fld.phone_number || fld.phone || ''
@@ -1748,73 +1764,72 @@ export const webhook = async (event) => {
           const adSetId = leadData.adset_id || null
           const adId = leadData.ad_id || null
 
-          const existing = await CrmLead.findOne({ where: { leadId } })
-          if (existing) {
-            existing.name = existing.name || fullName
-            existing.email = existing.email || email
-            existing.telephone = existing.telephone || phone
-            existing.inquiryDate = existing.inquiryDate || on
-            existing.rawData = existing.rawData || leadData
-            existing.campaignId = existing.campaignId || campaignId
-            existing.adSetId = existing.adSetId || adSetId
-            existing.adId = existing.adId || adId
-            await existing.save()
-            broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
-          } else {
-            const allowed = await isLeadAllowedForOrg(mp.organisationId)
-            if (!allowed) continue
-            const created = await CrmLead.create({
-              organisationId: mp.organisationId,
-              pageId,
-              formId: formId || null,
-              leadId,
-              campaignId,
-              adSetId,
-              adId,
-              name: fullName,
-              email,
-              telephone: phone,
-              inquiryDate: on,
-              rawData: leadData,
-              leadSource: 'Meta Leadgen',
-              leadStatus: 'New',
-            })
-            broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
-
-            try {
-              const orgUsers = await UserOrganisation.findAll({
-                where: {
-                  organisationId: mp.organisationId,
-                  status: 'Active',
-                },
-                attributes: ['userId'],
+          for (const mp of mps) {
+            const existing = await CrmLead.findOne({ where: { leadId, organisationId: mp.organisationId } })
+            if (existing) {
+              existing.name = existing.name || fullName
+              existing.email = existing.email || email
+              existing.telephone = existing.telephone || phone
+              existing.inquiryDate = existing.inquiryDate || on
+              existing.rawData = existing.rawData || leadData
+              existing.campaignId = existing.campaignId || campaignId
+              existing.adSetId = existing.adSetId || adSetId
+              existing.adId = existing.adId || adId
+              await existing.save()
+              broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
+            } else {
+              const allowed = await isLeadAllowedForOrg(mp.organisationId)
+              if (!allowed) continue
+              const created = await CrmLead.create({
+                organisationId: mp.organisationId,
+                pageId,
+                formId: formId || null,
+                leadId,
+                campaignId,
+                adSetId,
+                adId,
+                name: fullName,
+                email,
+                telephone: phone,
+                inquiryDate: on,
+                rawData: leadData,
+                leadSource: 'Meta Leadgen',
+                leadStatus: 'New',
               })
-              const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
-              if (userIds.length) {
-                await sendNotificationToMultipleUsers({
-                  userIds,
-                  organisationId: mp.organisationId,
-                  title: 'New Meta Lead',
-                  body: fullName || email || phone || 'A new lead was received',
-                  type: 'lead_created',
-                  referenceType: 'lead',
-                  referenceId: created.id,
-                  data: {
-                    leadId: String(created.id),
-                    leadSource: 'Meta Leadgen',
-                    organisationId: String(mp.organisationId || ''),
-                    pageId: String(pageId || ''),
-                    url: `/crm/leads?leadId=${created.id}`,
-                  },
-                  priority: 'high',
+              broadcastMetaEvent('lead', { orgId: mp.organisationId, leadId, pageId, formId })
+
+              try {
+                const orgUsers = await UserOrganisation.findAll({
+                  where: { organisationId: mp.organisationId, status: 'Active' },
+                  attributes: ['userId'],
+                })
+                const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
+                if (userIds.length) {
+                  await sendNotificationToMultipleUsers({
+                    userIds,
+                    organisationId: mp.organisationId,
+                    title: 'New Meta Lead',
+                    body: fullName || email || phone || 'A new lead was received',
+                    type: 'lead_created',
+                    referenceType: 'lead',
+                    referenceId: created.id,
+                    data: {
+                      leadId: String(created.id),
+                      leadSource: 'Meta Leadgen',
+                      organisationId: String(mp.organisationId || ''),
+                      pageId: String(pageId || ''),
+                      url: `/crm/leads?leadId=${created.id}`,
+                    },
+                    priority: 'high',
+                  })
+                }
+              } catch (notifyErr) {
+                console.warn('[META WEBHOOK]', reqId, 'Lead notification failed', {
+                  leadId: created?.id || null,
+                  pageId: String(pageId || ''),
+                  error: notifyErr?.message || 'Unknown notification error',
                 })
               }
-            } catch (notifyErr) {
-              console.warn('[META WEBHOOK]', reqId, 'Lead notification failed', {
-                leadId: created?.id || null,
-                pageId: String(pageId || ''),
-                error: notifyErr?.message || 'Unknown notification error',
-              })
             }
           }
         }
@@ -2449,19 +2464,26 @@ export const connectBusinessPages = async (event) => {
     }
   }
 
-  const conflicts = await MetaPage.findAll({
-    where: {
-      pageId: { [Op.in]: pageIds },
-      organisationId: { [Op.ne]: orgId },
-      status: 'Active',
-    },
-  })
-  if (conflicts.length) {
-    const names = conflicts.map((c) => c.pageName || c.pageId).join(', ')
-    return error(
-      409,
-      `Meta connection failed. The following page(s) are already connected to another organisation: ${names}`
-    )
+  const userOrgIds = (await UserOrganisation.findAll({
+    where: { userId, status: 'Active' },
+    attributes: ['organisationId'],
+  })).map((r) => String(r.organisationId)).filter((id) => id !== String(orgId))
+
+  if (userOrgIds.length) {
+    const conflicts = await MetaPage.findAll({
+      where: {
+        pageId: { [Op.in]: pageIds },
+        organisationId: { [Op.in]: userOrgIds },
+        status: 'Active',
+      },
+    })
+    if (conflicts.length) {
+      const names = conflicts.map((c) => c.pageName || c.pageId).join(', ')
+      return error(
+        409,
+        `Meta connection failed. The following page(s) are already connected to another of your organisations: ${names}`
+      )
+    }
   }
 
   let connected = 0
