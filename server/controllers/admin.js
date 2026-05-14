@@ -7321,3 +7321,193 @@ export const rejectLeave = async (event) => {
     return error(500, err.message || "Failed to reject leave");
   }
 };
+
+/**
+ * Bulk upload checklists for org-specific task pool tasks
+ * POST /api/admin/tasks/org/:orgId/checklists/bulk-upload
+ * CSV columns: taskId, taskTitle, question, category, fieldOneTitle, fieldOneValue,
+ *              fieldTwoTitle, fieldTwoValue, showRadio, showDate, showTime
+ */
+export const adminBulkUploadChecklistsForOrg = async (event) => {
+  const admin = event.context.admin;
+
+  if (!admin) {
+    return error(403, "Admin access required");
+  }
+
+  const orgIdRaw = getRouterParam(event, "orgId");
+  const organisationId = parseInt(orgIdRaw, 10);
+  if (!orgIdRaw || Number.isNaN(organisationId)) {
+    return error(400, "Invalid organisation id");
+  }
+
+  try {
+    const { TaskChecklist, Task, TaskCategory, Organisation } = await import(
+      "../models/index.js"
+    );
+
+    const organisation = await Organisation.findByPk(organisationId, {
+      attributes: ["id", "name"],
+    });
+    if (!organisation) {
+      return error(404, "Organisation not found");
+    }
+
+    const orgCategories = await TaskCategory.findAll({
+      where: { isDeleted: false, organisationId },
+      attributes: ["id"],
+    });
+    const orgCategoryIds = new Set(orgCategories.map((c) => c.id));
+
+    const formidable = (await import("formidable")).default;
+    const fs = await import("fs");
+    const { parse } = await import("csv-parse");
+
+    const form = formidable({ multiples: false });
+    const [_, files] = await new Promise((resolve, reject) => {
+      form.parse(event.node.req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve([fields, files]);
+      });
+    });
+
+    const file = files.file?.[0];
+    if (!file) {
+      return error(400, "No CSV file provided");
+    }
+
+    const records = await new Promise((resolve, reject) => {
+      const results = [];
+      fs.createReadStream(file.filepath)
+        .pipe(parse({ columns: true, trim: true }))
+        .on("data", (data) => results.push(data))
+        .on("end", () => resolve(results))
+        .on("error", (err) => reject(err));
+    });
+
+    if (!records || records.length === 0) {
+      return error(400, "CSV file is empty or invalid");
+    }
+
+    const rowErrors = [];
+    const checklistsToInsert = [];
+    const taskCache = new Map();
+
+    const resolveTask = async (rawId, rawTitle, rowNum) => {
+      if (rawId) {
+        const taskId = Number(rawId);
+        if (Number.isNaN(taskId)) {
+          rowErrors.push(`Row ${rowNum}: Invalid taskId — must be a number`);
+          return null;
+        }
+        if (taskCache.has(taskId)) return taskCache.get(taskId);
+
+        const task = await Task.findOne({
+          where: { id: taskId, isSystemTask: false },
+          attributes: ["id", "title", "categoryId"],
+        });
+
+        if (!task) {
+          rowErrors.push(`Row ${rowNum}: Task with id ${taskId} not found or is not an org task`);
+          return null;
+        }
+        if (!orgCategoryIds.has(task.categoryId)) {
+          rowErrors.push(`Row ${rowNum}: Task ${taskId} does not belong to organisation ${organisationId}`);
+          return null;
+        }
+        taskCache.set(taskId, task);
+        return task;
+      }
+
+      if (rawTitle) {
+        const key = rawTitle.toLowerCase();
+        if (taskCache.has(key)) return taskCache.get(key);
+
+        const task = await Task.findOne({
+          where: { title: { [Op.iLike]: rawTitle }, isSystemTask: false },
+          attributes: ["id", "title", "categoryId"],
+        });
+
+        if (!task) {
+          rowErrors.push(`Row ${rowNum}: No org task found with title "${rawTitle}"`);
+          return null;
+        }
+        if (!orgCategoryIds.has(task.categoryId)) {
+          rowErrors.push(`Row ${rowNum}: Task "${rawTitle}" does not belong to organisation ${organisationId}`);
+          return null;
+        }
+        taskCache.set(key, task);
+        return task;
+      }
+
+      rowErrors.push(`Row ${rowNum}: taskId or taskTitle is required`);
+      return null;
+    };
+
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      const rowNum = i + 2;
+
+      if (!record.question || !record.question.trim()) {
+        rowErrors.push(`Row ${rowNum}: question is required`);
+        continue;
+      }
+
+      const task = await resolveTask(
+        record.taskId ? String(record.taskId).trim() : "",
+        record.taskTitle ? String(record.taskTitle).trim() : "",
+        rowNum
+      );
+      if (!task) continue;
+
+      const parseBool = (val, defaultVal = false) => {
+        if (val === undefined || val === null || val === "") return defaultVal;
+        return String(val).toUpperCase() !== "FALSE";
+      };
+
+      checklistsToInsert.push({
+        taskId: task.id,
+        question: record.question.trim(),
+        category: record.category ? record.category.trim() : null,
+        fieldOneTitle: record.fieldOneTitle ? record.fieldOneTitle.trim() : null,
+        fieldOneValue: record.fieldOneValue ? record.fieldOneValue.trim() : null,
+        fieldTwoTitle: record.fieldTwoTitle ? record.fieldTwoTitle.trim() : null,
+        fieldTwoValue: record.fieldTwoValue ? record.fieldTwoValue.trim() : null,
+        showRadio: parseBool(record.showRadio, false),
+        showDate: parseBool(record.showDate, false),
+        showTime: parseBool(record.showTime, false),
+        radioValue: "N/A",
+        timeValue: null,
+        dateValue: null,
+      });
+    }
+
+    if (rowErrors.length > 0 && checklistsToInsert.length === 0) {
+      return error(400, `Validation errors: ${rowErrors.join(", ")}`);
+    }
+
+    let createdChecklists = [];
+    if (checklistsToInsert.length > 0) {
+      createdChecklists = await TaskChecklist.bulkCreate(checklistsToInsert);
+    }
+
+    return success({
+      message: `Successfully uploaded ${createdChecklists.length} checklist item(s) for organisation ${organisationId}`,
+      organisationId,
+      organisationName: organisation.name,
+      created: createdChecklists.length,
+      errors: rowErrors.length > 0 ? rowErrors : undefined,
+      checklists: createdChecklists.map((c) => ({
+        id: c.id,
+        taskId: c.taskId,
+        question: c.question,
+        showRadio: c.showRadio,
+        showDate: c.showDate,
+        showTime: c.showTime,
+      })),
+    });
+  } catch (err) {
+    console.error("Admin bulk upload org checklists error:", err);
+    return error(500, err.message || "Failed to upload organisation checklists");
+  }
+};
