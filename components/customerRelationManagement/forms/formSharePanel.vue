@@ -165,12 +165,12 @@ const regenerating = ref(false)
 // Compute shareUrl as a plain ref so it always resolves client-side
 const shareUrl = ref('')
 onMounted(() => {
-  shareUrl.value = `${window.location.origin}/form/${currentForm.value.token}`
+  shareUrl.value = `${window.location.origin}/lead-form/${currentForm.value.token}`
 })
 
 // Update shareUrl if token changes after regeneration
 watch(() => currentForm.value.token, (token) => {
-  if (process.client) shareUrl.value = `${window.location.origin}/form/${token}`
+  if (process.client) shareUrl.value = `${window.location.origin}/lead-form/${token}`
 })
 
 const embedCode = computed(() =>

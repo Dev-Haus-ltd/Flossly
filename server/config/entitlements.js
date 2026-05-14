@@ -23,8 +23,8 @@ export const ENTITLEMENTS = {
     // Tasks
     taskPool:       false,
     // Diary
-    patientBooking: false,
-    diary:          'view-only', // calendar only — Patients and Finance are Pro/CRM+
+    patientBooking: false, // gates full Patients tab, Finance tab, notes, surveys, forms — basic patient CRUD + appointments are open to all tiers
+    diary:          'view-only', // calendar only — full Patients and Finance tabs are CRM+/Pro
     charting:       true,
     // Team (rota, holiday tracker available on all tiers)
     rota:           true,
@@ -45,7 +45,7 @@ export const ENTITLEMENTS = {
     automation:     true,
     googleAds:      false,
     taskPool:       true,
-    patientBooking: false, // Patients + Finance diary sections are Pro only
+    patientBooking: false, // gates full Patients tab, Finance tab, notes, surveys, forms — basic patient CRUD + appointments are open to all tiers
     diary:          'view-only',
     charting:       true,
     rota:           true,

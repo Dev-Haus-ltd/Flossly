@@ -103,6 +103,7 @@ const selectedFolder = ref(null);
 const uploadedFiles = ref([]);
 const fileUploader = ref(null);
 const docStore = useDocStore();
+const { refreshUsage } = useUsageSummary();
 const searchQuery = ref("");
 
 // Compute filtered folders based on search query
@@ -132,6 +133,7 @@ const saveFile = () => {
       if (res.code === 0) {
         close();
         emit("onUpdate");
+        refreshUsage();
         mainStore.setSnackbar({
           title:
             uploadedFiles.value.length > 1

@@ -6,10 +6,11 @@ import { requireFeature } from '~/server/utils/requireFeature'
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
 
-  // All patient/finance/form operations require Pro (patientBooking flag)
+  // Full patient management section (Patients tab, Finance tab) — CRM/Pro only
+  // Basic patient CRUD and appointment create/update are allowed on all tiers (including Lite)
+  // so that calendar appointment booking works for new signups.
   const PATIENT_BOOKING_ROUTES = new Set([
-    'patients', 'patientsPaged', 'patientStats', 'patientCreate', 'patientUpdate', 'patientGet',
-    'appointmentCreate', 'appointmentUpdate',
+    'patientsPaged', 'patientStats',
     'notes', 'noteCreate', 'noteDelete',
     'patientComfortGet', 'patientComfortSave', 'patientComfortUpdate',
     'surveyGet', 'surveySave', 'surveyUploadPhotos', 'surveyDownload', 'surveyPrint', 'surveyShare', 'surveyStructure',

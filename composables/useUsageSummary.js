@@ -52,6 +52,11 @@ export const useUsageSummary = () => {
     } catch {}
   }
 
+  async function refreshUsage() {
+    _fetched.value = false
+    await fetchUsage()
+  }
+
   const usage = computed(() => _usage.value)
 
   const percentUsed = (resource) => {
@@ -79,5 +84,5 @@ export const useUsageSummary = () => {
   const dismiss = () => { _dismissed.value = true }
   const isDismissed = computed(() => _dismissed.value)
 
-  return { usage, fetchUsage, isLite, percentUsed, isAtWarning, isAtLimit, anyAtWarning, dismiss, isDismissed }
+  return { usage, fetchUsage, refreshUsage, isLite, percentUsed, isAtWarning, isAtLimit, anyAtWarning, dismiss, isDismissed }
 }

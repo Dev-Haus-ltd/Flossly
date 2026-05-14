@@ -131,12 +131,16 @@ const storagePct = computed(() => {
   if (!max) return 0
   return Math.min(100, Math.round((current / max) * 100))
 })
-const formatGb = (value) => `${(Number(value || 0) / 1024).toFixed(1)} GB`
-const storageUsedLabel = computed(() => formatGb(storageMB.value?.current))
-const storageLimitLabel = computed(() => formatGb(storageMB.value?.max))
+const formatStorage = (value) => {
+  const mb = Number(value || 0)
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
+  return `${mb.toFixed(1)} MB`
+}
+const storageUsedLabel = computed(() => formatStorage(storageMB.value?.current))
+const storageLimitLabel = computed(() => formatStorage(storageMB.value?.max))
 const storageRemainingLabel = computed(() => {
   const remaining = Math.max(0, Number(storageMB.value?.max || 0) - Number(storageMB.value?.current || 0))
-  return formatGb(remaining)
+  return formatStorage(remaining)
 })
 const storageTone = computed(() => {
   if (storagePct.value >= 100) return 'error'
