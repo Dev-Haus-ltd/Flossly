@@ -154,17 +154,31 @@
 
       <v-spacer />
 
-      <!-- Plan chip — hidden when sidebar is collapsed to rail -->
-      <div v-if="!rail" id="tour-plan-chip" class="px-3 pb-2">
-        <v-chip
-          size="small"
-          :color="planChipColor"
-          variant="tonal"
-          class="w-100 justify-center"
-          style="cursor: default; font-size: 11px;"
+      <!-- Plan tier indicator -->
+      <div id="tour-plan-chip" :class="rail ? 'px-0 pb-2 d-flex justify-center' : 'px-3 pb-2'">
+        <!-- Collapsed: avatar icon with tooltip -->
+        <v-tooltip v-if="rail" location="right" :text="planChipLabel">
+          <template #activator="{ props: tipProps }">
+            <div
+              v-bind="tipProps"
+              class="plan-avatar"
+              :class="`plan-avatar--${resolvedPlan.toLowerCase()}`"
+              @click="router.push('/settings?setting=billing')"
+            >
+              {{ planAvatarLetter }}
+            </div>
+          </template>
+        </v-tooltip>
+
+        <!-- Expanded: full chip -->
+        <div
+          v-else
+          class="plan-chip-full"
+          :class="`plan-chip-full--${resolvedPlan.toLowerCase()}`"
+          @click="router.push('/settings?setting=billing')"
         >
           {{ planChipLabel }}
-        </v-chip>
+        </div>
       </div>
 
       <div
@@ -344,12 +358,18 @@ const isTrialPlan = computed(() =>
 )
 const planChipLabel = computed(() => {
   if (isTrialPlan.value) return `${resolvedPlan.value} Trial`
-  const map = { Lite: 'Free Plan', CRM: 'CRM Plan', Pro: 'Pro Plan' }
+  const map = { Lite: 'Lite Plan', CRM: 'CRM Plan', Pro: 'Pro Plan' }
   return map[resolvedPlan.value] ?? resolvedPlan.value
 })
 const planChipColor = computed(() => {
   const map = { Lite: 'default', CRM: 'primary', Pro: 'deep-purple' }
   return map[resolvedPlan.value] ?? 'default'
+})
+
+const planAvatarLetter = computed(() => {
+  if (isTrialPlan.value) return resolvedPlan.value[0]
+  const map = { Lite: 'L', CRM: 'C', Pro: 'P' }
+  return map[resolvedPlan.value] ?? resolvedPlan.value[0] ?? '?'
 })
 
 const appBarHeight = 70;
@@ -536,5 +556,68 @@ watch(() => user.value, (newUser) => {
 }
 .v-navigation-drawer__scrim {
   display: none !important;
+}
+
+.plan-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  color: #fff;
+
+  &:hover {
+    transform: scale(1.12);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  }
+}
+
+.plan-avatar--lite {
+  background: linear-gradient(90deg, #FFA977 0%, #FF85DA 32.21%, #7D77FF 63.94%, #68ECE6 100%);
+}
+
+.plan-avatar--crm {
+  background: #0061fb;
+}
+
+.plan-avatar--pro {
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+}
+
+.plan-chip-full {
+  width: 100%;
+  height: 26px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.18s ease;
+  color: #fff;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
+.plan-chip-full--lite {
+  background: linear-gradient(90deg, #FFA977 0%, #FF85DA 32.21%, #7D77FF 63.94%, #68ECE6 100%);
+}
+
+.plan-chip-full--crm {
+  background: rgba(0, 97, 251, 0.12);
+  color: #0061fb;
+}
+
+.plan-chip-full--pro {
+  background: rgba(109, 40, 217, 0.1);
+  color: #6d28d9;
 }
 </style>

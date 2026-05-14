@@ -15,7 +15,7 @@
           size="small"
           variant="outlined"
           class="trial-banner__cta"
-          @click="openPricingModal"
+          @click="router.push('/settings?setting=billing')"
         >
           {{ isCrmTrial ? 'Upgrade to keep CRM' : 'Upgrade' }}
         </v-btn>
@@ -344,6 +344,7 @@ const router = useRouter()
 const trialBanner = ref(null);
 const pricingModalRef = ref(null);
 const { showPricing: showPricingDialog } = usePricingModal();
+provide("pricingModalRef", pricingModalRef);
 const trialExpiredDialog = ref(false);
 const DEFAULT_TRIAL_BANNER_HEIGHT = 36;
 

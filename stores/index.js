@@ -51,6 +51,13 @@ export const getLicenseTypeFromStorage = () => {
   }
 };
 
+const getDiaryRouteByLicense = (licenseType) =>
+  [LICENSE_TYPES.PRO, LICENSE_TYPES.SYSTEM, LICENSE_TYPES.SOAR].includes(
+    licenseType,
+  )
+    ? "/diary"
+    : "/diary/calendar";
+
 const LOCK_VISIBLE_FEATURES = new Set([
   "taskPool",
   "automation",
@@ -268,7 +275,7 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossy Diary",
           imgPath: tasksIcon,
           value: "flosslyDiary",
-          to: "/diary/calendar",
+          to: getDiaryRouteByLicense(licenseType),
           featureKey: "diary",
           children: [
             {

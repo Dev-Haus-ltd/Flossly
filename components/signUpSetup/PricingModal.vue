@@ -330,7 +330,22 @@ const resetModal = () => {
   if (error.value) error.value = "";
 };
 
-defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, selectedPriceId, selectedPlanId, isPaymentCompleted, error, loading, handleSubscribe });
+const startCheckoutForTier = async (tierKey) => {
+  const key = String(tierKey || "").toLowerCase();
+  if (isPlansLoading.value) {
+    await new Promise((resolve) => {
+      const stop = watch(isPlansLoading, (loading) => {
+        if (!loading) { stop(); resolve(); }
+      });
+    });
+  }
+  const plan = displayPlans.value.find((p) => p.key === key && !p.disabled);
+  if (!plan?.id) return;
+  selectedPlanId.value = plan.id;
+  handleSubscribe(plan.id);
+};
+
+defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, startCheckoutForTier, resetModal, selectedPriceId, selectedPlanId, isPaymentCompleted, error, loading, handleSubscribe });
 </script>
 
 <style scoped>
