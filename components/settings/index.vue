@@ -44,7 +44,8 @@
           </div>
         </v-col>
 
-        <!-- <v-col cols="12" sm="6" md="4" lg="3">
+        <!-- Diary Settings Card -->
+        <v-col cols="12" sm="6" md="4" lg="3">
           <div class="settings-card" @click="selectedSetting = 'diary'">
             <div class="card-content">
               <div class="card-icon-wrapper" style="background-color: #FFA977;">
@@ -59,32 +60,37 @@
               <p class="card-subtitle">Appointment configurations</p>
             </div>
           </div>
-        </v-col> -->
+        </v-col>
       </v-row>
     </div>
 
     <!-- Secondary View -->
     <div v-else style="background-color: white" class="px-5 rounded-lg">
-
-      <!-- Plan & Billing — standalone, no tabs -->
-      <div v-if="selectedSetting === 'billing'">
-        <SettingsPlanBillingCard @upgrade="openPricing" />
-      </div>
-
-      <!-- Other settings with tabs -->
-      <template v-else>
-        <v-tabs v-model="currentTab" class="custom-tabs" slider-color="primary">
-          <v-tab class="tab-text" value="smtp">
-            <img src="@/assets/icons/mainDrawerIcons/settings.svg" alt="SMTP Settings" class="tab-icon" />
-            SMTP Settings
-          </v-tab>
-        </v-tabs>
-        <v-tabs-window v-model="currentTab">
-          <v-tabs-window-item value="smtp">
-            <SettingsItSupport />
-          </v-tabs-window-item>
-        </v-tabs-window>
-      </template>
+      <v-tabs v-model="currentTab" class="custom-tabs" slider-color="primary">
+        <v-tab class="tab-text" value="billing">
+          <v-icon size="16" class="mr-1">mdi-credit-card-outline</v-icon>
+          Plan &amp; Billing
+        </v-tab>
+        <v-tab class="tab-text" value="smtp">
+          <img src="@/assets/icons/mainDrawerIcons/settings.svg" alt="SMTP Settings" class="tab-icon" />
+          SMTP Settings
+        </v-tab>
+        <v-tab class="tab-text" value="diary">
+          <img src="@/assets/images/diary/diary.svg" alt="Diary Settings" class="tab-icon" />
+          Diary Settings
+        </v-tab>
+      </v-tabs>
+      <v-tabs-window v-model="currentTab">
+        <v-tabs-window-item value="billing">
+          <SettingsPlanBilling @upgrade="openPricing" />
+        </v-tabs-window-item>
+        <v-tabs-window-item value="smtp">
+          <SettingsItSupport />
+        </v-tabs-window-item>
+        <v-tabs-window-item value="diary">
+          <SettingsDiary />
+        </v-tabs-window-item>
+      </v-tabs-window>
     </div>
   </div>
 </template>
@@ -95,6 +101,7 @@ import { ref, watch } from 'vue';
 // Settings component for roleId 16
 const selectedSetting = ref(null); // null = primary view, 'smtp' or 'diary' = secondary view
 const currentTab = ref("smtp");
+const route = useRoute();
 
 // Get setting title for breadcrumb
 const getSettingTitle = (setting) => {
@@ -107,13 +114,37 @@ const getSettingTitle = (setting) => {
 };
 
 watch(selectedSetting, (newVal) => {
-  if (newVal === 'smtp') currentTab.value = 'smtp';
+  if (newVal === 'billing') currentTab.value = 'billing';
+  else if (newVal === 'smtp') currentTab.value = 'smtp';
+  else if (newVal === 'diary') currentTab.value = 'diary';
 });
 
+watch(
+  () => route.query.setting,
+  (setting) => {
+    if (setting === 'billing' || setting === 'smtp' || setting === 'diary') {
+      selectedSetting.value = setting;
+      currentTab.value = setting;
+      return;
+    }
+    if (!setting) {
+      selectedSetting.value = null;
+    }
+  },
+  { immediate: true }
+);
+
 const { open: openPricingModal } = usePricingModal();
-const openPricing = () => {
-  selectedSetting.value = null;
+const pricingModalRef = inject("pricingModalRef", null);
+
+const openPricing = async (tier) => {
   openPricingModal();
+  if (!tier) return;
+  await nextTick();
+  const ref = pricingModalRef?.value ?? pricingModalRef;
+  if (ref?.startCheckoutForTier) {
+    ref.startCheckoutForTier(tier);
+  }
 };
 </script>
 

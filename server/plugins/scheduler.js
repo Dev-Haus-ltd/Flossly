@@ -8,7 +8,6 @@ import {
   startTaskDueReminderScheduler,
   startOnboardingScheduler,
   startDmQueueScheduler,
-  startMetaSyncScheduler,
   startShiftReminderScheduler,
   startLicenseExpiryScheduler,
 } from "../utils/scheduler";
@@ -41,7 +40,6 @@ export default defineNitroPlugin(async (nitroApp) => {
     startTaskDueReminderScheduler();
     startOnboardingScheduler();
     await startDmQueueScheduler();
-    startMetaSyncScheduler();
     startShiftReminderScheduler();
     startLicenseExpiryScheduler();
   } catch (error) {

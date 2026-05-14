@@ -20,12 +20,21 @@
           <!-- Expanded state: logo + title -->
           <template v-if="!rail">
             <img
-              :src="logoIcon"
-              alt="My Logo"
-              width="35"
-              height="100%"
+              v-if="isLite && !smAndDown"
+              :src="logoLite"
+              alt="Flossly Lite"
+              height="36"
+              style="max-width: 140px; object-fit: contain"
             />
-            <span class="text-h6 text-sm-h5 text-md-h5 font-weight-bold text-white ml-4 text-no-wrap">Flossly</span>
+            <template v-else>
+              <img
+                :src="logoIcon"
+                alt="My Logo"
+                width="35"
+                height="100%"
+              />
+              <span class="text-h6 text-sm-h5 text-md-h5 font-weight-bold text-white ml-4 text-no-wrap">Flossly</span>
+            </template>
           </template>
 
           <!-- Collapsed state: only icon -->
@@ -73,8 +82,12 @@
 
 <script setup>
 const { user } = useUser();
+import { useDisplay } from "vuetify";
 import logoIcon from "@/assets/logos/Logoicon2.svg";
+import logoLite from "/flosslyLite.svg";
 const emit = defineEmits(["small-screen-drawer"]);
+const { smAndDown } = useDisplay();
+const { isLite } = useUsageSummary();
 
 const props = defineProps({
   drawer: Boolean,
@@ -96,7 +109,7 @@ const handleDrawer = () => {
   margin-left: 20px; /* spacing from logo */
 }
 .logo-parent-sm {
-  width: 56px;
+  width: 70px;
   /* background-color: black; */
   height: 100%;
 }

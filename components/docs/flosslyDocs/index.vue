@@ -20,6 +20,31 @@
       </template>
     </div>
 
+    <div v-if="isLite && storageMB" class="px-5 pt-4">
+      <v-card rounded="lg" elevation="0" border class="usage-card">
+        <v-card-text class="pa-4">
+          <div class="d-flex align-center justify-space-between flex-wrap ga-3 mb-2">
+            <div>
+              <p class="text-subtitle-2 font-weight-semibold mb-0">Lite storage usage</p>
+              <p class="text-caption text-medium-emphasis mb-0">
+                {{ storageUsedLabel }} of {{ storageLimitLabel }} used
+              </p>
+            </div>
+            <v-chip size="small" :color="storageTone" variant="tonal">
+              {{ storageRemainingLabel }} left
+            </v-chip>
+          </div>
+          <v-progress-linear
+            :model-value="storagePct"
+            :color="storageTone"
+            bg-color="#e8eefc"
+            rounded
+            height="8"
+          />
+        </v-card-text>
+      </v-card>
+    </div>
+
     <div v-if="folderStack.length === 0">
       <!-- recently accessed -->
       <div class="py-2 px-5" v-if="recentFiles.length">
@@ -60,8 +85,8 @@
     </div>
 
     <div v-else>
-      <!-- subfolders (only when depth < 3) -->
-      <div class="mt-5 px-5" v-if="folderStack.length < 3">
+      <!-- subfolders (only when depth < 6) -->
+      <div class="mt-5 px-5" v-if="folderStack.length < 6">
         <DocsMyDocsFolders
           :folders="foldersList"
           :hideAddFolderButton="true"
@@ -88,19 +113,42 @@
 
 <script setup>
 import { downloadFile } from "~/lib/misc";
+import { resetUsageState } from "~/composables/useUsageSummary";
 
 const viewFileDialog = ref(false);
 const selectedDoc = ref(null);
 const docStore = useDocStore();
+const { usage, isLite, fetchUsage } = useUsageSummary()
 
 const recentFiles = ref([]);
 const files = ref([]);
 const foldersList = ref([]);
 const folderStack = ref([]);
+const storageMB = computed(() => usage.value?.storageMB || null)
+const storagePct = computed(() => {
+  const current = Number(storageMB.value?.current || 0)
+  const max = Number(storageMB.value?.max || 0)
+  if (!max) return 0
+  return Math.min(100, Math.round((current / max) * 100))
+})
+const formatGb = (value) => `${(Number(value || 0) / 1024).toFixed(1)} GB`
+const storageUsedLabel = computed(() => formatGb(storageMB.value?.current))
+const storageLimitLabel = computed(() => formatGb(storageMB.value?.max))
+const storageRemainingLabel = computed(() => {
+  const remaining = Math.max(0, Number(storageMB.value?.max || 0) - Number(storageMB.value?.current || 0))
+  return formatGb(remaining)
+})
+const storageTone = computed(() => {
+  if (storagePct.value >= 100) return 'error'
+  if (storagePct.value >= 80) return 'warning'
+  return 'primary'
+})
 
 const selectedFolder = computed(() => folderStack.value[folderStack.value.length - 1] ?? null);
 
 onMounted(() => {
+  resetUsageState();
+  fetchUsage();
   getSystemFolders();
   getRecentDocs();
   getSystemDocs({ folderId: null });

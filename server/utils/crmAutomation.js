@@ -2,9 +2,9 @@ import { crmAutomationDefaults } from "@shared/defaults/crmAutomationDefaults.js
 import { formatYmd, parseDayOffsetFromText } from "~/lib/misc";
 import { htmlToPlainText } from "~/lib/format/text.js";
 import { template as EMAIL_TEMPLATE } from "./emailTemplate.js";
-import { getOrgTransporter, getFromAddress } from "./nodeMailer.js";
+import { getOrgTransporter, getOrgEmailIdentity } from "./nodeMailer.js";
 import { buildLeadContext, renderTokens } from "./tokenRenderer.js";
-import { CrmAutomationTemplate, CrmLead, Organisation, CrmLeadAssignee, User } from "../models/index.js";
+import { CrmAutomationTemplate, CrmLead, Organisation, CrmLeadAssignee, User, UserOrganisation } from "../models/index.js";
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
 import { resolveWhapiConfig } from "./whatsappProvider.js";
 import { sendCrmAutomationSentNotification, sendCrmAutomationFailedNotification } from "./fcmNotification.js";
@@ -154,10 +154,12 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
   );
   const orgId = Number(lead?.organisationId);
   const orgTransporter = await getOrgTransporter(orgId);
-  const orgFrom = getFromAddress(orgId);
+  const identity = await getOrgEmailIdentity(orgId);
+
   await orgTransporter.sendMail({
     to: lead.email,
-    from: orgFrom,
+    from: identity.from,
+    ...(identity.replyTo ? { replyTo: identity.replyTo } : {}),
     subject,
     html: wrapped,
   });

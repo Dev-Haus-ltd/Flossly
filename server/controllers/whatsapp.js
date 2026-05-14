@@ -1,8 +1,76 @@
 import { Op } from 'sequelize'
 import { CrmLead, MetaWhatsAppConfig, CrmWhatsAppMessageLog } from '../models'
 import { decrypt } from '../utils/crypto'
+import { uploadBufferFile } from '../utils/storage'
 import { normalizeWhatsAppNumber, logWhatsAppMessage } from '../utils/whatsapp'
 import { success, error } from '../utils/response'
+
+const META_VERSION = 'v24.0'
+
+const inferExtension = (mimeType = '') => {
+  const lower = String(mimeType || '').toLowerCase()
+  if (lower.includes('jpeg')) return '.jpg'
+  if (lower.includes('png')) return '.png'
+  if (lower.includes('gif')) return '.gif'
+  if (lower.includes('mp4')) return '.mp4'
+  if (lower.includes('mpeg')) return '.mpeg'
+  if (lower.includes('mp3')) return '.mp3'
+  if (lower.includes('pdf')) return '.pdf'
+  return ''
+}
+
+const buildAttachmentFilename = ({ originalName, mimeType }) => {
+  const base = `${Date.now()}-${Math.random().toString(36).substring(7)}`
+  if (originalName && originalName.includes('.')) return originalName
+  const ext = inferExtension(mimeType)
+  return `${base}${ext}`
+}
+
+const fetchMetaMediaUrl = async ({ mediaId, accessToken }) => {
+  if (!mediaId || !accessToken) return null
+  const resp = await $fetch(`https://graph.facebook.com/${META_VERSION}/${mediaId}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  return resp?.url || null
+}
+
+const downloadMetaMediaToS3 = async ({ mediaId, accessToken, mimeType, filename }) => {
+  const url = await fetchMetaMediaUrl({ mediaId, accessToken })
+  if (!url) return null
+  const data = await $fetch(url, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    responseType: 'arrayBuffer',
+  })
+  const fileName = buildAttachmentFilename({ originalName: filename, mimeType })
+  const s3Path = await uploadBufferFile({
+    data: Buffer.from(data),
+    filename: fileName,
+    contentType: mimeType || undefined,
+    baseDir: 'chat-attachments',
+  })
+  return s3Path
+}
+
+const extractInboundAttachments = async ({ msg, accessToken }) => {
+  const msgType = String(msg?.type || '').toLowerCase()
+  const supported = ['image', 'video', 'audio', 'document', 'sticker']
+  if (!supported.includes(msgType)) return null
+  const media = msg?.[msgType] || {}
+  const mediaId = media?.id || null
+  const mimeType = media?.mime_type || null
+  const name = media?.filename || null
+  if (!mediaId) return null
+  const s3Url = await downloadMetaMediaToS3({ mediaId, accessToken, mimeType, filename: name })
+  if (!s3Url) return null
+  return [{
+    url: s3Url,
+    type: msgType === 'sticker' ? 'image' : msgType,
+    mimeType: mimeType || null,
+    name: name || null,
+  }]
+}
 
 const resolveConfigByPhoneNumberId = async (phoneNumberId) => {
   if (!phoneNumberId) return null
@@ -152,6 +220,9 @@ export const webhook = async (event) => {
           const lead = await findLeadByPhone(orgId, fromDigits)
           if (!lead) continue
           const content = getMessageContent(msg)
+          const accessToken = config?.accessTokenEnc ? decrypt(config.accessTokenEnc) : null
+          const attachments = await extractInboundAttachments({ msg, accessToken })
+          const msgType = String(msg?.type || '').toLowerCase() || (attachments?.length ? attachments[0].type : 'text')
           await updateLeadWhatsAppMeta(lead, {
             lastInboundAt: new Date(Number(msg?.timestamp || Date.now()) * 1000 || Date.now()).toISOString(),
             lastInboundFrom: fromDigits,
@@ -163,10 +234,11 @@ export const webhook = async (event) => {
             leadId: lead.id,
             to: fromDigits,
             direction: 'inbound',
-            type: 'text',
+            type: msgType || 'text',
             status: 'received',
             providerMessageId: msg?.id || null,
             content,
+            attachments,
           })
         }
 

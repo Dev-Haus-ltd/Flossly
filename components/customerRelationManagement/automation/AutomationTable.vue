@@ -157,6 +157,7 @@
         density="compact"
         hover
         :items-per-page="15"
+        :loading="loading"
       >
         <template #headers="{ columns }">
           <tr>
@@ -204,7 +205,14 @@
           </div>
         </template>
 
-        <template v-if="hasTriggerColumn" #item.sending="{ item }">
+        <template v-if="hasTriggerColumn && readOnlyTrigger" #item.sending="{ item }">
+          <div class="d-flex align-center trigger-cell">
+            <v-icon size="16" color="grey-darken-1" class="mr-2">mdi-clock-outline</v-icon>
+            <span class="text-body-2 text-medium-emphasis trigger-text">{{ item.sending || '—' }}</span>
+          </div>
+        </template>
+
+        <template v-else-if="hasTriggerColumn" #item.sending="{ item }">
           <div class="d-flex  align-center justify-space-between trigger-cell">
             <div class="d-flex align-center">
               <v-icon size="16" :color="item.sending ? 'grey-darken-1' : 'warning'" class="mr-2">
@@ -298,13 +306,14 @@
                   width="18"
                   height="18"
                   class="action-icon-btn"
-                  @click="$emit('openEdit', item)"
+                  :class="{ 'action-icon-disabled': disableEditForSent && item.sent }"
+                  @click="disableEditForSent && item.sent ? null : $emit('openEdit', item)"
                 />
               </template>
               <span>Edit</span>
             </v-tooltip>
 
-            <v-tooltip location="top">
+            <v-tooltip v-if="showDelete" location="top">
               <template #activator="{ props }">
                 <img
                   v-bind="props"
@@ -367,7 +376,7 @@
 
         <template v-if="hasSentStatusColumn" #item.sentStatus="{ item }">
           <v-chip
-            v-if="item.lastSentAt"
+            v-if="item.lastSentAt || item.sent"
             size="x-small"
             variant="tonal"
             color="success"
@@ -471,6 +480,22 @@ const props = defineProps({
   resendingKey: {
     type: String,
     default: null,
+  },
+  readOnlyTrigger: {
+    type: Boolean,
+    default: false,
+  },
+  showDelete: {
+    type: Boolean,
+    default: true,
+  },
+  loading: {
+    type: Boolean,
+    default: false,
+  },
+  disableEditForSent: {
+    type: Boolean,
+    default: false,
   },
   filterType: {
     type: String,

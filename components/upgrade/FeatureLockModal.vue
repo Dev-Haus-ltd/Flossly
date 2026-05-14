@@ -37,12 +37,32 @@ const CONTENT_MAP = {
     subtitle: 'Reach leads 3× faster and cut response time by 84% with WhatsApp messaging.',
   },
   patientBooking: {
-    title: 'Patient booking is on Flossy CRM',
-    subtitle: 'Book appointments directly from your lead pipeline with one click.',
+    title: 'Patient booking is on Flossy Pro',
+    subtitle: 'Manage patients, appointments, and finance in one place — available on the Pro plan.',
   },
   taskPool: {
     title: 'Team task pool is on Flossy CRM',
     subtitle: 'Give your whole team shared task visibility and better collaboration.',
+  },
+  taskBulkUpload: {
+    title: 'Bulk task upload is on Flossy CRM',
+    subtitle: 'Import task packs and scale workflows faster with CRM.',
+  },
+  leadBulkUpload: {
+    title: 'Bulk lead upload is on Flossy CRM',
+    subtitle: 'Import larger lead lists and manage growth from one place with CRM.',
+  },
+  leadForms: {
+    title: 'More lead forms are on Flossy CRM',
+    subtitle: 'Lite includes 1 active lead form. Upgrade to create and run more forms.',
+  },
+  googleAds: {
+    title: 'Google Ads analytics is on Flossy Pro',
+    subtitle: 'Track campaign performance and ROI across Google Ads directly inside Flossly.',
+  },
+  diary: {
+    title: 'Flossy Diary is on Flossy Pro',
+    subtitle: 'Manage appointments, patients, and finance all in one place — available on the Pro plan.',
   },
 }
 
@@ -50,8 +70,14 @@ const content = computed(
   () => CONTENT_MAP[props.feature] ?? { title: 'This feature is on Flossy CRM', subtitle: 'Upgrade to unlock the full Flossy experience.' }
 )
 
+// Features that require Pro — CRM trial won't unlock these
+const PRO_ONLY_FEATURES = new Set(['patientBooking', 'googleAds', 'diary'])
+
 const resolvedTier = computed(() => String(authStore.loggedUser?.licenseType || 'Lite').trim())
+const isProOnlyFeature = computed(() => PRO_ONLY_FEATURES.has(props.feature))
+
 const canStartTrial = computed(() => {
+  if (isProOnlyFeature.value) return false
   const billingCycle = authStore.loggedUser?.licenseBillingCycle || null
   const hasUsedTrial = Boolean(authStore.loggedUser?.hasUsedTrial)
   return resolvedTier.value === 'Lite' && !billingCycle && !hasUsedTrial

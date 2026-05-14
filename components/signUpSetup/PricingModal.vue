@@ -216,7 +216,9 @@ const displayPlans = computed(() => {
       const featureList = featureObj?.features || [];
       const description = featureObj?.description || plan.product?.description || plan.description || "";
       // Lite is the free plan — not purchasable through this modal
-      const displayAmount = key === "lite" ? 0 : plan.unit_amount;
+      // Hardcoded UI fallbacks until Stripe plans are updated (CRM £199, Pro £499)
+      const FALLBACK_PENCE = { crm: 19900, pro: 49900 }
+      const displayAmount = key === "lite" ? 0 : (FALLBACK_PENCE[key] ?? plan.unit_amount);
       return {
         ...plan,
         key,
@@ -328,7 +330,22 @@ const resetModal = () => {
   if (error.value) error.value = "";
 };
 
-defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, resetModal, selectedPriceId, selectedPlanId, isPaymentCompleted, error, loading, handleSubscribe });
+const startCheckoutForTier = async (tierKey) => {
+  const key = String(tierKey || "").toLowerCase();
+  if (isPlansLoading.value) {
+    await new Promise((resolve) => {
+      const stop = watch(isPlansLoading, (loading) => {
+        if (!loading) { stop(); resolve(); }
+      });
+    });
+  }
+  const plan = displayPlans.value.find((p) => p.key === key && !p.disabled);
+  if (!plan?.id) return;
+  selectedPlanId.value = plan.id;
+  handleSubscribe(plan.id);
+};
+
+defineExpose({ isPaymentOpen, cancelPaymentFlow, startCheckout, startCheckoutForTier, resetModal, selectedPriceId, selectedPlanId, isPaymentCompleted, error, loading, handleSubscribe });
 </script>
 
 <style scoped>

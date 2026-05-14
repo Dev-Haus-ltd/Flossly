@@ -1,11 +1,27 @@
 import { createError } from 'h3'
 import { getEntitlements } from '../config/entitlements'
-import { CrmLead, UserDocument, UserOrganisation, Organisation } from '../models'
+import { CrmLead, UserDocument, UserOrganisation, Organisation, User, FormConfig } from '../models'
+import sequelize from './db'
 
 const RESOURCE_LABELS = {
   leads:     'lead',
   storageMB: 'storage',
   members:   'team member',
+  forms:     'active lead form',
+}
+
+let formSoftDeleteSupported = null
+
+const supportsFormSoftDelete = async () => {
+  if (formSoftDeleteSupported !== null) return formSoftDeleteSupported
+  try {
+    const qi = sequelize.getQueryInterface()
+    const columns = await qi.describeTable('FormConfigs')
+    formSoftDeleteSupported = !!(columns?.softDeleted && columns?.deletedAt)
+  } catch {
+    formSoftDeleteSupported = false
+  }
+  return formSoftDeleteSupported
 }
 
 /**
@@ -13,7 +29,7 @@ const RESOURCE_LABELS = {
  * Returns current usage so callers can show warnings without a second query.
  *
  * @param {object} event - H3 event
- * @param {'leads'|'storageMB'|'members'} resource
+ * @param {'leads'|'storageMB'|'members'|'forms'} resource
  * @returns {{ current: number, max: number, warnAt: number }}
  */
 export const requireUsageAllowed = async (event, resource) => {
@@ -66,6 +82,12 @@ export const getCurrentUsage = async (orgId, resource) => {
     case 'leads':
       return CrmLead.count({ where: { organisationId: orgId, softDeleted: false } })
 
+    case 'forms': {
+      const where = { organisationId: orgId, active: true }
+      if (await supportsFormSoftDelete()) where.softDeleted = false
+      return FormConfig.count({ where })
+    }
+
     case 'storageMB': {
       const bytes = await UserDocument.sum('fileSizeBytes', {
         where: { organisationId: orgId },
@@ -73,8 +95,16 @@ export const getCurrentUsage = async (orgId, resource) => {
       return Math.ceil((Number(bytes) || 0) / (1024 * 1024))
     }
 
-    case 'members':
-      return UserOrganisation.count({ where: { organisationId: orgId } })
+    case 'members': {
+      const rows = await UserOrganisation.findAll({
+        where: { organisationId: orgId, status: ['Active', 'Invited'] },
+        include: [{ model: User, as: 'user', attributes: ['email'], required: true }],
+      })
+      return rows.filter(uo => {
+        const email = uo.user?.email || ''
+        return !(email.includes('dummy-dentist') && email.includes('@flossly.local'))
+      }).length
+    }
 
     default:
       return 0

@@ -15,7 +15,7 @@
           size="small"
           variant="outlined"
           class="trial-banner__cta"
-          @click="openPricingModal"
+          @click="router.push('/settings?setting=billing')"
         >
           {{ isCrmTrial ? 'Upgrade to keep CRM' : 'Upgrade' }}
         </v-btn>
@@ -280,7 +280,7 @@
 import { useDisplay } from "vuetify";
 import PricingModal from "@/components/signUpSetup/PricingModal.vue";
 import { useWhapiStream } from "@/composables/useWhapiStream";
-import { useUsageSummary } from "@/composables/useUsageSummary";
+import { resetUsageState, useUsageSummary } from "@/composables/useUsageSummary";
 import { usePostHog } from "@/composables/usePostHog";
 import { useAppTour } from "@/composables/useAppTour";
 import { Post } from "@/services/apiWrapper";
@@ -344,6 +344,7 @@ const router = useRouter()
 const trialBanner = ref(null);
 const pricingModalRef = ref(null);
 const { showPricing: showPricingDialog } = usePricingModal();
+provide("pricingModalRef", pricingModalRef);
 const trialExpiredDialog = ref(false);
 const DEFAULT_TRIAL_BANNER_HEIGHT = 36;
 
@@ -480,6 +481,8 @@ const handleStartTrial = async () => {
       showStartTrial.value = true
       track('trial_started', { tier: trialTier.value })
       await authStore.profile()
+      resetUsageState()
+      await fetchUsage()
     } else {
       mainStore.setSnackbar({ message: friendlyTrialError(extractApiError(res)), color: 'error' })
     }
@@ -584,7 +587,8 @@ const preloadUsers = async () => {
   }
 };
 const onUpgradeRequired = (e) => {
-  lockedFeature.value = e.detail?.feature || ''
+  const feature = e.detail?.feature || ''
+  lockedFeature.value = feature
   showFeatureLock.value = true
   track('feature_lock_shown', { feature: lockedFeature.value })
 }
@@ -592,6 +596,11 @@ const onUpgradeRequired = (e) => {
 const onOnboardingUi = () => {
   setTimeout(() => maybeStartTour(), 50)
 }
+
+const route = useRoute()
+watch(() => route.path, () => {
+  showFeatureLock.value = false
+})
 
 onMounted(async () => {
   if (typeof window !== "undefined") {

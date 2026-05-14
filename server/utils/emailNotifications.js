@@ -1,7 +1,8 @@
-import { getOrgTransporter, getFromAddress } from "./nodeMailer";
+import { getOrgTransporter, getFromAddress, getOrgEmailIdentity } from "./nodeMailer";
 import { template } from "./emailTemplate";
 import { buildLeadContext, renderTokens } from './tokenRenderer.js'
 import { getS3Object } from './s3.js'
+import { ServerCommunicationLogger } from './serverCommunicationLogger.js'
 const config = useRuntimeConfig();
 
 const streamToBuffer = (stream) =>
@@ -12,20 +13,148 @@ const streamToBuffer = (stream) =>
     stream.on('error', reject);
   });
 
-async function sendEmail(orgId, mailOptions) {
+async function sendEmail(orgId, mailOptions, options = {}) {
   const mailer = await getOrgTransporter(orgId);
-  const from = getFromAddress(orgId);
+  let from, replyTo;
+  if (options.patientFacing) {
+    const identity = await getOrgEmailIdentity(orgId);
+    from = mailOptions.from || identity.from;
+    replyTo = identity.replyTo;
+  } else {
+    from = mailOptions.from || getFromAddress(orgId);
+  }
+  const attachments = await resolveMailAttachments(mailOptions.attachments);
   return mailer.sendMail({
-    from: mailOptions.from || from,
+    from,
+    ...(replyTo ? { replyTo } : {}),
     to: mailOptions.to,
     cc: mailOptions.cc,
     bcc: mailOptions.bcc,
     subject: mailOptions.subject,
     html: mailOptions.html,
     text: mailOptions.text,
-    attachments: mailOptions.attachments,
+    attachments: attachments.length ? attachments : undefined,
   });
 }
+
+/**
+ * Send email with optional Communication Hub logging
+ * @param {Object} options
+ * @param {number} options.orgId - Organisation ID
+ * @param {Object} options.mailOptions - Standard mail options
+ * @param {number} options.patientId - Patient ID (optional, for logging)
+ * @param {number} options.practitionerId - Practitioner ID (optional, for logging)
+ * @param {Object} options.logMetadata - Additional metadata for logging
+ * @returns {Promise<Object>} Result with sent status and optional log
+ */
+export async function sendEmailWithLogging(options = {}) {
+  const {
+    orgId,
+    mailOptions,
+    patientId = null,
+    practitionerId = null,
+    logMetadata = {},
+  } = options
+
+  try {
+    const result = await sendEmail(orgId, mailOptions)
+
+    // Log to Communication Hub if patientId is provided
+    if (patientId) {
+      await ServerCommunicationLogger.logEmail(
+        orgId,
+        patientId,
+        mailOptions.subject || 'Email',
+        mailOptions.html || mailOptions.text || '',
+        'Sent',
+        practitionerId,
+        {
+          ...logMetadata,
+          recipientEmail: mailOptions.to?.[0] || '',
+          channel: 'email',
+        }
+      )
+    }
+
+    return { success: true, result }
+  } catch (error) {
+    console.error('Error sending email:', error)
+
+    // Log failed communication if patientId is provided
+    if (patientId) {
+      await ServerCommunicationLogger.logFailed(
+        orgId,
+        patientId,
+        'Email',
+        mailOptions.subject || 'Email',
+        mailOptions.html || mailOptions.text || '',
+        error.message,
+        practitionerId,
+        {
+          ...logMetadata,
+          recipientEmail: mailOptions.to?.[0] || '',
+        }
+      )
+    }
+
+    throw error
+  }
+}
+
+const inferEmailAttachmentContentType = (filename = '') => {
+  const lower = String(filename || '').toLowerCase();
+  if (lower.endsWith('.pdf')) return 'application/pdf';
+  if (lower.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (lower.endsWith('.doc')) return 'application/msword';
+  if (lower.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (lower.endsWith('.xls')) return 'application/vnd.ms-excel';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.txt')) return 'text/plain';
+  return 'application/octet-stream';
+};
+
+const resolveMailAttachments = async (attachments) => {
+  if (!Array.isArray(attachments)) return [];
+
+  const resolved = [];
+  for (const item of attachments) {
+    if (!item || typeof item !== 'object') continue;
+
+    const filename = String(item?.name || item?.filename || item?.title || 'attachment').trim() || 'attachment';
+    const contentType = String(item?.contentType || item?.mimeType || '').trim() || inferEmailAttachmentContentType(filename);
+
+    if (item.content) {
+      resolved.push({ filename, content: item.content, contentType });
+      continue;
+    }
+
+    if (item.path && typeof item.path === 'string' && item.path.trim()) {
+      resolved.push({ filename, path: item.path, contentType });
+      continue;
+    }
+
+    const key = String(item?.link || item?.url || item?.path || '').trim();
+    if (!key) continue;
+
+    try {
+      const s3Obj = await getS3Object(key);
+      const content = await streamToBuffer(s3Obj.body);
+      resolved.push({
+        filename,
+        content,
+        contentType: item?.contentType || item?.mimeType || s3Obj.contentType || inferEmailAttachmentContentType(filename),
+      });
+    } catch (err) {
+      // Skip attachments that cannot be fetched rather than fail the entire send.
+      console.warn(`Skipping email attachment '${filename}':`, err?.message || err);
+    }
+  }
+
+  return resolved;
+};
+
 
 /** These notifications are configured */
 
@@ -382,7 +511,6 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
 
   const effectiveOrgId = orgId || leads[0]?.organisationId;
 
-  // Pre-fetch attachment buffers from S3 (links are S3 keys, not web URLs)
   const resolvedAttachments = [];
   for (const item of (Array.isArray(attachments) ? attachments : [])) {
     const key = String(item?.link || item?.url || item?.path || '').trim();
@@ -396,7 +524,7 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
         contentType: item?.contentType || s3Obj.contentType || 'application/pdf',
       });
     } catch (_) {
-      // skip attachment that can't be fetched rather than failing the whole send
+      // Skip attachments that cannot be fetched rather than failing the whole send.
     }
   }
 
@@ -417,7 +545,7 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
         subject: renderedSubject,
         html: wrapped,
         attachments: resolvedAttachments.length ? resolvedAttachments : undefined,
-      });
+      }, { patientFacing: true });
       sent++;
     } catch (e) {
       // swallow and continue with others
@@ -1186,6 +1314,134 @@ export const sendOrganisationReferralEmail = async (data) => {
     subject,
     html,
   });
+};
+
+// CONSENT FORMS NOTIFICATIONS
+export const sendConsentFormEmail = async (data) => {
+  const {
+    orgId,
+    patientEmail,
+    patientName,
+    formName,
+    practiceInfo = {},
+    customMessage = '',
+    customSubject = '',
+    attachments = [],
+    expiryDays = 30,
+    expiresAt = null,
+    token = null,
+  } = data;
+
+  if (!patientEmail || !token) {
+    console.error('sendConsentFormEmail: Missing required fields - patientEmail or token');
+    return;
+  }
+
+  const baseUrl =
+    (config?.public?.BASE_URL || process.env.BASE_URL || 'http://localhost:3000')
+      .replace(/\/+$/, '');
+
+  const accessUrl = `${baseUrl}/form/${token}`;
+
+  const expiryText = expiresAt 
+    ? new Date(expiresAt).toLocaleDateString('en-GB', { 
+        day: '2-digit', 
+        month: 'long', 
+        year: 'numeric' 
+      })
+    : `in ${expiryDays} days`;
+
+  const practiceName = practiceInfo?.name || practiceInfo?.organisationName || 'Flossly';
+
+  const attachmentsList = Array.isArray(attachments)
+    ? attachments
+        .filter((item) => item && (item.url || item.link))
+        .map((item) => ({
+          filename: item.name || item.filename || 'attachment',
+          link: item.url || item.link || item.path,
+          contentType: item.mimeType || item.contentType || undefined,
+        }))
+    : [];
+
+  const attachmentLinks = attachmentsList.length
+    ? `<br/><div style="background:#f8fafc;border:1px solid #e5e7eb;padding:16px;border-radius:12px;margin-top:16px;">
+      <p style="margin:0 0 8px 0;font-size:13px;color:#374151;"><strong>Attached files</strong></p>
+      <ul style="margin:0;padding-left:18px;color:#374151;font-size:13px;">
+        ${attachmentsList
+          .map(
+            (att) =>
+              `<li><a href="${att.link}" target="_blank" style="color:#0061fb;">${att.filename}</a></li>`,
+          )
+          .join('')}
+      </ul>
+    </div>`
+    : '';
+
+  const content = `
+    <p>Dear ${patientName || 'Patient'},</p>
+    <br/>
+    <p>We're excited to share an important document with you:</p>
+    <p><strong style="font-size: 16px; color: #0061fb;">${formName}</strong></p>
+    <br/>
+    <p>Please review and sign this digital form at your earliest convenience. Your digital signature will be secure and legally binding.</p>
+    <br/>
+    <p style="text-align:center;margin-top:30px;margin-bottom:30px;">
+      <a href="${accessUrl}" 
+         target="_blank" 
+         style="background-color: #0061fb; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600; font-size: 16px;">
+        Review & Sign Document
+      </a>
+    </p>
+    <br/>
+    <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; border-left: 4px solid #0061fb;">
+      <p style="margin: 0 0 8px 0; font-size: 13px; color: #6b7280;"><strong>📋 Document Details</strong></p>
+      <p style="margin: 0 0 4px 0; font-size: 13px; color: #374151;">
+        <strong>Form:</strong> ${formName}
+      </p>
+      <p style="margin: 0 0 4px 0; font-size: 13px; color: #374151;">
+        <strong>Practice:</strong> ${practiceName}
+      </p>
+      <p style="margin: 0; font-size: 13px; color: #374151;">
+        <strong>Link expires:</strong> ${expiryText}
+      </p>
+    </div>
+    <br/>
+    ${customMessage ? `
+    <p><strong>Message from your practice:</strong></p>
+    <p style="font-style: italic; color: #6b7280;">${customMessage}</p>
+    <br/>
+    ` : ''}
+    ${attachmentLinks}
+    <p style="font-size: 13px; color: #9ca3af;">
+      💡 <strong>Tip:</strong> The link is unique to you and secure. It will only work on the device and browser where you first open it.
+    </p>
+    <br/>
+    <p style="font-size: 13px; color: #9ca3af;">
+      If you have any questions or encounter any issues, please reply to this email or contact us for support.
+    </p>
+    <br/>
+    <p>Best regards,<br/>
+      <strong>${practiceName}</strong><br/>
+      Powered by Flossly
+    </p>
+  `;
+
+  const subject = customSubject?.trim() || `Please Review & Sign: ${formName}`;
+  const html = template
+    .replaceAll("{subject}", subject)
+    .replace("{content}", content);
+
+  try {
+    await sendEmail(orgId, {
+      to: [patientEmail],
+      subject,
+      html,
+      attachments: attachmentsList.length ? attachmentsList : undefined,
+    });
+  } catch (error) {
+    console.error('Error sending consent form email:', error);
+    throw error;
+  }
 };
 
 export const sendMagicLinkEmail = async ({ email, fullName, link, orgId }) => {

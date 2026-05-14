@@ -3,7 +3,7 @@ import { useFCM } from "~/composables/useFCM";
 import { resetUsageState } from "~/composables/useUsageSummary";
 
 definePageMeta({
-  layout: "default",
+  layout: false,
 });
 
 const { setUser } = useUser();

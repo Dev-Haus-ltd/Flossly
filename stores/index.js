@@ -21,20 +21,28 @@ export const LICENSE_TYPES = {
   SOAR:   "Soar",
 };
 
-// Maps any legacy or current license type to the menu feature set it should see
-const LICENSE_FEATURES = {
-  Lite:   new Set(["dashboard", "crm"]),
-  CRM:    new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
-  Pro:    new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
-  // Legacy — mapped to their resolved tier's feature set
-  System: new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
-  Trial:  new Set(["dashboard", "crm"]),
-  Drift:  new Set(["dashboard", "crm"]),
-  Glide:  new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
-  Soar:   new Set(["dashboard", "tasks", "docs", "team", "crm", "diary"]),
+export const resolveUserLicenseType = (user) => {
+  const preference = Array.isArray(user?.preferences)
+    ? user.preferences[0]
+    : user?.preferences;
+
+  return preference?.licenseType || LICENSE_TYPES.LITE;
 };
 
-const getLicenseTypeFromStorage = () => {
+// Maps any legacy or current license type to the menu feature set it should see
+const LICENSE_FEATURES = {
+  Lite:   new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta", "diary"]),
+  CRM:    new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "diary"]),
+  Pro:    new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "googleAds", "diary", "patientBooking"]),
+  // Legacy — mapped to their resolved tier's feature set
+  System: new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "googleAds", "diary", "patientBooking"]),
+  Trial:  new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta", "diary"]),
+  Drift:  new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta", "diary"]),
+  Glide:  new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "diary"]),
+  Soar:   new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "googleAds", "diary", "patientBooking"]),
+};
+
+export const getLicenseTypeFromStorage = () => {
   try {
     const authStore = useAuthStore();
     return authStore.loggedUser?.licenseType ?? LICENSE_TYPES.LITE;
@@ -43,19 +51,47 @@ const getLicenseTypeFromStorage = () => {
   }
 };
 
+const getDiaryRouteByLicense = (licenseType) =>
+  [LICENSE_TYPES.PRO, LICENSE_TYPES.SYSTEM, LICENSE_TYPES.SOAR].includes(
+    licenseType,
+  )
+    ? "/diary"
+    : "/diary/calendar";
+
+const LOCK_VISIBLE_FEATURES = new Set([
+  "taskPool",
+  "automation",
+  "googleAds",
+  "patientBooking",
+])
+
 const filterMenuByLicense = (menuItems, licenseType) => {
   const allowed = LICENSE_FEATURES[licenseType] ?? LICENSE_FEATURES[LICENSE_TYPES.LITE];
 
   return menuItems.reduce((acc, item) => {
-    if (!allowed.has(item.featureKey)) {
+    const hasChildren = Array.isArray(item.children) && item.children.length > 0
+    if (!allowed.has(item.featureKey) && !hasChildren) {
       return acc;
     }
 
     const next = { ...item };
-    if (Array.isArray(next.children) && next.children.length) {
-      next.children = next.children.filter((child) =>
-        allowed.has(child.featureKey || next.featureKey)
-      );
+    if (hasChildren) {
+      next.children = next.children.reduce((children, child) => {
+        const childFeature = child.featureKey || next.featureKey
+        if (allowed.has(childFeature)) {
+          children.push({ ...child, locked: false })
+          return children
+        }
+        if (LOCK_VISIBLE_FEATURES.has(childFeature) && allowed.has(next.featureKey)) {
+          children.push({
+            ...child,
+            locked: true,
+            lockedFeature: childFeature,
+          })
+        }
+        return children
+      }, [])
+      if (!allowed.has(next.featureKey) && !next.children.length) return acc
     }
     acc.push(next);
     return acc;
@@ -95,13 +131,12 @@ export const useMainStore = defineStore("mainStore", {
     getManagerOptions() {
       const licenseType = getLicenseTypeFromStorage();
       const authStore = useAuthStore();
-      
+
       const isDeveloper = authStore.getIsDeveloper;
-      
-      // Get user data to check roleId
+
       const { user } = useUser();
       const userRoleId = user.value?.roleId;
-      
+
       const menuItems = [
         {
           title: "DashBoard",
@@ -167,7 +202,7 @@ export const useMainStore = defineStore("mainStore", {
             //   imgPath: teamIcon,
             //   to: "/teams/invoice",
             // }, 
-        
+
           ],
         },
         // {
@@ -184,25 +219,25 @@ export const useMainStore = defineStore("mainStore", {
         //     },
         //   ],
         // },
-          {
-            title: "CRM",
-            imgPath: crmIcon,
-            value: "crm",
-            to:"/crm",
-            children: [
-              {
-                title: "Leads",
-                value: "crmLeads",
-                imgPath: crmIcon,
-                to: "/crm/leads",
-                featureKey: "crm",
-              },
+        {
+          title: "CRM",
+          imgPath: crmIcon,
+          value: "crm",
+          to: "/crm",
+          children: [
+            {
+              title: "Leads",
+              value: "crmLeads",
+              imgPath: crmIcon,
+              to: "/crm/leads",
+              featureKey: "crm_leads",
+            },
             {
               title: "DMs",
               value: "crmDms",
               imgPath: crmIcon,
               to: "/crm/dms",
-              featureKey: "crm",
+              featureKey: "crm_meta",
               beta: true,
             },
             {
@@ -210,22 +245,29 @@ export const useMainStore = defineStore("mainStore", {
               value: "crmAutomations",
               imgPath: crmIcon,
               to: "/crm/automations",
-              featureKey: "crm",
+              featureKey: "automation",
             },
             {
               title: "Meta Analytics",
               value: "crmAnalytics",
               imgPath: crmIcon,
               to: "/crm/analytics",
-              featureKey: "crm",
+              featureKey: "crm_meta",
             },
             {
               title: "Google Analytics",
               value: "crm Google Analytics",
               imgPath: crmIcon,
               to: "/crm/google_analytics",
-              featureKey: "crm",
+              featureKey: "googleAds",
             },
+            // {
+            //   title: "Google Ads Analytics",
+            //   value: "crm Google Ads Analytics",
+            //   imgPath: crmIcon,
+            //   to: "/crm/google_ads",
+            //   featureKey: "crm",
+            // },
           ],
           featureKey: "crm",
         },
@@ -233,7 +275,7 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossy Diary",
           imgPath: tasksIcon,
           value: "flosslyDiary",
-          to:"/diary",
+          to: getDiaryRouteByLicense(licenseType),
           featureKey: "diary",
           children: [
             {
@@ -248,14 +290,14 @@ export const useMainStore = defineStore("mainStore", {
               value: "diaryPatients",
               imgPath: tasksIcon,
               to: "/diary/patients",
-              featureKey: "diary",
+              featureKey: "patientBooking",
             },
             {
               title: "Finance",
               value: "diaryfinance",
               imgPath: tasksIcon,
               to: "/diary/finance",
-              featureKey: "diary",
+              featureKey: "patientBooking",
             },
           ],
         },
@@ -296,10 +338,10 @@ export const useMainStore = defineStore("mainStore", {
       if (isDeveloper) {
         menuItems.push({
           title: "Support Chat",
-          imgPath: teamIcon, // Using team icon temporarily, can be replaced with chat icon
+          imgPath: teamIcon,
           value: "supportChat",
           to: "/support-chat",
-          featureKey: "dashboard", // Use dashboard feature key so it's always visible
+          featureKey: "dashboard",
         });
       }
 
@@ -310,7 +352,7 @@ export const useMainStore = defineStore("mainStore", {
           imgPath: settingsIcon,
           value: "settings",
           to: "/settings",
-          featureKey: "dashboard", // Use dashboard feature key so it's always visible
+          featureKey: "dashboard",
         });
       }
 
@@ -366,28 +408,28 @@ export const useMainStore = defineStore("mainStore", {
               value: "crmLeads",
               imgPath: crmIcon,
               to: "/crm/leads",
-              featureKey: "crm",
+              featureKey: "crm_leads",
             },
             {
               title: "My Automations",
               value: "crmAutomations",
               imgPath: crmIcon,
               to: "/crm/automations",
-              featureKey: "crm",
+              featureKey: "automation",
             },
             {
               title: "Meta Analytics",
               value: "crmAnalytics",
               imgPath: crmIcon,
               to: "/crm/analytics",
-              featureKey: "crm",
+              featureKey: "crm_meta",
             },
             {
               title: "Google Analytics",
               value: "crm Google Analytics",
               imgPath: crmIcon,
               to: "/crm/google_analytics",
-              featureKey: "crm",
+              featureKey: "googleAds",
             },
           ],
         },

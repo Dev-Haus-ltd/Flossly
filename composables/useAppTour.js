@@ -2,6 +2,8 @@ import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 
 const TOUR_KEY = 'flossly_app_tour_v1'
+const CRM_UPGRADE_TOUR_KEY = 'flossly_crm_upgrade_tour_v1'
+let activeTour = null
 
 const STEPS = [
   {
@@ -19,7 +21,7 @@ const STEPS = [
     popover: {
       title: 'Dashboard',
       description:
-        'Your command centre — see setup progress, key metrics, and next best actions at a glance.',
+        'Your command centre - see setup progress, key metrics, and next best actions at a glance.',
       side: 'right',
       align: 'start',
     },
@@ -39,7 +41,7 @@ const STEPS = [
     popover: {
       title: 'Task Management',
       description:
-        'Create tasks for your team, set due dates, and track completion — fully included on Lite.',
+        'Create tasks for your team, set due dates, and track completion - fully included on Lite.',
       side: 'right',
       align: 'start',
     },
@@ -47,9 +49,62 @@ const STEPS = [
   {
     element: '#tour-plan-chip',
     popover: {
-      title: "You're on Flossy Lite — free forever",
+      title: "You're on Flossy Lite - free forever",
       description:
-        "When you're ready to grow, upgrade to CRM (£199/mo) to unlock WhatsApp messaging, automations, and unlimited leads.",
+        "When you're ready to grow, upgrade to CRM (GBP199/mo) to unlock WhatsApp messaging, automations, and unlimited leads.",
+      side: 'top',
+      align: 'center',
+    },
+  },
+]
+
+const CRM_UPGRADE_STEPS = [
+  {
+    element: '[data-tour-id="crm"]',
+    popover: {
+      title: 'CRM Trial Activated',
+      description:
+        'Your CRM workspace is now unlocked. This is where the upgraded lead workflow lives.',
+      side: 'right',
+      align: 'start',
+    },
+  },
+  {
+    element: '[data-tour-id="crm-upgrade-forms"]',
+    popover: {
+      title: 'Lead Forms',
+      description:
+        'Create and share lead capture forms from inside CRM. Lite is capped, while CRM gives you room to scale.',
+      side: 'bottom',
+      align: 'center',
+    },
+  },
+  {
+    element: '[data-tour-id="crm-upgrade-upload"]',
+    popover: {
+      title: 'Bulk Lead Upload',
+      description:
+        'Bring in historical spreadsheets or campaign exports without adding leads one by one.',
+      side: 'bottom',
+      align: 'center',
+    },
+  },
+  {
+    element: '[data-tour-id="crmAutomations"]',
+    popover: {
+      title: 'Automations',
+      description:
+        'CRM unlocks automated follow-up journeys so new leads are not left sitting in the pipeline.',
+      side: 'right',
+      align: 'start',
+    },
+  },
+  {
+    element: '#tour-plan-chip',
+    popover: {
+      title: 'Plan Status',
+      description:
+        'Your sidebar plan chip and billing screen now update live when your plan changes.',
       side: 'top',
       align: 'center',
     },
@@ -57,53 +112,81 @@ const STEPS = [
 ]
 
 export const useAppTour = () => {
-  const hasSeen = () => {
+  const hasSeen = (key = TOUR_KEY) => {
     if (!process.client) return true
-    return !!localStorage.getItem(TOUR_KEY)
+    return !!localStorage.getItem(key)
   }
 
-  const markSeen = () => {
-    if (process.client) localStorage.setItem(TOUR_KEY, '1')
+  const markSeen = (key = TOUR_KEY) => {
+    if (process.client) localStorage.setItem(key, '1')
+    activeTour = null
   }
 
-  const resetTour = () => {
-    if (process.client) localStorage.removeItem(TOUR_KEY)
+  const resetTour = (key = TOUR_KEY) => {
+    if (process.client) localStorage.removeItem(key)
   }
 
-  const startTour = () => {
-    // Filter to steps whose target element actually exists in the DOM
-    const activeSteps = STEPS.filter((s) => {
+  const destroyActiveTour = () => {
+    if (!activeTour) return
+    try {
+      activeTour.destroy()
+    } catch {}
+  }
+
+  const buildTour = (steps, storageKey) => {
+    const filteredSteps = steps.filter((step) => {
       try {
-        return !!document.querySelector(s.element)
+        return !!document.querySelector(step.element)
       } catch {
         return false
       }
     })
 
-    if (!activeSteps.length) return
+    if (!filteredSteps.length) return
 
-    const driverObj = driver({
+    destroyActiveTour()
+
+    const activeSteps = filteredSteps.map((step, index) => {
+      const isLastStep = index === filteredSteps.length - 1
+      if (!isLastStep) return step
+      return {
+        ...step,
+        popover: {
+          ...(step.popover || {}),
+          nextBtnText: 'Done',
+          onNextClick: destroyActiveTour,
+          onCloseClick: destroyActiveTour,
+        },
+      }
+    })
+
+    activeTour = driver({
       showProgress: true,
       progressText: '{{current}} of {{total}}',
-      nextBtnText: 'Next →',
-      prevBtnText: '← Back',
+      nextBtnText: 'Next ->',
+      prevBtnText: '<- Back',
       doneBtnText: 'Done',
       popoverClass: 'flossly-tour-popover',
       steps: activeSteps,
-      onDestroyed: markSeen,
-      onDestroyStarted: markSeen,
+      onDestroyed: () => markSeen(storageKey),
     })
 
-    driverObj.drive()
+    activeTour.drive()
+  }
+
+  const startTour = () => {
+    buildTour(STEPS, TOUR_KEY)
+  }
+
+  const startCrmUpgradeTour = () => {
+    buildTour(CRM_UPGRADE_STEPS, CRM_UPGRADE_TOUR_KEY)
   }
 
   const maybeStartTour = () => {
     if (hasSeen()) return
-    // Don't conflict with the Day-0 welcome/video popup or any pending in-app messages.
-    // If those are active this session, skip — the tour will show on the next login
-    // once the onboarding welcome flow is complete.
-    const authStore = useAuthStore()
-    const onboarding = authStore.loggedUser?.onboarding
+    // useUser() reflects local updates from updateLocalOnboarding(); authStore.loggedUser may be stale
+    const { user } = useUser()
+    const onboarding = user.value?.onboarding
     if (
       onboarding?.showWelcomePopup ||
       onboarding?.showWelcomeVideoPopup ||
@@ -111,9 +194,8 @@ export const useAppTour = () => {
     ) {
       return
     }
-    // Wait for sidebar elements to finish rendering
     setTimeout(startTour, 700)
   }
 
-  return { startTour, maybeStartTour, resetTour, hasSeen }
+  return { startTour, startCrmUpgradeTour, maybeStartTour, resetTour, hasSeen }
 }

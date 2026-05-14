@@ -854,6 +854,16 @@ export const bulkUploadLeads = async (event) => {
       })
     }
 
+    if (!admin) {
+      const { current, max } = await requireUsageAllowed(event, 'leads')
+      if (max !== Infinity && current + validLeads.length > max) {
+        return error(
+          403,
+          `Lead limit reached. Your current plan allows ${max} leads and you already have ${current}.`
+        )
+      }
+    }
+
     const transaction = await DB.transaction()
     try {
       const created = await CrmLead.bulkCreate(
@@ -1458,6 +1468,9 @@ export const uploadLeadWhatsAppMedia = async (event) => {
     return error(500, e.message || 'Failed to upload media')
   }
 }
+
+// Alias so legacy route 'whatsappUploadAttachment' still works
+export const uploadWhatsAppAttachment = uploadLeadWhatsAppMedia
 
 export const getLeadPriceAttachmentRecent = async (event) => {
   try {

@@ -31,6 +31,10 @@ export const useOrgStore = defineStore("orgStore", {
           .updateOrganisation(data)
           .then((res) => {
             this.isLoading = false
+            // Update the store with the response data from backend
+            if (res.code === 0 && res.data) {
+              this.organisation = res.data;
+            }
             resolve(res);
           })
           .catch((err) => {
@@ -53,7 +57,52 @@ export const useOrgStore = defineStore("orgStore", {
             reject(err);
           });
       });
-     },
+    },
+    addTreatment(payload) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true
+        orgService
+          .addTreatment(payload)
+          .then((res) => {
+            this.isLoading = false
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false
+            reject(err);
+          });
+      });
+    },
+    updateTreatment(payload) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true
+        orgService
+          .updateTreatment(payload)
+          .then((res) => {
+            this.isLoading = false
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false
+            reject(err);
+          });
+      });
+    },
+    deleteTreatment(id) {
+      return new Promise((resolve, reject) => {
+        this.isLoading = true
+        orgService
+          .deleteTreatment(id)
+          .then((res) => {
+            this.isLoading = false
+            resolve(res);
+          })
+          .catch((err) => {
+            this.isLoading = false
+            reject(err);
+          });
+      });
+    },
     getTaskStatuses() {
       return new Promise((resolve, reject) => {
         this.isLoading = true
