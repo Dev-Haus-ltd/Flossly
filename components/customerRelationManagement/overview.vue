@@ -215,8 +215,8 @@
               </v-btn>
             </template> 
             -->
-            <!-- GOOGLE placed temperory above implementation is functional -->
-            <template v-else-if="card.key === 'google'">
+            <!-- Google card actions hidden -->
+            <!-- <template v-else-if="card.key === 'google'">
               <v-btn
                 color="primary"
                 variant="flat"
@@ -226,7 +226,7 @@
               >
                 Coming Soon
               </v-btn>
-            </template>
+            </template> -->
             <template v-else>
               <v-btn
                 color="primary"
@@ -284,6 +284,7 @@
           :error="metaChartError"
         />
 
+        <!-- Google Search Console chart hidden
         <CrmCharts
           :chartType="'line'"
           :chartTitle="gscChartConfig.chartTitle"
@@ -297,6 +298,7 @@
           :showFallback="!gscChartLoading && (!isGoogleConnected || gscChartConfig.chartData.datasets.length === 0)"
           :error="gscChartError"
         />
+        -->
       </div>
     </div>
 
@@ -685,16 +687,17 @@ const integrationCards = computed(() => ([
     icon: whatsappLogo,
     iconClass: 'whatsapp',
   },
-  {
-    key: 'google',
-    title: 'Google',
-    subtitlePrimary: googleStatus.email || userEmail.value || '-',
-    subtitleSecondary: currentOrgName.value || '-',
-    statusLabel: googleStatusLabel.value,
-    statusColor: googleStatusColor.value,
-    icon: googleLogo,
-    iconClass: 'google',
-  },
+  // Google card hidden
+  // {
+  //   key: 'google',
+  //   title: 'Google',
+  //   subtitlePrimary: googleStatus.email || userEmail.value || '-',
+  //   subtitleSecondary: currentOrgName.value || '-',
+  //   statusLabel: googleStatusLabel.value,
+  //   statusColor: googleStatusColor.value,
+  //   icon: googleLogo,
+  //   iconClass: 'google',
+  // },
   {
     key: 'chatbot',
     title: 'Chatbot',

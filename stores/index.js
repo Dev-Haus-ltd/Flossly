@@ -345,8 +345,8 @@ export const useMainStore = defineStore("mainStore", {
         });
       }
 
-      // Add Settings menu item for roleId 16 and roleId 1
-      if (userRoleId === 16 || userRoleId === 1) {
+      // Add Settings menu item for roleId 16, 1, and 8 (Lite org creator)
+      if (userRoleId === 16 || userRoleId === 1 || userRoleId === 8) {
         menuItems.push({
           title: "Settings",
           imgPath: settingsIcon,
@@ -449,14 +449,14 @@ export const useMainStore = defineStore("mainStore", {
         // },
       ];
 
-      // Add Settings menu item for roleId 16 and roleId 1
-      if (userRoleId === 16 || userRoleId === 1) {
+      // Add Settings menu item for roleId 16, 1, and 8 (Lite org creator)
+      if (userRoleId === 16 || userRoleId === 1 || userRoleId === 8) {
         menuItems.push({
           title: "Settings",
           imgPath: settingsIcon,
           value: "settings",
           to: "/settings",
-          featureKey: "dashboard", // Use dashboard feature key so it's always visible
+          featureKey: "dashboard",
         });
       }
 
