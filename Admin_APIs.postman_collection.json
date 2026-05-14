@@ -2110,6 +2110,40 @@
             "description": "Download CSV template for bulk task upload. Template does NOT include user column."
           },
           "response": []
+        },
+        {
+          "name": "Bulk Upload Tasks for Org (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "CSV file with columns: title, description, categoryId (or categoryName), roleId, defaultFrequency. categoryId must belong to the target org. If categoryName is given instead, a category will be auto-created if it doesn't exist."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/tasks/org/1/bulk-upload",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tasks",
+                "org",
+                "1",
+                "bulk-upload"
+              ]
+            },
+            "description": "Upload org-specific task presets (isSystemTask: false) linked to a specific organisation. Accepts categoryId (must belong to the org) or categoryName (auto-creates category if missing). Replace `1` in the URL with the target organisationId."
+          },
+          "response": []
         }
       ],
       "description": "Manage global task pool and bulk task uploads"
@@ -2315,7 +2349,7 @@
           "response": []
         },
         {
-          "name": "Bulk Upload Checklists",
+          "name": "Bulk Upload Checklists (System Tasks)",
           "request": {
             "method": "POST",
             "header": [
@@ -2331,8 +2365,8 @@
                 {
                   "key": "file",
                   "type": "file",
-                  "src": "public/samples/checklist-sample.csv",
-                  "description": "CSV file with format: taskTitle,itemTitle,showRadio,defaultComment"
+                  "src": [],
+                  "description": "CSV file with columns: taskTitle, question, category, fieldOneTitle, fieldOneValue, fieldTwoTitle, fieldTwoValue, showRadio, showDate, showTime"
                 }
               ]
             },
@@ -2349,12 +2383,12 @@
                 "bulk-upload"
               ]
             },
-            "description": "Upload multiple checklist items from CSV file. Automatically creates tasks if they don't exist (as system tasks). Groups checklist items by taskTitle. Use downloadChecklistTemplate to get sample CSV format."
+            "description": "Upload checklist items for global system tasks (isSystemTask: true). Looks up tasks by taskTitle (case-insensitive) and auto-creates the task as a system task if not found. Use GET /api/admin/tasks/checklists/template to download the CSV template."
           },
           "response": []
         },
         {
-          "name": "Download Checklist Template",
+          "name": "Download Checklist Template (System Tasks)",
           "request": {
             "method": "GET",
             "header": [
@@ -2377,7 +2411,48 @@
                 "template"
               ]
             },
-            "description": "Download CSV template for bulk checklist upload with sample data."
+            "description": "Download CSV template for bulk checklist upload (system tasks). Columns: taskTitle, question, category, fieldOneTitle, fieldOneValue, fieldTwoTitle, fieldTwoValue, showRadio, showDate, showTime."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Checklists for Org",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "CSV file with columns: taskId (or taskTitle), question, category, fieldOneTitle, fieldOneValue, fieldTwoTitle, fieldTwoValue, showRadio, showDate, showTime. taskId must be an org-specific task belonging to the org. taskTitle does a case-insensitive lookup."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/tasks/org/1/checklists/bulk-upload",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tasks",
+                "org",
+                "1",
+                "checklists",
+                "bulk-upload"
+              ]
+            },
+            "description": "Upload checklist items for org-specific task pool tasks (isSystemTask: false). Validates that all referenced tasks belong to the given organisation. Accepts taskId (numeric) or taskTitle (case-insensitive lookup). Partial success — valid rows are inserted even if some rows fail. Replace `1` in the URL with the target organisationId."
           },
           "response": []
         }
