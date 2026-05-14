@@ -7,7 +7,9 @@
 
     <!-- Left: Floating glass login card -->
     <div class="login-card-col d-flex align-center justify-center">
-      <div class="login-card pa-10">
+      <div class="d-flex flex-column align-center" style="width: 100%; max-width: 480px;">
+        <img src="/white-logo.svg" alt="FlosslyOS" class="page-logo mb-6" />
+      <div class="login-card pa-10" style="width: 100%">
         <h2 class="welcome-heading text-center mb-2">Welcome Back!</h2>
         <p class="welcome-sub text-center mb-6">Let's get signed in securely.</p>
 
@@ -108,6 +110,7 @@
             </v-btn>
           </div>
         </v-form>
+      </div>
       </div>
     </div>
 
@@ -360,6 +363,12 @@ const resendVerificationEmail = async () => {
   line-height: 1.5;
   color: #fff;
   max-width: 560px;
+}
+
+/* ── Page logo above card ───────────────────────────────────── */
+.page-logo {
+  height: 32px;
+  width: auto;
 }
 
 /* ── Typography ─────────────────────────────────────────────── */

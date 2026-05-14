@@ -5,7 +5,9 @@
 
     <!-- Left: Floating glass signup card -->
     <div class="signup-card-col d-flex align-center justify-center">
-      <div class="signup-card pa-10">
+      <div class="d-flex flex-column align-center" style="width: 100%; max-width: 480px;">
+        <img src="/white-logo.svg" alt="FlosslyOS" class="page-logo mb-6" />
+      <div class="signup-card pa-10" style="width: 100%">
         <template v-if="!isSignedUp">
           <h2 class="welcome-heading text-center mb-2">Sign Up</h2>
           <p class="welcome-sub text-center mb-6">Get started with Flossly to streamline your clinic in minutes.</p>
@@ -148,6 +150,7 @@
           </p>
           <v-btn text flat color="primary" @click="goToLogin">Sign In</v-btn>
         </template>
+      </div>
       </div>
     </div>
 
@@ -374,6 +377,11 @@ const goToLogin = () => {
   line-height: 1.5;
   color: #fff;
   max-width: 560px;
+}
+
+.page-logo {
+  height: 32px;
+  width: auto;
 }
 
 .welcome-heading {
