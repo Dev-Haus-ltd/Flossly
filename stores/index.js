@@ -31,14 +31,14 @@ export const resolveUserLicenseType = (user) => {
 
 // Maps any legacy or current license type to the menu feature set it should see
 const LICENSE_FEATURES = {
-  Lite:   new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta"]),
-  CRM:    new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation"]),
+  Lite:   new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta", "diary"]),
+  CRM:    new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "diary"]),
   Pro:    new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "googleAds", "diary", "patientBooking"]),
   // Legacy — mapped to their resolved tier's feature set
   System: new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "googleAds", "diary", "patientBooking"]),
-  Trial:  new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta"]),
-  Drift:  new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta"]),
-  Glide:  new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation"]),
+  Trial:  new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta", "diary"]),
+  Drift:  new Set(["dashboard", "tasks", "docs", "team", "crm", "crm_leads", "crm_meta", "diary"]),
+  Glide:  new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "diary"]),
   Soar:   new Set(["dashboard", "tasks", "taskPool", "docs", "team", "crm", "crm_leads", "crm_meta", "automation", "googleAds", "diary", "patientBooking"]),
 };
 
@@ -268,7 +268,7 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossy Diary",
           imgPath: tasksIcon,
           value: "flosslyDiary",
-          to: "/diary",
+          to: "/diary/calendar",
           featureKey: "diary",
           children: [
             {

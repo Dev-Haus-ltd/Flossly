@@ -184,8 +184,9 @@ export const useAppTour = () => {
 
   const maybeStartTour = () => {
     if (hasSeen()) return
-    const authStore = useAuthStore()
-    const onboarding = authStore.loggedUser?.onboarding
+    // useUser() reflects local updates from updateLocalOnboarding(); authStore.loggedUser may be stale
+    const { user } = useUser()
+    const onboarding = user.value?.onboarding
     if (
       onboarding?.showWelcomePopup ||
       onboarding?.showWelcomeVideoPopup ||

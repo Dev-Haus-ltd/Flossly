@@ -15,7 +15,7 @@
       >
         {{ folder && folder.name ? folder.name : " All Files" }}
       </h3>
-      <div class="d-flex align-center gap-3">
+      <div class="d-flex align-center flex-wrap gap-2">
         <v-text-field
           v-model="search"
           density="compact"
@@ -28,7 +28,7 @@
         />
         <v-btn
           v-if="!hideAddFileButton"
-          class="py-2 ml-2 file-btn"
+          class="py-2 file-btn"
           color="primary"
           flat
           @click="$emit('addFileHandle')"
@@ -40,13 +40,14 @@
     </div>
 
     <!-- Table -->
+    <div class="table-scroll-wrapper">
     <v-table class="custom-table" density="comfortable">
       <thead>
         <tr>
-          <th style="width: 600px">Name of Document</th>
-          <th v-if="!folder">Folder</th>
-          <th>Modified Date</th>
-          <th>Actions</th>
+          <th class="col-name">Name of Document</th>
+          <th v-if="!folder" class="col-folder">Folder</th>
+          <th class="col-date">Modified Date</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -158,6 +159,7 @@
         </tr>
       </tbody>
     </v-table>
+    </div>
   </div>
 </template>
 
@@ -249,11 +251,22 @@ const copyLink = async (file) => {
 </script>
 
 <style scoped>
+.table-scroll-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 :deep(.v-table__wrapper table) {
   width: 100% !important;
+  min-width: 600px;
   border-collapse: collapse;
-  table-layout: fixed; /* Ensures columns align */
+  table-layout: auto;
 }
+
+.col-name { min-width: 180px; }
+.col-folder { min-width: 100px; }
+.col-date { min-width: 120px; white-space: nowrap; }
+.col-actions { min-width: 160px; }
 
 .custom-table th,
 .custom-table td {
