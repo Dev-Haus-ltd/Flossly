@@ -1,149 +1,118 @@
 <template>
-  <div class="bg-white parent">
-   
-      <v-row>
-        <!-- Left banner -->
-        <v-col 
-          cols="12"
-          md="6" 
-          class="d-flex align-center justify-center px-12"
-        >
-          <div style="width: 100%; max-width: 500px">
-            <h2 class="text-center login-heading">Forgot Password?</h2>
-            <h2
-              class="mb-6 text-center login-sub-heading"
-              style="color: #8b8b8b"
-            >
-              {{
-                step === 1
-                  ? "Enter your email to receive a reset code."
-                  : "Enter the OTP and set a new password."
-              }}
-            </h2>
+  <div class="forgot-page">
+    <div class="gradient-bg" />
+    <img src="/grids.svg" class="grid-overlay" aria-hidden="true" />
 
-            <!-- Step 1: Email -->
-            <v-form v-if="step === 1" ref="form" @submit.prevent="submitEmail">
-              <v-label class="lbl">Email</v-label>
-              <v-text-field
-                v-model="email"
-                label="Email"
-                type="email"
-                :rules="emailRules"
-                density="comfortable"
-                variant="solo"
-                single-line
-                required
-                class="mb-2 input-bordered"
-                flat
-              />
-              <v-btn
-                type="submit"
-                color="primary"
-                block
-                class="mt-2 rounded-lg"
-                height="48"
-                flat
-              >
-                Send Reset Code
-              </v-btn>
-            </v-form>
+    <!-- Left: Floating glass card -->
+    <div class="forgot-card-col d-flex align-center justify-center">
+      <div class="d-flex flex-column align-center" style="width: 100%; max-width: 480px;">
+        <img src="/white-logo.svg" alt="FlosslyOS" class="page-logo mb-6" />
+        <div class="forgot-card pa-10" style="width: 100%">
+        <h2 class="welcome-heading text-center mb-2">Forgot Password?</h2>
+        <p class="welcome-sub text-center mb-6">
+          {{
+            step === 1
+              ? "Enter your email to receive a reset code."
+              : "Enter the OTP and set a new password."
+          }}
+        </p>
 
-            <!-- Step 2: Reset -->
-            <v-form v-else ref="form" @submit.prevent="submitReset">
-              <v-label class="lbl">New Password</v-label>
-              <v-text-field
-                v-model="newPassword"
-                label="New Password"
-                :type="showPassword ? 'text' : 'password'"
-                :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
-                @click:append-inner="showPassword = !showPassword"
-                :rules="passwordRules"
-                required
-                variant="solo"
-                class="input-bordered"
-                single-line
-                density="comfortable"
-                flat
-              />
+        <!-- Step 1: Email -->
+        <v-form v-if="step === 1" ref="form" @submit.prevent="submitEmail">
+          <label class="lbl">Email</label>
+          <v-text-field
+            v-model="email"
+            type="email"
+            placeholder="you@example.com"
+            :rules="emailRules"
+            density="comfortable"
+            variant="solo"
+            single-line
+            required
+            class="mb-3 input-bordered"
+            flat
+          />
 
-              <v-label>Enter OTP</v-label>
-              <v-otp-input
-                v-model="otp"
-                length="6"
-                type="number"
-                class="mb-4 otp-input"
-              />
-
-              <v-btn
-                type="submit"
-                color="primary"
-                block
-                variant="flat"
-                class="mt-5 rounded-lg"
-                height="48"
-                :disabled="otp.length < 6"
-              >
-                Reset Password
-              </v-btn>
-            </v-form>
-
-            <div class="mt-5 text-body-2 text-center" style="height: 48px">
-              <v-btn variant="text" color="primary" @click="goToLogin">
-                Back to Login
-              </v-btn>
-            </div>
-          </div>
-        </v-col>
-          <!-- Right side form -->
-          <v-col v-if="mdAndUp" cols="12" md="6" class="d-flex align-center justify-center pa-0">
-        <div class="px-4 w-100">
-          <div
-            class="background-image relative d-flex align-center justify-center"
+          <v-btn
+            type="submit"
+            color="primary"
+            block
+            class="rounded-lg mb-4"
+            height="48"
+            flat
           >
-            <!-- Centered content box -->
-            <div class="overlay-box pa-8">
-              <!-- Logo -->
-              <img
-                src="@/assets/logos/loginLogos/white-logo.svg"
-                alt="My Logo"
-                class="mb-6"
-                style="max-width: 180px"
-              />
+            Send Reset Code
+          </v-btn>
+        </v-form>
 
-              <!-- Heading -->
-              <h1
-                style="
-                  font-family: 'Garnett';
-                  font-weight: 600;
-                  font-size: 40px;
-                  color: #fff;
-                  margin-bottom: 16px;
-                  text-align: left;
-                "
-              >
-                A  Reset your password to get back on track.
-              </h1>
+        <!-- Step 2: Reset -->
+        <v-form v-else ref="form" @submit.prevent="submitReset">
+          <label class="lbl">New Password</label>
+          <v-text-field
+            v-model="newPassword"
+            :type="showPassword ? 'text' : 'password'"
+            placeholder="*************"
+            :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
+            @click:append-inner="showPassword = !showPassword"
+            :rules="passwordRules"
+            required
+            variant="solo"
+            class="mb-3 input-bordered"
+            single-line
+            density="comfortable"
+            flat
+          />
 
-             
-            </div>
-          </div>
+          <label class="lbl">Enter OTP</label>
+          <v-otp-input
+            v-model="otp"
+            length="6"
+            type="number"
+            class="mb-4 otp-input"
+          />
+
+          <v-btn
+            type="submit"
+            color="primary"
+            block
+            variant="flat"
+            class="rounded-lg"
+            height="48"
+            :disabled="otp.length < 6"
+          >
+            Reset Password
+          </v-btn>
+        </v-form>
+
+        <div class="mt-4 text-body-2 text-center">
+          <v-btn variant="text" color="#0061FB" @click="goToLogin">
+            Back to Login
+          </v-btn>
         </div>
-      </v-col>
+      </div>
+    </div>
 
-      
-      
-      </v-row>
-   
+    <!-- Right: Illustration + tagline (hidden on mobile) -->
+    <div v-if="!smAndDown" class="right-panel d-flex flex-column align-center justify-center">
+      <img
+        src="/forgot.png"
+        class="right-illustration"
+        alt=""
+      />
+      <div class="right-text text-center px-10 mt-6">
+        <h1 class="right-heading text-white mb-4">Reset your password to get back on track.</h1>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { useRouter } from "vue-router";
-import { useDisplay } from 'vuetify';
+import { useDisplay } from "vuetify";
 
-const { mdAndUp } = useDisplay();
+const { smAndDown } = useDisplay();
 const authStore = useAuthStore();
-const store = useMainStore(); // ✅ main snackbar store
+const store = useMainStore();
 const router = useRouter();
 const step = ref(1);
 
@@ -151,7 +120,6 @@ const email = ref("");
 const otp = ref("");
 const newPassword = ref("");
 const showPassword = ref(false);
-
 const form = ref(null);
 
 const emailRules = [
@@ -164,7 +132,6 @@ const passwordRules = [
   (v) => v.length >= 6 || "Password must be at least 6 characters",
 ];
 
-// Step 1: request reset
 const submitEmail = async () => {
   const { valid } = await form.value.validate();
   if (!valid) return;
@@ -173,36 +140,21 @@ const submitEmail = async () => {
     const res = await authStore.requestReset({ email: email.value.trim() });
     if (res.code === 0) {
       step.value = 2;
-      store.setSnackbar({
-        title: res.message || "Reset code sent to your email",
-        type: "success",
-      });
+      store.setSnackbar({ title: res.message || "Reset code sent to your email", type: "success" });
     } else {
-      store.setSnackbar({
-        title: res.message || "Something went wrong",
-        type: "error",
-      });
+      store.setSnackbar({ title: res.message || "Something went wrong", type: "error" });
     }
   } catch (err) {
-    console.log('Forgot password error:', err); // Debug log
-    const errorMessage = err.data?.message || err.message || 'An error occurred';
-    store.setSnackbar({
-      title: errorMessage,
-      type: "error",
-    });
+    store.setSnackbar({ title: err.data?.message || err.message || "An error occurred", type: "error" });
   }
 };
 
-// Step 2: reset password
 const submitReset = async () => {
   const { valid } = await form.value.validate();
   if (!valid) return;
 
   if (otp.value.length < 6) {
-    store.setSnackbar({
-      title: "Please enter the 6-digit OTP",
-      type: "error",
-    });
+    store.setSnackbar({ title: "Please enter the 6-digit OTP", type: "error" });
     return;
   }
 
@@ -213,33 +165,22 @@ const submitReset = async () => {
       newPassword: newPassword.value,
     });
     if (res.code === 0) {
-      store.setSnackbar({
-        title: "Password reset successfully!",
-        type: "success",
-      });
+      store.setSnackbar({ title: "Password reset successfully!", type: "success" });
       router.push("/login");
     } else {
-      store.setSnackbar({
-        title: res.message || "Something went wrong",
-        type: "error",
-      });
+      store.setSnackbar({ title: res.message || "Something went wrong", type: "error" });
     }
   } catch (err) {
-    console.log('Forgot password error:', err); // Debug log
-    const errorMessage = err.data?.message || err.message || 'An error occurred';
-    store.setSnackbar({
-      title: errorMessage,
-      type: "error",
-    });
+    store.setSnackbar({ title: err.data?.message || err.message || "An error occurred", type: "error" });
   }
 };
 
 onMounted(() => {
-  if (localStorage.getItem('route')) {
-    step.value = 2
-    localStorage.removeItem('route')
+  if (localStorage.getItem("route")) {
+    step.value = 2;
+    localStorage.removeItem("route");
   }
-})
+});
 
 const goToLogin = () => {
   router.push("/login");
@@ -247,58 +188,141 @@ const goToLogin = () => {
 </script>
 
 <style scoped>
-.parent{
-  height: 100vh;
+.forgot-page {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  overflow: hidden;
 }
-.background-image {
-  background-image: url("/assets/images/loginBanner.svg");
-  background-size: cover;
-  width: 100%;
-  height: 99vh;
-  border-radius: 12px;
-}
-.login-banner-heading {
-  color: #fff;
-  
-  font-weight: 600;
-  font-size: 30px;
-}
-.login-heading {
-  font-family: "Garnett";
 
-  font-weight: 600;
-  font-size: 32px;
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.6;
 }
-.login-sub-heading {
+
+.gradient-bg {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(
+    157.223deg,
+    rgb(255, 169, 119) 0.51%,
+    rgb(255, 133, 218) 39.8%,
+    rgb(125, 119, 255) 77.18%,
+    rgb(104, 236, 230) 116.07%
+  );
+  z-index: 0;
+}
+
+.forgot-card-col {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 50%;
+  max-width: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+@media (max-width: 959px) {
+  .forgot-card-col {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+}
+
+.forgot-card {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 15px;
+  box-shadow: 0px 40px 40px 0px rgba(0, 0, 0, 0.2);
+}
+
+.right-panel {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 32px;
+}
+
+.right-illustration {
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+  object-fit: contain;
+}
+
+.right-heading {
+  font-family: "Inter", sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1.3;
+  color: #fff;
+}
+
+.welcome-heading {
+  font-family: "Garnett", sans-serif;
+  font-weight: 600;
+  font-size: 40px;
+  color: #1e1e1e;
+  line-height: 1.3;
+}
+
+.welcome-sub {
+  font-family: "Inter", sans-serif;
   font-weight: 400;
   font-size: 16px;
+  color: #1e1e1e;
+  line-height: 1.3;
 }
-.overlay-box {
-  border: 1px solid #fff;
-  background-color: rgba(255, 255, 255, 0.1); /* translucent white */
-  backdrop-filter: blur(10px); /* blur effect */
-  -webkit-backdrop-filter: blur(10px); /* Safari support */
-  max-width: 530px;
-  width: 100%;
-  text-align: left;
-  border-radius: 15px;
+
+.lbl {
+  font-family: "Inter", sans-serif;
+  font-weight: 400;
+  font-size: 16px;
+  color: #1e1e1e;
+  display: block;
+  margin-bottom: 6px;
 }
+
 .input-bordered :deep(.v-field) {
   border: 1px solid #dfdfdf !important;
   border-radius: 8px !important;
   background-color: white !important;
-  min-height: 40px;
+  min-height: 44px;
   font-size: 14px;
-  
 }
-.lbl {
-  font-family: "Inter";
-  font-weight: 400;
-  font-style: "Regular";
-  font-size: 16px;
-  color: #1e1e1e;
+
+.otp-input :deep(.v-otp-input__field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+}
+
+.page-logo {
+  height: 32px;
+  width: auto;
+}
+
+@media (max-width: 960px) {
+  .forgot-page {
+    align-items: flex-start;
+  }
 }
 </style>
