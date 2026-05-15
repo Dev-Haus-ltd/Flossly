@@ -6,16 +6,16 @@
         <span class="cns-pill">{{ itemTypeLabel }}</span>
         <span v-if="statusText" class="cns-status">{{ statusText }}</span>
       </div>
-      <button class="cns-close" title="Close note helper" @click="$emit('close')">
+      <button v-if="!isChartEmpty" class="cns-close" title="Close note helper" @click="$emit('close')">
         <v-icon size="18">mdi-close</v-icon>
       </button>
     </div>
 
-    <div v-if="!item" class="cns-empty">
+    <div v-if="!item && !isChartEmpty" class="cns-empty">
       Select a chart item to edit its clinical note.
     </div>
 
-    <template v-else>
+    <template v-if="item || isChartEmpty">
       <div class="cns-banner">
         <div class="cns-banner__title">
           <v-icon size="15" class="cns-banner__icon">mdi-robot-outline</v-icon>
@@ -100,6 +100,19 @@
         </transition>
         <div v-if="statusText && !noteApplied" class="cns-footer__save">{{ statusText }}</div>
         <v-btn
+          v-if="isChartEmpty"
+          class="cns-generate"
+          color="primary"
+          block
+          :loading="aiCharting"
+          :disabled="!draft.rawNote.trim()"
+          @click="generateCharting"
+        >
+          Generate Charting
+        </v-btn>
+
+        <v-btn
+          v-else
           class="cns-generate"
           color="primary"
           block
@@ -117,6 +130,8 @@
 <script setup>
 import { plainTextToHtml } from '@/lib/editorFormatter'
 import { usePatientChartingStore } from '~/stores/patientCharting'
+import { useMainStore } from '~/stores'
+import patientChartingService from '~/services/patientChartingService'
 
 const props = defineProps({
   item: { type: Object, default: null },
@@ -134,6 +149,7 @@ const warnings = ref([])
 const noteApplied = ref(false)
 const saveState = ref('idle')
 const lastSavedAt = ref(null)
+const aiCharting = ref(false)
 const draft = reactive({
   id: null,
   type: 'diagnosis',
@@ -154,7 +170,10 @@ const displayRawNote = computed(() =>
     ? `${draft.rawNote} ${interimText.value}`.trim()
     : draft.rawNote
 )
-const sidebarTitle = computed(() => props.item?.treatmentName || props.item?.conditionLabel || props.item?.condition || 'Clinical note')
+const sidebarTitle = computed(() => {
+  if (isChartEmpty.value) return 'AI Charting'
+  return props.item?.treatmentName || props.item?.conditionLabel || props.item?.condition || 'Clinical note'
+})
 const itemTypeLabel = computed(() => draft.type === 'treatment_plan' ? 'Treatment Plan' : 'Diagnosis')
 const templateOptions = computed(() => {
   const grouped = [
@@ -176,6 +195,15 @@ const statusText = computed(() => {
     return `Applied to note ${formatRelative(lastSavedAt.value)}`
   }
   return null
+})
+
+const isChartEmpty = computed(() => {
+  const chart = chartingStore.chart
+  return Object.values(chart).every((tooth) => {
+    if (tooth.missing || tooth.unerupted || tooth.implant) return false
+    if (tooth.toothCondition) return false
+    return Object.values(tooth.surfaces || {}).every((s) => s.condition === null)
+  })
 })
 
 async function loadTemplates() {
@@ -266,6 +294,34 @@ async function generateSummary() {
   }
 }
 
+async function generateCharting() {
+  if (!draft.rawNote.trim()) return
+  aiCharting.value = true
+  try {
+    const res = await patientChartingService.aiChart(draft.rawNote, props.patientId, chartingStore.teethType)
+    if (res?.code === 0) {
+      const { actions } = res.data
+      if (!actions || !actions.length) {
+        useMainStore().setSnackbar({ message: 'No findings were charted — please try again with more detail.', color: 'warning' })
+        return
+      }
+      chartingStore.applyConditionBatch(actions)
+      const n = actions.length
+      useMainStore().setSnackbar({
+        message: `AI charted ${n} finding${n !== 1 ? 's' : ''} across ${new Set(actions.map(a => a.fdi)).size} teeth`,
+        color: 'success',
+      })
+      draft.rawNote = ''
+    } else {
+      useMainStore().setSnackbar({ message: res?.message || 'AI charting failed. Please try again.', color: 'error' })
+    }
+  } catch {
+    useMainStore().setSnackbar({ message: 'AI charting failed. Please try again.', color: 'error' })
+  } finally {
+    aiCharting.value = false
+  }
+}
+
 function toggleTranscribe() {
   if (!SpeechRecognition) return
   if (isTranscribing.value) {
@@ -310,6 +366,10 @@ function formatRelative(date) {
 }
 
 watch(() => props.item, syncFromItem, { immediate: true })
+
+watch(isChartEmpty, (empty) => {
+  if (empty && !templates.value.length) loadTemplates()
+}, { immediate: true })
 
 onBeforeUnmount(() => {
   recognition?.stop()

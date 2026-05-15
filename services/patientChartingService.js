@@ -85,4 +85,8 @@ export default {
   uploadChartImage(formData) {
     return PostFormData('/diary/chartImageUpload', formData)
   },
+
+  aiChart(transcript, patientId, teethType) {
+    return Post('/charting/aiChart', { transcript, patientId, teethType })
+  },
 }
