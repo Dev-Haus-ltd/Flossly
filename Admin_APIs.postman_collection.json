@@ -283,7 +283,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/orgs?search=&page=1&limit=20",
+              "raw": "{{baseUrl}}/api/admin/orgs?search=&page=1&limit=20&sortBy=name&sortOrder=asc&createdAtFrom=&createdAtTo=",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -295,19 +295,42 @@
               "query": [
                 {
                   "key": "search",
-                  "value": ""
+                  "value": "",
+                  "description": "Filter by org name (case-insensitive partial match)"
                 },
                 {
                   "key": "page",
-                  "value": "1"
+                  "value": "1",
+                  "description": "Page number (default: 1)"
                 },
                 {
                   "key": "limit",
-                  "value": "20"
+                  "value": "20",
+                  "description": "Results per page (default: 20)"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "name",
+                  "description": "Field to sort by. Allowed values: name, createdAt, status, licenseType (default: name)"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc",
+                  "description": "Sort direction. Allowed values: asc, desc (default: asc)"
+                },
+                {
+                  "key": "createdAtFrom",
+                  "value": "",
+                  "description": "Return orgs created on or after this date (ISO 8601, e.g. 2026-01-01T00:00:00.000Z)"
+                },
+                {
+                  "key": "createdAtTo",
+                  "value": "",
+                  "description": "Return orgs created on or before this date (ISO 8601, e.g. 2026-05-18T23:59:59.999Z)"
                 }
               ]
             },
-            "description": "Search organisations by name with pagination"
+            "description": "Search and filter organisations. Supports name search, date range filtering (createdAtFrom / createdAtTo), and sorting by name, createdAt, status, or licenseType. Role 17 sees all orgs; other admin roles see only their own org."
           },
           "response": []
         },

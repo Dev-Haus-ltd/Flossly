@@ -156,9 +156,13 @@ export const searchOrganisations = async (event) => {
 
   try {
     const query = getQuery(event);
-    const { search = '', page = 1, limit = 20 } = query;
+    const { search = '', page = 1, limit = 20, sortBy = 'name', sortOrder = 'asc', createdAtFrom, createdAtTo } = query;
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const ALLOWED_SORT_FIELDS = ['name', 'createdAt', 'status', 'licenseType'];
+    const sortField = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'name';
+    const sortDir = sortOrder === 'desc' ? 'DESC' : 'ASC';
 
     const whereClause = {};
 
@@ -178,10 +182,16 @@ export const searchOrganisations = async (event) => {
       };
     }
 
+    if (createdAtFrom || createdAtTo) {
+      whereClause.createdAt = {};
+      if (createdAtFrom) whereClause.createdAt[Op.gte] = new Date(createdAtFrom);
+      if (createdAtTo) whereClause.createdAt[Op.lte] = new Date(createdAtTo);
+    }
+
     const { count, rows: organisations } = await Organisation.findAndCountAll({
       where: whereClause,
       attributes: ['id', 'name', 'contact', 'address', 'postalCode', 'type', 'status', 'licenseType', 'createdAt'],
-      order: [['name', 'ASC']],
+      order: [[sortField, sortDir]],
       limit: parseInt(limit),
       offset,
     });
