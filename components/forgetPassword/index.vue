@@ -89,6 +89,7 @@
             Back to Login
           </v-btn>
         </div>
+        </div>
       </div>
     </div>
 
