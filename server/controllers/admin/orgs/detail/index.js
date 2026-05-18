@@ -303,25 +303,17 @@ export const updateOrgLicense = async (event) => {
   }
 
   try {
-    const organisation = await Organisation.findByPk(organisationId, {
-      attributes: ['id', 'name', 'managerId', 'licenseType', 'licenseBillingCycle', 'licenseRenewalDate'],
-    });
+    const organisation = await Organisation.findByPk(organisationId);
 
     if (!organisation) return error(404, 'Organisation not found');
 
-    const preferences = await UserPreference.findAll({ where: { organisationId } });
-    for (const pref of preferences) {
-      pref.licenseType = licenseType;
-      pref.licenseRenewalDate = renewalDateObj;
-      await pref.save();
-    }
+    await organisation.update({ licenseType, licenseRenewalDate: renewalDateObj });
 
     return success({
       message: `License updated to ${licenseType} for organisation ${organisationId}`,
       organisationId,
       licenseType,
       renewalDate: renewalDateObj,
-      usersUpdated: preferences.length,
     });
   } catch (err) {
     console.error('updateUserLicense error:', err);

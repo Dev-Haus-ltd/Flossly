@@ -80,7 +80,7 @@ const plans = computed(() => [
       "FlosslyDoc - Unlimited Storage",
       "FlosslyHR - Full Module",
       "FlosslyCRM - Full Lead & Pipeline Management",
-      "Appointment Booking Enabled",
+      "WhatsApp, Automation & Task Pool",
     ],
   },
   {

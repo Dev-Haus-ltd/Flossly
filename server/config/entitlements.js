@@ -41,7 +41,7 @@ export const ENTITLEMENTS = {
   },
   [TIERS.CRM]: {
     metaDms:        true,
-    whatsapp:       true,
+    whatsapp:       true,   // tier allows it — trial orgs are additionally blocked by requirePaidWhatsApp()
     automation:     true,
     googleAds:      false,
     taskPool:       true,

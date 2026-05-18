@@ -15,7 +15,10 @@ export { TRIAL_DAYS, LITE_META_LIMITS, TRIAL_AI_AUTOMATION_LIMIT }
 
 export const getResolvedTier = (org) => resolveTier(org?.licenseType)
 
+const INTERNAL_LICENSE_TYPES = new Set(['System'])
+
 export const isFreeTrialUpgradeOrg = (org) => {
+  if (INTERNAL_LICENSE_TYPES.has(org?.licenseType)) return false
   const tier = getResolvedTier(org)
   if (![TIERS.CRM, TIERS.PRO].includes(tier)) return false
   if (org?.licenseBillingCycle) return false

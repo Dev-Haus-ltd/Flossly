@@ -21,13 +21,7 @@ export const LICENSE_TYPES = {
   SOAR:   "Soar",
 };
 
-export const resolveUserLicenseType = (user) => {
-  const preference = Array.isArray(user?.preferences)
-    ? user.preferences[0]
-    : user?.preferences;
-
-  return preference?.licenseType || LICENSE_TYPES.LITE;
-};
+export const resolveUserLicenseType = (_user) => getLicenseTypeFromStorage();
 
 // Maps any legacy or current license type to the menu feature set it should see
 const LICENSE_FEATURES = {

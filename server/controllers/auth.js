@@ -1469,27 +1469,14 @@ export const acceptInvitation = async (event) => {
       },
       config.JWT_SECRET
     );
-    const managerPreference = await UserPreference.findOne({
-      where: {
-        userId: userOrgDetails.managerId,
-        organisationId: userOrg.organisationId,
-      },
-    });
     const trialEndDate = new Date();
     trialEndDate.setDate(trialEndDate.getDate() + TRIAL_DAYS);
 
-    let licenseType = "Lite";
-    let licenseRenewalDate = trialEndDate;
-
-    if (managerPreference) {
-      licenseType = managerPreference.licenseType;
-      licenseRenewalDate = managerPreference.licenseRenewalDate;
-    }
     await UserPreference.create({
       userId: user.id,
       organisationId: userOrg.organisationId,
-      licenseType,
-      licenseRenewalDate,
+      licenseType: "Lite",       // placeholder — plan is now read from Organisations.licenseType
+      licenseRenewalDate: trialEndDate,
     });
     setCookie(event, "accessToken", token, { maxAge: 31536000 });
     return success("User updated");
