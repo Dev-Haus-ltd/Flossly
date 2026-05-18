@@ -39,14 +39,15 @@ const PLAN_ORDER = { Lite: 0, CRM: 1, Pro: 2 };
 
 const licenseType = computed(() => authStore.loggedUser?.licenseType ?? "Lite");
 const resolvedTier = computed(() => LEGACY_MAP[licenseType.value] ?? licenseType.value);
+const isSystemOrg = computed(() => licenseType.value === "System");
 
 const isTrialAccess = computed(
   () =>
+    !isSystemOrg.value &&
     ["CRM", "Pro"].includes(resolvedTier.value) &&
     !authStore.loggedUser?.licenseBillingCycle &&
     !!authStore.loggedUser?.licenseRenewalDate,
 );
-
 
 const currentBadgeLabel = computed(() =>
   isTrialAccess.value ? "Current trial" : "Current plan",
@@ -101,7 +102,7 @@ const plans = computed(() => [
 ]);
 
 const hasStripeSubscription = computed(
-  () => resolvedTier.value !== "Lite" && !isTrialAccess.value,
+  () => !isSystemOrg.value && resolvedTier.value !== "Lite" && !isTrialAccess.value,
 );
 
 const shouldShowManageBilling = (plan) =>
