@@ -854,8 +854,9 @@ const leadUsageTone = computed(() => {
 const canBulkUploadLeads = computed(() => ['CRM', 'Pro'].includes(resolvedTier.value));
 const canManageWhapi = computed(() => {
   const type = String(currentOrgLicense.value || '').toLowerCase();
+  if (type === 'system') return true;
   const billingCycle = authStore.loggedUser?.licenseBillingCycle || user.value?.licenseBillingCycle || null;
-  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type) && !!billingCycle;
+  return ['crm', 'pro', 'glide', 'soar'].includes(type) && !!billingCycle;
 });
 const canBookAppointments = computed(() => ['Pro', 'Soar', 'System'].includes(resolvedTier.value));
 watch(bookingPractitionerOptions, (opts) => {

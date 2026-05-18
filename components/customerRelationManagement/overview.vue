@@ -662,8 +662,9 @@ const currentOrgLicense = computed(() => {
 })
 const canManageWhapi = computed(() => {
   const type = String(currentOrgLicense.value || '').toLowerCase()
+  if (type === 'system') return true
   const billingCycle = authStore.loggedUser?.licenseBillingCycle || user.value?.licenseBillingCycle || null
-  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type) && !!billingCycle
+  return ['crm', 'pro', 'glide', 'soar'].includes(type) && !!billingCycle
 })
 
 const integrationCards = computed(() => ([
