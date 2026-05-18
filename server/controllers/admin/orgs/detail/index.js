@@ -180,7 +180,7 @@ export const searchOrganisations = async (event) => {
 
     const { count, rows: organisations } = await Organisation.findAndCountAll({
       where: whereClause,
-      attributes: ['id', 'name', 'contact', 'address', 'postalCode', 'type', 'status', 'createdAt'],
+      attributes: ['id', 'name', 'contact', 'address', 'postalCode', 'type', 'status', 'licenseType', 'createdAt'],
       order: [['name', 'ASC']],
       limit: parseInt(limit),
       offset,
