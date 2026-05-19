@@ -57,7 +57,7 @@
           />
 
           <!-- Folder Details -->
-          <div class="flex-grow-1">
+          <div class="flex-grow-1" style="min-width: 0; overflow: hidden;">
             <div class="folder-name">
               {{ folder.name }}
             </div>
@@ -212,6 +212,9 @@ const toggleShowAll = () => {
   font-style: normal;
   font-family: Poppins, sans-serif;
   line-height: 130%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .folder-file-count {
   font-weight: 400;
