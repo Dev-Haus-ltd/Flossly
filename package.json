@@ -31,6 +31,7 @@
     "@aws-sdk/client-s3": "^3.760.0",
     "@editorjs/editorjs": "^2.30.6",
     "@editorjs/header": "^2.8.1",
+    "@editorjs/image": "^2.10.3",
     "@editorjs/list": "^1.8.0",
     "@google-cloud/speech": "^7.2.1",
     "@lordicon/element": "^2.0.1",

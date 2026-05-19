@@ -558,6 +558,8 @@ const props = defineProps({
   readOnlyTrigger: { type: Boolean, default: false },
   selectedLeadIds: { type: Array, default: null },
   selectedLeads: { type: Array, default: null },
+  categorySearch: { type: String, default: '' },
+  categoryFilter: { type: Object, default: () => ({}) },
 })
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -730,13 +732,15 @@ const isDefaultGroup = (group) =>
 
 const visibleGroups = computed(() => {
   const withoutLegacy = resolvedGroups.value.filter((group) => String(group?.source || '').toLowerCase() !== 'legacy')
+  let filtered
   if (isPatientJourney.value) {
-    return withoutLegacy
+    filtered = withoutLegacy
+  } else if (props.includeDefaults) {
+    filtered = withoutLegacy.filter((group) => String(group?.source || '').toLowerCase() === 'system')
+  } else {
+    filtered = withoutLegacy.filter((group) => String(group?.source || '').toLowerCase() === 'custom')
   }
-  if (props.includeDefaults) {
-    return withoutLegacy.filter((group) => String(group?.source || '').toLowerCase() === 'system')
-  }
-  return withoutLegacy.filter((group) => String(group?.source || '').toLowerCase() === 'custom')
+  return [...filtered].sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0))
 })
 
 const resolveGroupAuthor = (group) =>
@@ -787,7 +791,7 @@ const bulkGroupState = computed(() => {
 })
 
 const automationCards = computed(() => {
-  return visibleGroups.value.map((group) => {
+  const cards = visibleGroups.value.map((group) => {
     const keys = group.templateKeys || []
     const groupRows = keys.length
       ? rows.filter(r => keys.includes(r.key))
@@ -808,6 +812,18 @@ const automationCards = computed(() => {
       hasWhatsApp: groupRows.some(r => String(r.type || 'Email').toLowerCase() === 'whatsapp'),
     }
   })
+  let result = cards
+  const q = String(props.categorySearch || '').trim().toLowerCase()
+  if (q) {
+    result = result.filter(c =>
+      String(c.title || '').toLowerCase().includes(q) ||
+      String(c.description || '').toLowerCase().includes(q)
+    )
+  }
+  const f = props.categoryFilter || {}
+  if (f.type === 'whatsapp') result = result.filter(c => c.hasWhatsApp)
+  if (f.type === 'email') result = result.filter(c => !c.hasWhatsApp)
+  return result
 })
 
 const loadPatientJourneyTemplates = async (groupKey) => {
@@ -1135,9 +1151,27 @@ const buildLeadScopedPayload = (row, leadId, overrides = {}) => {
 
 const bulkToggleSaving = ref(false)
 
+const missingTriggerMessage = (noTriggerRows) => {
+  const names = noTriggerRows.slice(0, 2).map(r => `"${r.name || r.key}"`).join(', ')
+  const extra = noTriggerRows.length > 2 ? ` and ${noTriggerRows.length - 2} more` : ''
+  return `Cannot enable — trigger missing for ${names}${extra}. Open each automation to set a trigger.`
+}
+
 const toggleAutomationGroupBulk = async (card, val) => {
   if (bulkToggleSaving.value) return
   const keys = card?.templateKeys || []
+
+  if (val) {
+    const templateRows = keys.length
+      ? keys.map(k => rows.find(r => r.key === k) || defaultAutomationMap.get(k)).filter(Boolean)
+      : rows.filter(r => r.groupKey === card?.key)
+    const noTrigger = templateRows.filter(r => !r.trigger?.type)
+    if (noTrigger.length) {
+      mainStore?.setSnackbar?.({ title: missingTriggerMessage(noTrigger), type: 'error' })
+      return
+    }
+  }
+
   const allUpdates = []
   const rollbackByLead = new Map()
 
@@ -1227,6 +1261,14 @@ const toggleAutomationGroup = async (card, val) => {
     if (synthesized.length) rows.push(...synthesized)
   } else {
     groupRows = rows.filter((r) => r.groupKey === card?.key)
+  }
+
+  if (val) {
+    const noTrigger = groupRows.filter(r => !r.trigger?.type)
+    if (noTrigger.length) {
+      mainStore?.setSnackbar?.({ title: missingTriggerMessage(noTrigger), type: 'error' })
+      return
+    }
   }
 
   const updates = []

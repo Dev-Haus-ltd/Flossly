@@ -11,6 +11,7 @@ const PREFIXES = [
   "/chat-attachments/",
   "/meta-creatives/",
   "/chart-images/",
+  "/email-images/",
 ];
 
 export default defineEventHandler(async (event) => {

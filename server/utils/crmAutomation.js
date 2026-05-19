@@ -8,6 +8,7 @@ import { CrmAutomationTemplate, CrmLead, Organisation, CrmLeadAssignee, User, Us
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
 import { resolveWhapiConfig } from "./whatsappProvider.js";
 import { sendCrmAutomationSentNotification, sendCrmAutomationFailedNotification } from "./fcmNotification.js";
+import { resolveHtmlImages } from "./emailNotifications.js";
 
 const crmTriggersByKey = new Map(
   crmAutomationDefaults
@@ -35,7 +36,7 @@ export const inferTriggerFromName = (name) => {
     const days = Number(dayNumberMatch[1] || dayNumberMatch[2])
     if (Number.isFinite(days)) return { type: 'inquiry_days', days }
   }
-  return { type: 'inquiry_days', days: 0 }
+  return null
 }
 
 export const resolveCrmTrigger = (tpl) => {
@@ -152,6 +153,7 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
     "{content}",
     html
   );
+  const { html: wrappedWithCids, attachments: inlineImages } = await resolveHtmlImages(wrapped)
   const orgId = Number(lead?.organisationId);
   const orgTransporter = await getOrgTransporter(orgId);
   const identity = await getOrgEmailIdentity(orgId);
@@ -161,7 +163,8 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
     from: identity.from,
     ...(identity.replyTo ? { replyTo: identity.replyTo } : {}),
     subject,
-    html: wrapped,
+    html: wrappedWithCids,
+    ...(inlineImages.length ? { attachments: inlineImages } : {}),
   });
 
   // Send push notification to lead assignees on success

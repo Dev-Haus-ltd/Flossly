@@ -1,4 +1,4 @@
-import { addRoles, getConfigs, getRoles, addHRDocuments } from "~/server/controllers/misc";
+import { addRoles, getConfigs, getRoles, addHRDocuments, uploadEmailImage, uploadEmailImageByUrl } from "~/server/controllers/misc";
 
 export default defineEventHandler(async (event) => {
     const path = getRouterParam(event, "name");
@@ -11,6 +11,10 @@ export default defineEventHandler(async (event) => {
         return await getConfigs(event)
       case "addHrDocuments":
         return await addHRDocuments(event)
+      case "uploadEmailImage":
+        return await uploadEmailImage(event)
+      case "uploadEmailImageByUrl":
+        return await uploadEmailImageByUrl(event)
       default:
         return { code: 0, error: "Not found" };
     }

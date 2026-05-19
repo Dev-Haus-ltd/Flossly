@@ -15,45 +15,137 @@
           class="automation-info-banner mt-4"
           @close="showInfoBanner = false"
         />
-        <div class="automation-actions d-flex flex-wrap gap-4">
-          <v-btn
-            color="secondary"
-            variant="flat"
-            rounded="lg"
-            class="add-task-btn automation-btn automation-btn--group"
-            @click="openGroupCreate"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-folder-plus-outline</v-icon>
-            </template>
-            Create Automation Category
-          </v-btn>
+        <div class="automation-actions d-flex flex-wrap align-center">
+          <!-- Search + Filter — left side -->
+          <div class="d-inline-flex align-center toolbar-wrapper">
+            <div style="width: 180px">
+              <v-text-field
+                v-model="categorySearch"
+                placeholder="Search"
+                clearable
+                @click:clear="categorySearch = ''"
+                variant="solo"
+                :elevation="0"
+                density="compact"
+                hide-details
+                bg-color="#F3F4F6"
+                flat
+                class="cat-search"
+              >
+                <template #append-inner>
+                  <img :src="searchicon" alt="search" width="14" height="14" />
+                </template>
+              </v-text-field>
+            </div>
 
-          <v-btn
-            color="secondary"
-            variant="flat"
-            rounded="lg"
-            class="add-task-btn automation-btn automation-btn--group"
-            @click="showBulkUploadDialog = true"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-upload</v-icon>
-            </template>
-            Bulk Upload
-          </v-btn>
+            <v-menu
+              v-model="filterMenu"
+              :close-on-content-click="false"
+              transition="fade-transition"
+              offset-y
+            >
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  variant="flat"
+                  density="compact"
+                  class="cat-filter-btn ml-3"
+                >
+                  <span>Filter</span>
+                  <img :src="filtericon" alt="filter" class="ml-2" width="14" height="14" />
+                  <v-badge
+                    v-if="activeFilterCount"
+                    :content="activeFilterCount"
+                    color="primary"
+                    floating
+                    offset-x="4"
+                    offset-y="4"
+                  />
+                </v-btn>
+              </template>
 
-          <v-btn
-            color="primary"
-            variant="flat"
-            rounded="lg"
-            class="add-task-btn automation-btn automation-btn--primary"
-            @click="showAutomationDrawer = true"
-          >
-            <template #prepend>
-              <v-icon size="18">mdi-plus-circle-outline</v-icon>
-            </template>
-            Add Automation
-          </v-btn>
+              <v-card style="min-width: 260px; border-radius: 12px; padding: 16px">
+                <v-list class="pa-0">
+                  <div class="pa-0 d-flex align-center justify-space-between">
+                    <div style="font-weight: 500; font-size: 14px">Filters by</div>
+                    <v-btn
+                      variant="text"
+                      density="comfortable"
+                      color="primary"
+                      style="text-transform: none; font-weight: 500; font-size: 13px"
+                      @click="clearCategoryFilters"
+                    >
+                      Clear filters
+                    </v-btn>
+                  </div>
+                  <v-divider style="background-color: #dbdbdb" class="my-3" />
+
+                  <v-label class="my-1" style="font-size: 14px">Type</v-label>
+                  <v-select
+                    v-model="categoryFilter.type"
+                    :items="[
+                      { title: 'All', value: 'all' },
+                      { title: 'Email only', value: 'email' },
+                      { title: 'Has WhatsApp', value: 'whatsapp' },
+                    ]"
+                    item-title="title"
+                    item-value="value"
+                    variant="solo"
+                    flat
+                    density="compact"
+                    hide-details
+                    class="filter-input-bordered"
+                  />
+
+                </v-list>
+              </v-card>
+            </v-menu>
+          </div>
+
+          <!-- Spacer -->
+          <div class="flex-grow-1" />
+
+          <!-- Action buttons — right side -->
+          <div class="d-inline-flex align-center" style="gap: 10px">
+            <v-btn
+              color="secondary"
+              variant="flat"
+              rounded="lg"
+              class="add-task-btn automation-btn automation-btn--group"
+              @click="openGroupCreate"
+            >
+              <template #prepend>
+                <v-icon size="18">mdi-folder-plus-outline</v-icon>
+              </template>
+              Create Automation Category
+            </v-btn>
+
+            <v-btn
+              color="secondary"
+              variant="flat"
+              rounded="lg"
+              class="add-task-btn automation-btn automation-btn--group"
+              @click="showBulkUploadDialog = true"
+            >
+              <template #prepend>
+                <v-icon size="18">mdi-upload</v-icon>
+              </template>
+              Bulk Upload
+            </v-btn>
+
+            <v-btn
+              color="primary"
+              variant="flat"
+              rounded="lg"
+              class="add-task-btn automation-btn automation-btn--primary"
+              @click="showAutomationDrawer = true"
+            >
+              <template #prepend>
+                <v-icon size="18">mdi-plus-circle-outline</v-icon>
+              </template>
+              Add Automation
+            </v-btn>
+          </div>
         </div>
 
         <!-- AI Automation Generator Input -->
@@ -105,6 +197,8 @@
             :disable-toggle="true"
             :show-trigger-column="true"
             :show-status-column="false"
+            :category-search="categorySearch"
+            :category-filter="categoryFilter"
             @edit-group="openGroupEdit"
             @delete-group="confirmGroupDelete"
           />
@@ -168,6 +262,8 @@ import CustomerRelationManagementBulkAutomationUploadDialog from '@/components/c
 import CustomerRelationManagementAiAutomationGenerator from '@/components/customerRelationManagement/aiAutomationGenerator.vue'
 import CommonFeatureCard from '@/components/Common/featureCard.vue'
 import automationFeatureCardIcon from '@/assets/icons/crm/automation-feature-card.svg'
+import filtericon from '@/assets/icons/listView/filter-icon.svg'
+import searchicon from '@/assets/icons/listView/serach-icon.svg'
 
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
@@ -190,6 +286,15 @@ const aiIdea = ref('')
 const showAIPreview = ref(false)
 const generatingAI = ref(false)
 const aiGeneratorRef = ref(null)
+const categorySearch = ref('')
+const categoryFilter = ref({ type: 'all' })
+const filterMenu = ref(false)
+
+const activeFilterCount = computed(() => categoryFilter.value.type !== 'all' ? 1 : 0)
+
+const clearCategoryFilters = () => {
+  categoryFilter.value = { type: 'all' }
+}
 
 const isPrivileged = computed(() => [1, 8].includes(Number(user.value?.roleId)))
 
@@ -350,9 +455,45 @@ onBeforeUnmount(() => {
 
 .automation-actions {
   margin-top: 16px;
-  align-items: center;
-  justify-content: flex-end;
   gap: 10px;
+}
+
+.toolbar-wrapper {
+  height: 46px;
+}
+
+.cat-search {
+  height: 46px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.cat-search :deep(.v-field) {
+  border-radius: 8px !important;
+}
+
+.cat-search :deep(input::placeholder) {
+  color: #737373;
+  opacity: 1;
+}
+
+.cat-filter-btn {
+  height: 46px;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: #F3F4F6 !important;
+  text-transform: none;
+  box-shadow: none;
+  color: #737373;
+  min-width: 100px;
+}
+
+.filter-input-bordered :deep(.v-field) {
+  border: 1px solid #dfdfdf !important;
+  border-radius: 8px !important;
+  background-color: white !important;
+  min-height: 40px;
+  font-size: 14px;
 }
 
 .automation-btn {

@@ -124,14 +124,20 @@ const resolveMailAttachments = async (attachments) => {
 
     const filename = String(item?.name || item?.filename || item?.title || 'attachment').trim() || 'attachment';
     const contentType = String(item?.contentType || item?.mimeType || '').trim() || inferEmailAttachmentContentType(filename);
+    const sharedMeta = {
+      ...(item?.cid ? { cid: String(item.cid) } : {}),
+      ...(item?.contentDisposition ? { contentDisposition: String(item.contentDisposition) } : {}),
+      ...(item?.encoding ? { encoding: String(item.encoding) } : {}),
+      ...(item?.headers && typeof item.headers === 'object' ? { headers: item.headers } : {}),
+    };
 
     if (item.content) {
-      resolved.push({ filename, content: item.content, contentType });
+      resolved.push({ filename, content: item.content, contentType, ...sharedMeta });
       continue;
     }
 
     if (item.path && typeof item.path === 'string' && item.path.trim()) {
-      resolved.push({ filename, path: item.path, contentType });
+      resolved.push({ filename, path: item.path, contentType, ...sharedMeta });
       continue;
     }
 
@@ -145,6 +151,7 @@ const resolveMailAttachments = async (attachments) => {
         filename,
         content,
         contentType: item?.contentType || item?.mimeType || s3Obj.contentType || inferEmailAttachmentContentType(filename),
+        ...sharedMeta,
       });
     } catch (err) {
       // Skip attachments that cannot be fetched rather than fail the entire send.
@@ -502,6 +509,54 @@ export const sendInvitationEmail = async (data) => {
   });
 };
 
+// Parses <img src="..."> tags out of HTML and embeds only user-uploaded images
+// (those from /email-images/ on S3) as CID inline attachments.
+// All other images (template logos, external URLs) are left untouched.
+export const resolveHtmlImages = async (html) => {
+  if (!html) return { html, attachments: [] }
+
+  const attachments = []
+  const cidMap = {}
+
+  const srcRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi
+  const srcs = new Set()
+  let match
+  while ((match = srcRegex.exec(html)) !== null) {
+    srcs.add(match[1])
+  }
+
+  for (const src of srcs) {
+    if (!src.includes('/email-images/')) continue
+
+    try {
+      const urlPath = src.startsWith('http') ? new URL(src).pathname : src
+      const s3Key = urlPath.replace(/^\/+/, '')
+      const s3Obj = await getS3Object(s3Key)
+      const imageBuffer = await streamToBuffer(s3Obj.body)
+      const contentType = s3Obj.contentType || 'image/jpeg'
+
+      const cid = `img_${Math.random().toString(36).slice(2)}@flossly`
+      cidMap[src] = cid
+      attachments.push({
+        filename: src.split('/').pop().split('?')[0] || 'image.jpg',
+        content: imageBuffer,
+        contentType,
+        cid,
+        contentDisposition: 'inline',
+      })
+    } catch (_) {
+      // Leave this src as-is if we can't resolve it
+    }
+  }
+
+  let resolvedHtml = html
+  for (const [src, cid] of Object.entries(cidMap)) {
+    resolvedHtml = resolvedHtml.split(src).join(`cid:${cid}`)
+  }
+
+  return { html: resolvedHtml, attachments }
+}
+
 // CRM: bulk-send email to leads using a provided HTML body.
 // Performs light-weight placeholder replacement and wraps with the app template.
 // Placeholders supported:
@@ -539,12 +594,19 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
       const wrapped = template
         .replaceAll("{subject}", renderedSubject || "")
         .replace("{content}", content);
+
+      const { html: wrappedWithCids, attachments: inlineImages } = await resolveHtmlImages(wrapped)
+      const allAttachments = [
+        ...resolvedAttachments,
+        ...inlineImages,
+      ]
+
       await sendEmail(effectiveOrgId, {
         to: lead.email,
         from: from,
         subject: renderedSubject,
-        html: wrapped,
-        attachments: resolvedAttachments.length ? resolvedAttachments : undefined,
+        html: wrappedWithCids,
+        attachments: allAttachments.length ? allAttachments : undefined,
       }, { patientFacing: true });
       sent++;
     } catch (e) {
