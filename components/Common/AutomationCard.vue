@@ -66,7 +66,8 @@
           hide-details
           :color="bulkState ? bulkToggleColor : 'primary'"
           :model-value="bulkState ? isBulkFullyEnabled : enabled"
-          @click.stop="$emit('toggle', bulkState ? !isBulkFullyEnabled : !enabled)"
+          :disabled="disableToggle"
+          @click.stop="disableToggle ? null : $emit('toggle', bulkState ? !isBulkFullyEnabled : !enabled)"
         />
       </div>
     </div>
@@ -111,6 +112,10 @@ const props = defineProps({
   bulkState: {
     type: Object,
     default: null,
+  },
+  disableToggle: {
+    type: Boolean,
+    default: false,
   },
 })
 

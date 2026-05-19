@@ -285,10 +285,27 @@ export const sendCrmAutomationWhatsApp = async (lead, message, templatePayload =
 export const hasCrmSent = (raw, key) =>
   !!(raw?.automationSentKeys && raw.automationSentKeys[key]);
 
-export const markCrmSent = async (lead, raw, key) => {
+export const markCrmSent = async (lead, raw, key, meta = {}) => {
+  const sentAt = new Date().toISOString();
   const map = { ...(raw.automationSentKeys || {}) };
-  map[key] = new Date().toISOString();
-  lead.rawData = { ...raw, automationSentKeys: map };
+  map[key] = sentAt;
+  const history = Array.isArray(raw?.crmAutomationHistory)
+    ? [...raw.crmAutomationHistory]
+    : [];
+  history.push({
+    key,
+    name: String(meta?.name || key || "").trim() || key,
+    type: String(meta?.type || "Email").trim() || "Email",
+    channel: String(meta?.channel || meta?.type || "Email").toLowerCase() === "whatsapp" ? "whatsapp" : "email",
+    triggerType: meta?.trigger?.type || null,
+    sentAt,
+    source: "automation",
+  });
+  lead.rawData = {
+    ...raw,
+    automationSentKeys: map,
+    crmAutomationHistory: history.slice(-500),
+  };
   await lead.save();
   try {
     await CrmAutomationTemplate.update(
@@ -516,7 +533,7 @@ export const dispatchSendNowAutomationWithOptions = async (orgId, tpl, options =
           }
           const message = buildCrmWhatsAppMessage(lead, tpl, org);
           await sendCrmAutomationWhatsApp(lead, message, null, tpl?.name);
-          await markCrmSent(lead, raw, sentKey);
+          await markCrmSent(lead, raw, sentKey, tpl);
           if (wasAlreadySent && forceResend) summary.resent += 1;
           else summary.sent += 1;
         } else {
@@ -526,7 +543,7 @@ export const dispatchSendNowAutomationWithOptions = async (orgId, tpl, options =
           }
           const { subject, html } = buildCrmEmail(lead, tpl, org);
           await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
-          await markCrmSent(lead, raw, sentKey);
+          await markCrmSent(lead, raw, sentKey, tpl);
           if (wasAlreadySent && forceResend) summary.resent += 1;
           else summary.sent += 1;
         }
@@ -618,12 +635,12 @@ export const sendImmediateCrmAutomationsForLead = async (lead, options = {}) => 
       if (!lead?.telephone) continue;
       const message = buildCrmWhatsAppMessage(lead, tpl, org);
       await sendCrmAutomationWhatsApp(lead, message, null, tpl?.name);
-      await markCrmSent(lead, lead.rawData || {}, sentKey);
+      await markCrmSent(lead, lead.rawData || {}, sentKey, tpl);
     } else {
       if (!lead?.email) continue;
       const { subject, html } = buildCrmEmail(lead, tpl, org);
       await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
-      await markCrmSent(lead, lead.rawData || {}, sentKey);
+      await markCrmSent(lead, lead.rawData || {}, sentKey, tpl);
     }
   }
 };

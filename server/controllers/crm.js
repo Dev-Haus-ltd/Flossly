@@ -1783,7 +1783,7 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
       template: template || '',
       whatsappTemplateName: whatsappTemplateName || '',
       whatsappTemplateLanguage: whatsappTemplateLanguage || '',
-      trigger: trigger ?? null,
+      trigger: trigger !== undefined ? (trigger ?? null) : (existingOverride?.trigger ?? null),
     }
     if (becameEnabled) {
       const activatedAt = new Date().toISOString()
@@ -2369,13 +2369,19 @@ export const getLeadAutomationLog = async (event) => {
     if (!lead) return error(404, 'Lead not found')
 
     const sentKeys = lead.rawData?.automationSentKeys || {}
+    const automationHistory = Array.isArray(lead.rawData?.crmAutomationHistory)
+      ? lead.rawData.crmAutomationHistory
+      : []
     const manualLog = Array.isArray(lead.rawData?.manualSentLog) ? lead.rawData.manualSentLog : []
 
-    if (!Object.keys(sentKeys).length && !manualLog.length) return success({ rows: [], total: 0 })
+    if (!Object.keys(sentKeys).length && !automationHistory.length && !manualLog.length) {
+      return success({ rows: [], total: 0 })
+    }
 
     const allRows = []
+    const seenAutomationRows = new Set()
 
-    if (Object.keys(sentKeys).length) {
+    if (Object.keys(sentKeys).length || automationHistory.length) {
       const templates = await CrmAutomationTemplate.findAll({
         where: { organisationId: orgId },
         attributes: ['key', 'name', 'type'],
@@ -2383,7 +2389,24 @@ export const getLeadAutomationLog = async (event) => {
       const templateMap = new Map(templates.map((t) => [t.key, t]))
       const defaultMap = new Map(crmAutomationDefaults.map((d) => [d.key, d]))
 
+      automationHistory.forEach((entry) => {
+        const key = String(entry?.key || '')
+        const tpl = templateMap.get(key)
+        const def = defaultMap.get(key)
+        const sentAt = entry?.sentAt
+        if (!sentAt) return
+        seenAutomationRows.add(`${key}::${sentAt}`)
+        allRows.push({
+          key,
+          name: entry?.name || tpl?.name || def?.name || key || 'Automation',
+          type: entry?.type || tpl?.type || def?.type || 'Email',
+          sentAt,
+          source: entry?.source || 'automation',
+        })
+      })
+
       Object.entries(sentKeys).forEach(([key, sentAt]) => {
+        if (seenAutomationRows.has(`${key}::${sentAt}`)) return
         const tpl = templateMap.get(key)
         const def = defaultMap.get(key)
         allRows.push({

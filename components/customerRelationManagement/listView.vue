@@ -1644,7 +1644,7 @@ watch(showBulkAutomationsDialog, async (open) => {
       selectedLeads.value
         .map((lead) => Number(lead?.id || 0))
         .filter(Boolean)
-        .map((id) => crmStore.invalidateLeadAutomations(id))
+        .map((id) => crmStore.fetchLeadAutomations(id, { force: true, silent: true }))
     );
   }
 });
@@ -2103,7 +2103,7 @@ const buildAutomationPayload = (row, leadId, groupKey) => {
 const toggleLeadGroup = async (lead, group, enabled) => {
   const leadId = lead?.id;
   if (!leadId || !group) return;
-  await crmStore.fetchLeadAutomations(leadId, { force: true });
+  await crmStore.fetchLeadAutomations(leadId);
 
   const currentRows = crmStore.automationRowsCache[Number(leadId)] || [];
   const keys = group?.templateKeys || [];
@@ -2160,7 +2160,7 @@ const toggleLeadGroup = async (lead, group, enabled) => {
   automationSaving[leadId] = true;
   try {
     await crmStore.saveAutomationBatch({ items: updates });
-    await crmStore.invalidateLeadAutomations(leadId);
+    await crmStore.fetchLeadAutomations(leadId, { force: true, silent: true });
   } catch (e) {
     // Roll back optimistic update
     crmStore.setLeadAutomationsOptimistic(
@@ -2268,9 +2268,6 @@ const onActionClick = (key) => {
   else if (key === 'automations') {
     bulkAutomationsTab.value = 'automation'
     showBulkAutomationsDialog.value = true
-    selectedLeads.value.forEach(lead => {
-      if (lead?.id) crmStore.fetchLeadAutomations(lead.id, { force: true })
-    })
   }
   else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') confirmArchive.value = true;

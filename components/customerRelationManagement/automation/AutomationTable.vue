@@ -225,7 +225,7 @@
                   </span>
                 </template>
                 <div class="mixed-trigger-tooltip">
-                  <div class="mixed-trigger-tooltip__title">Selected leads currently have different trigger settings</div>
+                  <div class="mixed-trigger-tooltip__title">Selected leads have different trigger settings</div>
                   <div
                     v-for="detail in item.bulkTriggerDetails"
                     :key="detail.leadId"
@@ -233,6 +233,9 @@
                   >
                     <span class="mixed-trigger-tooltip__lead">{{ detail.leadName }}</span>
                     <span class="mixed-trigger-tooltip__value">{{ detail.triggerLabel }}</span>
+                  </div>
+                  <div v-if="item.bulkTriggerOverflow > 0" class="mixed-trigger-tooltip__overflow">
+                    +{{ item.bulkTriggerOverflow }} more lead{{ item.bulkTriggerOverflow === 1 ? '' : 's' }}
                   </div>
                 </div>
               </v-tooltip>
@@ -721,6 +724,12 @@ const formatRelativeTime = (dateStr) => {
 .mixed-trigger-tooltip__value {
   color: #6b7280;
   text-align: right;
+}
+
+.mixed-trigger-tooltip__overflow {
+  font-size: 11px;
+  color: #9ca3af;
+  font-style: italic;
 }
 
 .switch-active :deep(.v-selection-control__input) {
