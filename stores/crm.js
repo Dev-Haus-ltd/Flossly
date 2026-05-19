@@ -366,6 +366,7 @@ export const useCrmStore = defineStore("crmStore", {
     },
 
     getLeadAutomationLog(leadId, params = {}) { return this._wrap(() => crmService.getLeadAutomationLog(leadId, params)); },
+    getLeadAutomationPreview(leadId, key) { return this._wrap(() => crmService.getLeadAutomationPreview(leadId, key)); },
 
     // Mail
     sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },

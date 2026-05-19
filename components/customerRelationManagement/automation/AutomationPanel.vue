@@ -564,7 +564,7 @@ const props = defineProps({
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
 const orgStore = useOrgStore()
-const emit = defineEmits(['update:rows','save','edit-group','delete-group','go-to-automations'])
+const emit = defineEmits(['update:rows','save','edit-group','delete-group','go-to-automations','bulk-toggle-done'])
 
 const resolvedPatientId = computed(() => {
   const raw = props.patientId ?? props.patient?.id
@@ -1223,7 +1223,18 @@ const toggleAutomationGroupBulk = async (card, val) => {
 
   bulkToggleSaving.value = true
   try {
-    await crmStore.saveAutomationBatch({ items: allUpdates })
+    const res = await crmStore.saveAutomationBatch({ items: allUpdates })
+    if (res?.code === 0) {
+      const groupName = card?.title || 'Automation'
+      const count = selectedLeadIdsNormalized.value.length
+      const action = val ? 'activated' : 'deactivated'
+      const leadWord = count === 1 ? 'lead' : 'leads'
+      mainStore?.setSnackbar?.({
+        title: `"${groupName}" was ${action} for ${count} ${leadWord}`,
+        type: 'success',
+      })
+      emit('bulk-toggle-done')
+    }
   } catch (e) {
     // Roll back all optimistic updates
     for (const [numId, changeMap] of rollbackByLead.entries()) {

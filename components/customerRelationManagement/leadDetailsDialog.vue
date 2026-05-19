@@ -17,7 +17,7 @@
               class="custom-tabs"
               hide-slider
               density="comfortable"
-              :show-arrows="false"
+              show-arrows
             >
             <v-tab value="lead-info" class="tab-text">
               <img
@@ -580,6 +580,18 @@
                       Sent
                     </v-chip>
                   </template>
+                  <template #item.action="{ item }">
+                    <v-btn
+                      v-if="item.key"
+                      icon
+                      variant="text"
+                      size="small"
+                      :loading="previewLoadingKey === `${item.key}::${item.sentAt}`"
+                      @click="openAutomationPreview(item)"
+                    >
+                      <img src="@/assets/icons/view.svg" width="20" height="20" alt="Preview" />
+                    </v-btn>
+                  </template>
                   <template #no-data>
                     <div class="text-center py-8">
                       <v-icon size="48" color="grey-lighten-1">mdi-email-check-outline</v-icon>
@@ -594,6 +606,15 @@
         </div>
       </v-card>
     </v-dialog>
+
+    <CustomerRelationManagementAutomationPreviewDialog
+      v-model="previewDialog"
+      :title="previewData?.name"
+      :subject="previewData?.subject || ''"
+      :email-html="previewData?.html || ''"
+      :is-whats-app="previewData?.type === 'WhatsApp'"
+      :whatsapp-text="previewData?.message || ''"
+    />
   </div>
 </template>
 
@@ -724,7 +745,28 @@ const automationLogHeaders = [
   { title: 'Automation', key: 'name', sortable: false },
   { title: 'Message Sent', key: 'sentAt', width: '200px', sortable: false },
   { title: 'Status', key: 'logStatus', width: '110px', sortable: false },
+  { title: 'Action', key: 'action', width: '70px', sortable: false },
 ]
+
+const previewDialog = ref(false)
+const previewData = ref(null)
+const previewLoadingKey = ref('')
+
+const openAutomationPreview = async (item) => {
+  const leadId = props.selectedLead?.id
+  if (!leadId || !item?.key) return
+  const loadKey = `${item.key}::${item.sentAt}`
+  previewLoadingKey.value = loadKey
+  try {
+    const res = await crmStore.getLeadAutomationPreview(leadId, item.key)
+    if (res?.code === 0) {
+      previewData.value = res.data
+      previewDialog.value = true
+    }
+  } finally {
+    previewLoadingKey.value = ''
+  }
+}
 
 const loadAutomationLog = async (leadId) => {
   if (!leadId) return
@@ -937,7 +979,14 @@ const savePreferences = async () => {
 
 .custom-tabs :deep(.v-slide-group__prev),
 .custom-tabs :deep(.v-slide-group__next) {
-  display: none !important;
+  min-width: 28px;
+  color: #0061FB;
+  opacity: 0.8;
+}
+
+.custom-tabs :deep(.v-slide-group__prev:hover),
+.custom-tabs :deep(.v-slide-group__next:hover) {
+  opacity: 1;
 }
 
 .custom-tabs :deep(.v-slide-group__content) {

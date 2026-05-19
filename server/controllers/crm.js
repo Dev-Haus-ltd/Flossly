@@ -7,7 +7,7 @@ import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { requireUsageAllowed } from '../utils/requireUsageAllowed'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
-import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName } from '../utils/crmAutomation.js'
+import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName, buildEffectiveCrmTemplates, buildCrmTemplatesByOrg, buildCrmEmail, buildCrmWhatsAppMessage } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
@@ -1761,17 +1761,11 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     const overrides = { ...(raw.crmAutomationOverrides || {}) }
     const activationDates = { ...(raw.crmAutomationActivationDates || {}) }
     const existingOverride = overrides[key] || {}
-    const existingTemplate = await CrmAutomationTemplate.findOne({
-      where: { organisationId: Number(orgId), key },
-      transaction,
-    })
-    const defaultTemplate = crmAutomationDefaults.find((item) => item.key === key) || null
-    const previousEnabled =
-      existingOverride?.enabled !== undefined
-        ? !!existingOverride.enabled
-        : existingTemplate?.enabled !== undefined
-          ? !!existingTemplate.enabled
-          : !!defaultTemplate?.enabled
+    // Per-lead opt-in model: no override = automation was not active for this lead,
+    // regardless of the global template's enabled state.
+    const previousEnabled = existingOverride?.enabled !== undefined
+      ? !!existingOverride.enabled
+      : false
     const becameEnabled = !!enabled && !previousEnabled
     overrides[key] = {
       key,
@@ -2437,6 +2431,35 @@ export const getLeadAutomationLog = async (event) => {
     const rows = allRows.slice((pageNum - 1) * limitNum, pageNum * limitNum)
 
     return success({ rows, total })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const getLeadAutomationPreview = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const { leadId, key } = getQuery(event)
+    if (!leadId || !key) return error(400, 'leadId and key required')
+
+    const lead = await CrmLead.findOne({ where: { id: leadId, organisationId: orgId } })
+    if (!lead) return error(404, 'Lead not found')
+
+    const org = await Organisation.findByPk(Number(orgId))
+    const templates = await CrmAutomationTemplate.findAll({ where: { organisationId: orgId } })
+    const templatesByOrg = buildCrmTemplatesByOrg(templates)
+    const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg)
+    const tpl = effectiveTemplates.find((t) => t.key === key)
+    if (!tpl) return error(404, 'Template not found')
+
+    const type = String(tpl.type || 'Email').toLowerCase()
+    if (type === 'whatsapp') {
+      const message = buildCrmWhatsAppMessage(lead, tpl, org)
+      return success({ type: 'WhatsApp', name: tpl.name || key, message })
+    }
+    const { subject, html } = buildCrmEmail(lead, tpl, org)
+    return success({ type: 'Email', name: tpl.name || key, subject, html })
   } catch (e) {
     return error(500, e.message)
   }

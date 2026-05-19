@@ -1240,6 +1240,7 @@
                 :disable-toggle="false"
                 :show-sent-status-column="false"
                 :show-resend-action="false"
+                @bulk-toggle-done="showBulkAutomationsDialog = false"
               />
             </v-tabs-window-item>
             <v-tabs-window-item value="my-automations">
@@ -1253,6 +1254,7 @@
                 :disable-toggle="false"
                 :show-sent-status-column="false"
                 :show-resend-action="false"
+                @bulk-toggle-done="showBulkAutomationsDialog = false"
               />
             </v-tabs-window-item>
           </v-tabs-window>

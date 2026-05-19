@@ -325,6 +325,7 @@ const types = ['Email', 'WhatsApp']
 const triggerTypes = [
   { label: '— Select trigger type —', value: null },
   { label: 'After enquiry', value: 'inquiry_days' },
+  { label: 'After activation', value: 'activation_days' },
   { label: 'Birthday offset', value: 'birthday_offset' },
   { label: 'Birthday month start', value: 'birthday_month_start' },
   { label: 'Black Friday', value: 'black_friday' },
