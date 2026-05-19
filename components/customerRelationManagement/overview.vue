@@ -215,8 +215,8 @@
               </v-btn>
             </template> 
             -->
-            <!-- GOOGLE placed temperory above implementation is functional -->
-            <template v-else-if="card.key === 'google'">
+            <!-- Google card actions hidden -->
+            <!-- <template v-else-if="card.key === 'google'">
               <v-btn
                 color="primary"
                 variant="flat"
@@ -226,7 +226,7 @@
               >
                 Coming Soon
               </v-btn>
-            </template>
+            </template> -->
             <template v-else>
               <v-btn
                 color="primary"
@@ -284,6 +284,7 @@
           :error="metaChartError"
         />
 
+        <!-- Google Search Console chart hidden
         <CrmCharts
           :chartType="'line'"
           :chartTitle="gscChartConfig.chartTitle"
@@ -297,6 +298,7 @@
           :showFallback="!gscChartLoading && (!isGoogleConnected || gscChartConfig.chartData.datasets.length === 0)"
           :error="gscChartError"
         />
+        -->
       </div>
     </div>
 
@@ -671,14 +673,18 @@ const currentOrgName = computed(() => {
   return match?.organisation?.name || ''
 })
 const currentOrgLicense = computed(() => {
+  const direct = String(authStore.loggedUser?.licenseType || user.value?.licenseType || '').trim()
+  if (direct) return direct
   const orgId = user.value?.currentLoggedInOrgId
   const prefs = user.value?.preferences || []
   const match = prefs.find((row) => row.organisationId === orgId)
-  return match?.licenseType || 'Trial'
+  return match?.licenseType || 'Lite'
 })
 const canManageWhapi = computed(() => {
   const type = String(currentOrgLicense.value || '').toLowerCase()
-  return ['drift', 'glide', 'soar', 'system'].includes(type)
+  if (type === 'system') return true
+  const billingCycle = authStore.loggedUser?.licenseBillingCycle || user.value?.licenseBillingCycle || null
+  return ['crm', 'pro', 'glide', 'soar'].includes(type) && !!billingCycle
 })
 
 const integrationCards = computed(() => ([
@@ -702,16 +708,17 @@ const integrationCards = computed(() => ([
     icon: whatsappLogo,
     iconClass: 'whatsapp',
   },
-  {
-    key: 'google',
-    title: 'Google',
-    subtitlePrimary: googleStatus.email || userEmail.value || '-',
-    subtitleSecondary: currentOrgName.value || '-',
-    statusLabel: googleStatusLabel.value,
-    statusColor: googleStatusColor.value,
-    icon: googleLogo,
-    iconClass: 'google',
-  },
+  // Google card hidden
+  // {
+  //   key: 'google',
+  //   title: 'Google',
+  //   subtitlePrimary: googleStatus.email || userEmail.value || '-',
+  //   subtitleSecondary: currentOrgName.value || '-',
+  //   statusLabel: googleStatusLabel.value,
+  //   statusColor: googleStatusColor.value,
+  //   icon: googleLogo,
+  //   iconClass: 'google',
+  // },
   {
     key: 'chatbot',
     title: 'Chatbot',
@@ -821,6 +828,7 @@ const handleMetaQuery = () => {
   const metaConnected = route.query.meta === 'connected'
   const igConnected = route.query.meta === 'ig_connected'
   const metaError = route.query.error
+  const metaWarning = route.query.warning
   const pagesCount = Number(route.query.pages || 0)
   const igAccount = route.query.account
 
@@ -830,6 +838,9 @@ const handleMetaQuery = () => {
   } else if (metaConnected && pagesCount === 0) {
     const msg = 'Meta could not be connected. You need full access to the page you are trying to connect.'
     mainStore?.setSnackbar?.({ title: msg, type: 'error' })
+  } else if (metaConnected && metaWarning) {
+    metaHealthData.value = null
+    mainStore?.setSnackbar?.({ title: String(metaWarning), type: 'warning' })
   } else if (metaConnected) {
     metaHealthData.value = null
     mainStore?.setSnackbar?.({ title: 'Meta connected successfully', type: 'success' })
@@ -1389,7 +1400,12 @@ const loadAutoReplySettings = async () => {
     if (res?.code === 0) {
       autoReplyEnabled.value = !!res.data?.autoReplyEnabled
       whatsappAutoReplyEnabled.value = !!res.data?.whatsappAutoReplyEnabled
-      autoReplyConfig.value = res.data?.autoReplyConfig || { services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "" }
+      autoReplyConfig.value = res.data?.autoReplyConfig || {
+        services: '',
+        cta: '',
+        outOfScopeMessage: 'Thank you so much! Our team will contact you shortly.',
+        ctaScript: '',
+      }
     }
   } catch {}
 }
@@ -1398,7 +1414,7 @@ const toggleAutoReply = async (platform) => {
   if (autoReplyLoading.value) return
   const targetValue = platform === 'whatsapp' ? whatsappAutoReplyEnabled.value : autoReplyEnabled.value
   if (targetValue && !hasValidAutoReplyConfig.value) {
-    mainStore?.setSnackbar?.({ title: "Please configure Q&A before enabling auto-reply", type: "warning" })
+    mainStore?.setSnackbar?.({ title: 'Please configure Q&A before enabling auto-reply', type: 'warning' })
     if (platform === 'whatsapp') {
       whatsappAutoReplyEnabled.value = false
     } else {
@@ -1419,9 +1435,9 @@ const toggleAutoReply = async (platform) => {
       } else {
         autoReplyEnabled.value = !!res.data?.autoReplyEnabled
       }
-      mainStore?.setSnackbar?.({ 
-        title: targetValue ? `${platform === 'whatsapp' ? 'WhatsApp' : 'Meta'} auto-reply enabled` : `${platform === 'whatsapp' ? 'WhatsApp' : 'Meta'} auto-reply disabled`, 
-        type: "success" 
+      mainStore?.setSnackbar?.({
+        title: targetValue ? `${platform === 'whatsapp' ? 'WhatsApp' : 'Meta'} auto-reply enabled` : `${platform === 'whatsapp' ? 'WhatsApp' : 'Meta'} auto-reply disabled`,
+        type: 'success',
       })
     } else {
       if (platform === 'whatsapp') {
@@ -1429,7 +1445,7 @@ const toggleAutoReply = async (platform) => {
       } else {
         autoReplyEnabled.value = !targetValue
       }
-      mainStore?.setSnackbar?.({ title: res?.message || "Failed to update auto-reply settings", type: "error" })
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to update auto-reply settings', type: 'error' })
     }
   } catch (e) {
     if (platform === 'whatsapp') {
@@ -1437,7 +1453,7 @@ const toggleAutoReply = async (platform) => {
     } else {
       autoReplyEnabled.value = !targetValue
     }
-    mainStore?.setSnackbar?.({ title: e?.message || "Failed to update auto-reply settings", type: "error" })
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to update auto-reply settings', type: 'error' })
   } finally {
     autoReplyLoading.value = false
   }
@@ -1457,13 +1473,13 @@ const saveAutoReplyConfig = async () => {
     })
     if (res?.code === 0) {
       autoReplyConfig.value = res.data?.autoReplyConfig || autoReplyConfig.value
-      mainStore?.setSnackbar?.({ title: "Auto-reply config saved", type: "success" })
+      mainStore?.setSnackbar?.({ title: 'Auto-reply config saved', type: 'success' })
       autoReplyConfigDialog.value = false
     } else {
-      mainStore?.setSnackbar?.({ title: res?.message || "Failed to save config", type: "error" })
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to save config', type: 'error' })
     }
   } catch (e) {
-    mainStore?.setSnackbar?.({ title: e?.message || "Failed to save config", type: "error" })
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to save config', type: 'error' })
   } finally {
     autoReplyConfigLoading.value = false
   }

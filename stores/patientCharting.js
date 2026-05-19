@@ -1,5 +1,7 @@
 import patientChartingService from '~/services/patientChartingService'
 import diaryService from '~/services/diaryService'
+import accountsService from '~/services/accountsService'
+import { useAccountsStore } from '~/stores/accounts'
 import { createDefaultTooth, UPPER_ARCH, LOWER_ARCH, DECIDUOUS_UPPER_ARCH, DECIDUOUS_LOWER_ARCH, CONDITIONS, TOOTH_STATUSES } from '~/components/patients/charting/toothData.js'
 import {
   DEFAULT_APPOINTMENT_ID,
@@ -588,7 +590,44 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         )
       }
 
-      if (hasConditionFlow) this._scheduleSave(fdi)
+if (hasConditionFlow) this._scheduleSave(fdi)
+    },
+
+    applyConditionBatch(actions = []) {
+      if (!Array.isArray(actions) || !actions.length) return
+      const previousCondition = this.activeCondition
+
+      for (const action of actions) {
+        if (action.type === 'missing') {
+          this.activeCondition = 'missing'
+          this.applyCondition(action.fdi, null)
+          continue
+        }
+
+        if (action.type === 'unerupted') {
+          if (!this.chart[action.fdi]) this.chart[action.fdi] = createDefaultTooth(action.fdi)
+          this.chart[action.fdi].unerupted = true
+          continue
+        }
+
+        if (action.type === 'surface') {
+          this.activeCondition = action.condition
+          const surfaces = Array.isArray(action.surfaces) ? action.surfaces : []
+          for (const surface of surfaces) {
+            this.applyCondition(action.fdi, surface, { status: action.status ?? 'existing' })
+          }
+          continue
+        }
+
+        if (action.type === 'tooth') {
+          this.activeCondition = action.condition
+          this.applyCondition(action.fdi, null, { status: action.status ?? 'existing' })
+          continue
+        }
+      }
+
+      this.activeCondition = previousCondition
+      this._scheduleSave()
     },
 
     _handleBridgeClick(fdi) {
@@ -1038,8 +1077,21 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
 
       const groupId = item.appointmentGroupId || DEFAULT_APPOINTMENT_ID
       const inGroup = this.treatmentItems.filter((i) => (i.appointmentGroupId || DEFAULT_APPOINTMENT_ID) === groupId)
-      if (inGroup.length && inGroup.every((i) => String(i.status || '').toLowerCase() === 'completed')) {
+      const appointment = this.appointments.find(a => a.id === groupId)
+      const wasAlreadyCompleted = appointment?.status === 'completed'
+      if (inGroup.length && inGroup.every((i) => String(i.status || '').toLowerCase() === 'completed') && !wasAlreadyCompleted) {
         this.updateAppointment(groupId, { status: 'completed' })
+        // Automatically generate invoices when appointment is completed
+        try {
+          await accountsService.generateInvoiceFromTreatments(this.patientId)
+          // Refresh accounts store if it's loaded for the same patient
+          const accountsStore = useAccountsStore()
+          if (accountsStore.patientId === this.patientId) {
+            await accountsStore._refresh()
+          }
+        } catch (error) {
+          console.error('Failed to generate invoices:', error)
+        }
       }
     },
     addAppointment() {

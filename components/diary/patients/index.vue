@@ -92,9 +92,11 @@
               <th
                 :style="{
                   width: (column.width || 160) + 'px',
+                  minWidth: (column.width || 160) + 'px',
                   padding: '0px 7px',
                   fontSize: '14px',
-                  backgroundColor: '#F6F6F6',
+                  backgroundColor: '#f6f6f6',
+                  position: 'relative',
                 }"
               >
                 <div class="d-flex align-center th-content">
@@ -105,7 +107,7 @@
           </tr>
         </template>
         <template #item.name="{ item }">
-          <div class="d-flex flex-column py-3">
+          <div class="d-flex flex-column">
             <span class="font-weight-medium">{{ item.name }}</span>
           </div>
         </template>
@@ -465,7 +467,7 @@ watch(
   }
 }
 .patients-table {
-  border: 1px solid rgb(var(--v-theme-outline));
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 12px;
   overflow: hidden;
   background: #ffffff;
@@ -474,48 +476,47 @@ watch(
 :deep(.patients-table .v-table__wrapper table) {
   width: 100% !important;
   table-layout: fixed;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 :deep(.patients-table .v-table__wrapper > table > thead > tr > th) {
-  height: 40px;
-  padding: 0 7px !important;
+  height: 48px !important;
+  padding: 0px 7px !important;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   background-color: #f6f6f6;
-  border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
   vertical-align: middle;
+  color: #374151;
 }
 
-:deep(
-  .patients-table .v-table__wrapper > table > thead > tr > th:not(:last-child)
-) {
-  border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+:deep(.patients-table .v-table__wrapper > table > thead > tr > th:last-child) {
+  border-right: none;
 }
 
 :deep(.patients-table tbody tr) {
-  height: 30px !important;
+  height: 48px !important;
 }
 
 :deep(.patients-table td) {
-  height: 30px !important;
-  padding: 0 7px !important;
+  height: 48px !important;
+  padding: 4px 8px !important;
   font-size: 14px;
   vertical-align: middle !important;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  color: #374151;
 }
 
-:deep(
-  .patients-table .v-table__wrapper > table > tbody > tr > td:not(:last-child)
-) {
-  border-right: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+:deep(.patients-table .v-table__wrapper > table > tbody > tr > td:last-child) {
+  border-right: none;
 }
 
 :deep(.patients-table tbody tr:hover) {
-  background-color: #f5f5f5;
-  transition: background-color 0.15s ease-in-out;
+  background-color: #f9fafb;
+  transition: background-color 0.2s ease;
 }
 
 .th-content {

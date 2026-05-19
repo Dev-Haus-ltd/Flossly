@@ -1,23 +1,9 @@
-import { getOrgTransporter, getFromAddress } from "./nodeMailer";
+import { getOrgTransporter, getFromAddress, getOrgEmailIdentity } from "./nodeMailer";
 import { template } from "./emailTemplate";
 import { buildLeadContext, renderTokens } from './tokenRenderer.js'
 import { getS3Object } from './s3.js'
+import { ServerCommunicationLogger } from './serverCommunicationLogger.js'
 const config = useRuntimeConfig();
-
-async function sendEmail(orgId, mailOptions) {
-  const mailer = await getOrgTransporter(orgId);
-  const from = getFromAddress(orgId);
-  return mailer.sendMail({
-    from: mailOptions.from || from,
-    to: mailOptions.to,
-    cc: mailOptions.cc,
-    bcc: mailOptions.bcc,
-    subject: mailOptions.subject,
-    html: mailOptions.html,
-    text: mailOptions.text,
-    attachments: mailOptions.attachments,
-  });
-}
 
 const streamToBuffer = (stream) =>
   new Promise((resolve, reject) => {
@@ -26,6 +12,156 @@ const streamToBuffer = (stream) =>
     stream.on('end', () => resolve(Buffer.concat(chunks)));
     stream.on('error', reject);
   });
+
+async function sendEmail(orgId, mailOptions, options = {}) {
+  const mailer = await getOrgTransporter(orgId);
+  let from, replyTo;
+  if (options.patientFacing) {
+    const identity = await getOrgEmailIdentity(orgId);
+    from = mailOptions.from || identity.from;
+    replyTo = identity.replyTo;
+  } else {
+    from = mailOptions.from || getFromAddress(orgId);
+  }
+  const attachments = await resolveMailAttachments(mailOptions.attachments);
+  return mailer.sendMail({
+    from,
+    ...(replyTo ? { replyTo } : {}),
+    to: mailOptions.to,
+    cc: mailOptions.cc,
+    bcc: mailOptions.bcc,
+    subject: mailOptions.subject,
+    html: mailOptions.html,
+    text: mailOptions.text,
+    attachments: attachments.length ? attachments : undefined,
+  });
+}
+
+/**
+ * Send email with optional Communication Hub logging
+ * @param {Object} options
+ * @param {number} options.orgId - Organisation ID
+ * @param {Object} options.mailOptions - Standard mail options
+ * @param {number} options.patientId - Patient ID (optional, for logging)
+ * @param {number} options.practitionerId - Practitioner ID (optional, for logging)
+ * @param {Object} options.logMetadata - Additional metadata for logging
+ * @returns {Promise<Object>} Result with sent status and optional log
+ */
+export async function sendEmailWithLogging(options = {}) {
+  const {
+    orgId,
+    mailOptions,
+    patientId = null,
+    practitionerId = null,
+    logMetadata = {},
+  } = options
+
+  try {
+    const result = await sendEmail(orgId, mailOptions)
+
+    // Log to Communication Hub if patientId is provided
+    if (patientId) {
+      await ServerCommunicationLogger.logEmail(
+        orgId,
+        patientId,
+        mailOptions.subject || 'Email',
+        mailOptions.html || mailOptions.text || '',
+        'Sent',
+        practitionerId,
+        {
+          ...logMetadata,
+          recipientEmail: mailOptions.to?.[0] || '',
+          channel: 'email',
+        }
+      )
+    }
+
+    return { success: true, result }
+  } catch (error) {
+    console.error('Error sending email:', error)
+
+    // Log failed communication if patientId is provided
+    if (patientId) {
+      await ServerCommunicationLogger.logFailed(
+        orgId,
+        patientId,
+        'Email',
+        mailOptions.subject || 'Email',
+        mailOptions.html || mailOptions.text || '',
+        error.message,
+        practitionerId,
+        {
+          ...logMetadata,
+          recipientEmail: mailOptions.to?.[0] || '',
+        }
+      )
+    }
+
+    throw error
+  }
+}
+
+const inferEmailAttachmentContentType = (filename = '') => {
+  const lower = String(filename || '').toLowerCase();
+  if (lower.endsWith('.pdf')) return 'application/pdf';
+  if (lower.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (lower.endsWith('.doc')) return 'application/msword';
+  if (lower.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (lower.endsWith('.xls')) return 'application/vnd.ms-excel';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.txt')) return 'text/plain';
+  return 'application/octet-stream';
+};
+
+const resolveMailAttachments = async (attachments) => {
+  if (!Array.isArray(attachments)) return [];
+
+  const resolved = [];
+  for (const item of attachments) {
+    if (!item || typeof item !== 'object') continue;
+
+    const filename = String(item?.name || item?.filename || item?.title || 'attachment').trim() || 'attachment';
+    const contentType = String(item?.contentType || item?.mimeType || '').trim() || inferEmailAttachmentContentType(filename);
+    const sharedMeta = {
+      ...(item?.cid ? { cid: String(item.cid) } : {}),
+      ...(item?.contentDisposition ? { contentDisposition: String(item.contentDisposition) } : {}),
+      ...(item?.encoding ? { encoding: String(item.encoding) } : {}),
+      ...(item?.headers && typeof item.headers === 'object' ? { headers: item.headers } : {}),
+    };
+
+    if (item.content) {
+      resolved.push({ filename, content: item.content, contentType, ...sharedMeta });
+      continue;
+    }
+
+    if (item.path && typeof item.path === 'string' && item.path.trim()) {
+      resolved.push({ filename, path: item.path, contentType, ...sharedMeta });
+      continue;
+    }
+
+    const key = String(item?.link || item?.url || item?.path || '').trim();
+    if (!key) continue;
+
+    try {
+      const s3Obj = await getS3Object(key);
+      const content = await streamToBuffer(s3Obj.body);
+      resolved.push({
+        filename,
+        content,
+        contentType: item?.contentType || item?.mimeType || s3Obj.contentType || inferEmailAttachmentContentType(filename),
+        ...sharedMeta,
+      });
+    } catch (err) {
+      // Skip attachments that cannot be fetched rather than fail the entire send.
+      console.warn(`Skipping email attachment '${filename}':`, err?.message || err);
+    }
+  }
+
+  return resolved;
+};
+
 
 /** These notifications are configured */
 
@@ -373,6 +509,54 @@ export const sendInvitationEmail = async (data) => {
   });
 };
 
+// Parses <img src="..."> tags out of HTML and embeds only user-uploaded images
+// (those from /email-images/ on S3) as CID inline attachments.
+// All other images (template logos, external URLs) are left untouched.
+export const resolveHtmlImages = async (html) => {
+  if (!html) return { html, attachments: [] }
+
+  const attachments = []
+  const cidMap = {}
+
+  const srcRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi
+  const srcs = new Set()
+  let match
+  while ((match = srcRegex.exec(html)) !== null) {
+    srcs.add(match[1])
+  }
+
+  for (const src of srcs) {
+    if (!src.includes('/email-images/')) continue
+
+    try {
+      const urlPath = src.startsWith('http') ? new URL(src).pathname : src
+      const s3Key = urlPath.replace(/^\/+/, '')
+      const s3Obj = await getS3Object(s3Key)
+      const imageBuffer = await streamToBuffer(s3Obj.body)
+      const contentType = s3Obj.contentType || 'image/jpeg'
+
+      const cid = `img_${Math.random().toString(36).slice(2)}@flossly`
+      cidMap[src] = cid
+      attachments.push({
+        filename: src.split('/').pop().split('?')[0] || 'image.jpg',
+        content: imageBuffer,
+        contentType,
+        cid,
+        contentDisposition: 'inline',
+      })
+    } catch (_) {
+      // Leave this src as-is if we can't resolve it
+    }
+  }
+
+  let resolvedHtml = html
+  for (const [src, cid] of Object.entries(cidMap)) {
+    resolvedHtml = resolvedHtml.split(src).join(`cid:${cid}`)
+  }
+
+  return { html: resolvedHtml, attachments }
+}
+
 // CRM: bulk-send email to leads using a provided HTML body.
 // Performs light-weight placeholder replacement and wraps with the app template.
 // Placeholders supported:
@@ -410,13 +594,20 @@ export const sendLeadBulkEmail = async ({ leads = [], subject, html, from, sende
       const wrapped = template
         .replaceAll("{subject}", renderedSubject || "")
         .replace("{content}", content);
+
+      const { html: wrappedWithCids, attachments: inlineImages } = await resolveHtmlImages(wrapped)
+      const allAttachments = [
+        ...resolvedAttachments,
+        ...inlineImages,
+      ]
+
       await sendEmail(effectiveOrgId, {
         to: lead.email,
         from: from,
         subject: renderedSubject,
-        html: wrapped,
-        attachments: resolvedAttachments.length ? resolvedAttachments : undefined,
-      });
+        html: wrappedWithCids,
+        attachments: allAttachments.length ? allAttachments : undefined,
+      }, { patientFacing: true });
       sent++;
     } catch (e) {
       // swallow and continue with others
@@ -1060,7 +1251,7 @@ export const sendTaskDetailsEmail = async (data) => {
 };
 
 export const sendTrialActivatedEmail = async (data) => {
-  const subject = "Your 15-Day Free Trial Is Active 🎉";
+  const subject = `Your ${Number(data.trialDays || 14)}-Day Free Trial Is Active 🎉`;
 
   const trialEndDateFormatted = new Date(data.trialEndsOn).toLocaleDateString(
     "en-GB",
@@ -1076,7 +1267,7 @@ export const sendTrialActivatedEmail = async (data) => {
     <br />
 
     <p>
-      Your <strong>15-day free trial</strong> has been successfully activated for the organisation
+      Your <strong>${Number(data.trialDays || 14)}-day free trial</strong> has been successfully activated for the organisation
       <strong>${data.organisationName}</strong>.
     </p>
 
@@ -1196,6 +1387,8 @@ export const sendConsentFormEmail = async (data) => {
     formName,
     practiceInfo = {},
     customMessage = '',
+    customSubject = '',
+    attachments = [],
     expiryDays = 30,
     expiresAt = null,
     token = null,
@@ -1206,11 +1399,11 @@ export const sendConsentFormEmail = async (data) => {
     return;
   }
 
-const baseUrl =
-  (config?.public?.BASE_URL || process.env.BASE_URL || 'http://localhost:3000')
-    .replace(/\/+$/, '');
+  const baseUrl =
+    (config?.public?.BASE_URL || process.env.BASE_URL || 'http://localhost:3000')
+      .replace(/\/+$/, '');
 
-const accessUrl = `${baseUrl}/form/${token}`;
+  const accessUrl = `${baseUrl}/form/${token}`;
 
   const expiryText = expiresAt 
     ? new Date(expiresAt).toLocaleDateString('en-GB', { 
@@ -1221,6 +1414,30 @@ const accessUrl = `${baseUrl}/form/${token}`;
     : `in ${expiryDays} days`;
 
   const practiceName = practiceInfo?.name || practiceInfo?.organisationName || 'Flossly';
+
+  const attachmentsList = Array.isArray(attachments)
+    ? attachments
+        .filter((item) => item && (item.url || item.link))
+        .map((item) => ({
+          filename: item.name || item.filename || 'attachment',
+          link: item.url || item.link || item.path,
+          contentType: item.mimeType || item.contentType || undefined,
+        }))
+    : [];
+
+  const attachmentLinks = attachmentsList.length
+    ? `<br/><div style="background:#f8fafc;border:1px solid #e5e7eb;padding:16px;border-radius:12px;margin-top:16px;">
+      <p style="margin:0 0 8px 0;font-size:13px;color:#374151;"><strong>Attached files</strong></p>
+      <ul style="margin:0;padding-left:18px;color:#374151;font-size:13px;">
+        ${attachmentsList
+          .map(
+            (att) =>
+              `<li><a href="${att.link}" target="_blank" style="color:#0061fb;">${att.filename}</a></li>`,
+          )
+          .join('')}
+      </ul>
+    </div>`
+    : '';
 
   const content = `
     <p>Dear ${patientName || 'Patient'},</p>
@@ -1256,6 +1473,7 @@ const accessUrl = `${baseUrl}/form/${token}`;
     <p style="font-style: italic; color: #6b7280;">${customMessage}</p>
     <br/>
     ` : ''}
+    ${attachmentLinks}
     <p style="font-size: 13px; color: #9ca3af;">
       💡 <strong>Tip:</strong> The link is unique to you and secure. It will only work on the device and browser where you first open it.
     </p>
@@ -1270,7 +1488,7 @@ const accessUrl = `${baseUrl}/form/${token}`;
     </p>
   `;
 
-  const subject = `Please Review & Sign: ${formName}`;
+  const subject = customSubject?.trim() || `Please Review & Sign: ${formName}`;
   const html = template
     .replaceAll("{subject}", subject)
     .replace("{content}", content);
@@ -1280,11 +1498,43 @@ const accessUrl = `${baseUrl}/form/${token}`;
       to: [patientEmail],
       subject,
       html,
+      attachments: attachmentsList.length ? attachmentsList : undefined,
     });
   } catch (error) {
     console.error('Error sending consent form email:', error);
     throw error;
   }
+};
+
+export const sendMagicLinkEmail = async ({ email, fullName, link, orgId }) => {
+  const subject = "Your Flossy login link";
+  const content = `
+    <p>Hi ${fullName || 'there'},</p>
+    <p>Click the button below to log in to Flossy. This link expires in 30 minutes.</p>
+    <p style="text-align:center;margin-top:25px;">
+      <a href="${link}" class="btn">Log in to Flossy →</a>
+    </p>
+    <p style="color:#6b7280;font-size:13px;">If you didn't request this link, you can safely ignore this email.</p>
+    <br/><p>The Flossy Team</p>
+  `;
+  const html = template.replaceAll("{subject}", subject).replace("{content}", content);
+  await sendEmail(orgId, { to: [email], subject, html });
+};
+
+export const sendTrialEndingSoonEmail = async ({ fullName, email, trialEndDate, orgId }) => {
+  const subject = "Your Flossy CRM trial is ending soon";
+  const content = `
+    <p>Hi ${fullName || 'there'},</p>
+    <p>Your 14-day Flossy CRM trial ends on <strong>${trialEndDate}</strong>.</p>
+    <p>To keep access to WhatsApp messaging, automation, unlimited leads, and patient booking — upgrade to CRM before your trial ends.</p>
+    <p style="text-align:center;margin-top:25px;">
+      <a href="${config.public.BASE_URL}/subscription" class="btn">Upgrade to CRM →</a>
+    </p>
+    <p>If you don't upgrade, your account will revert to Flossy Lite (free forever) and your data will be kept safe.</p>
+    <br/><p>The Flossy Team</p>
+  `;
+  const html = template.replaceAll("{subject}", subject).replace("{content}", content);
+  await sendEmail(orgId, { to: [email], subject, html });
 };
 
 // leaves

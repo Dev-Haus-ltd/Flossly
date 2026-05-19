@@ -16,6 +16,7 @@
         :allow-group-edit="props.allowGroupEdit"
         :active-key="activeAutomation?.key || ''"
         :whatsapp-enabled="props.whatsappEnabled"
+        :disable-toggle="bulkToggleSaving"
         @select="selectAutomation"
         @toggle="toggleAutomationGroup"
         @edit="(card) => emit('edit-group', card)"
@@ -202,7 +203,7 @@
 
               <!-- inquiry_days / activation_days: days number + date picker -->
               <template v-if="['inquiry_days', 'activation_days'].includes(triggerForm.triggerType)">
-                <v-col cols="12" sm="6">
+                <v-col cols="12" :sm="triggerForm.triggerType === 'activation_days' ? 12 : 6">
                   <div class="trig-field-label">
                     Days after {{ triggerForm.triggerType === 'activation_days' ? 'activation' : (resolvedLeadId ? 'activation' : 'enquiry') }}
                   </div>
@@ -219,12 +220,10 @@
                     suffix="days"
                   />
                 </v-col>
-                <v-col cols="12" sm="6">
+                <v-col v-if="triggerForm.triggerType === 'inquiry_days'" cols="12" sm="6">
                   <div class="trig-field-label">
                     Or pick a target date
-                    <span class="trig-field-hint">
-                      (calculates days from {{ triggerForm.triggerType === 'activation_days' ? 'activation day' : 'today' }})
-                    </span>
+                    <span class="trig-field-hint">(calculates days from today)</span>
                   </div>
                   <v-text-field
                     :model-value="triggerInquiryDatePickerValue"
@@ -559,11 +558,13 @@ const props = defineProps({
   readOnlyTrigger: { type: Boolean, default: false },
   selectedLeadIds: { type: Array, default: null },
   selectedLeads: { type: Array, default: null },
+  categorySearch: { type: String, default: '' },
+  categoryFilter: { type: Object, default: () => ({}) },
 })
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
 const orgStore = useOrgStore()
-const emit = defineEmits(['update:rows','save','edit-group','delete-group','go-to-automations'])
+const emit = defineEmits(['update:rows','save','edit-group','delete-group','go-to-automations','bulk-toggle-done'])
 
 const resolvedPatientId = computed(() => {
   const raw = props.patientId ?? props.patient?.id
@@ -610,10 +611,12 @@ const filterType = ref('all')
 const saving = ref(false)
 const activeAutomation = ref(null)
 const showGroupDialog = ref(false)
+const bulkLoadInProgress = ref(false)
 const infoAlertText = "Most content is tailored to your practice profile. Please review and update details before enabling, as you're responsible for the final message."
 const groupRows = ref([])
 const defaultAutomationKeySet = new Set(crmAutomationDefaults.map(item => item.key))
 const defaultGroupKeySet = new Set(crmAutomationGroups.map(group => group.key))
+const defaultAutomationMap = new Map(crmAutomationDefaults.map(item => [item.key, item]))
 
 const tableHeaders = computed(() => {
   const headers = [
@@ -729,13 +732,15 @@ const isDefaultGroup = (group) =>
 
 const visibleGroups = computed(() => {
   const withoutLegacy = resolvedGroups.value.filter((group) => String(group?.source || '').toLowerCase() !== 'legacy')
+  let filtered
   if (isPatientJourney.value) {
-    return withoutLegacy
+    filtered = withoutLegacy
+  } else if (props.includeDefaults) {
+    filtered = withoutLegacy.filter((group) => String(group?.source || '').toLowerCase() === 'system')
+  } else {
+    filtered = withoutLegacy.filter((group) => String(group?.source || '').toLowerCase() === 'custom')
   }
-  if (props.includeDefaults) {
-    return withoutLegacy.filter((group) => String(group?.source || '').toLowerCase() === 'system')
-  }
-  return withoutLegacy.filter((group) => String(group?.source || '').toLowerCase() === 'custom')
+  return [...filtered].sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0))
 })
 
 const resolveGroupAuthor = (group) =>
@@ -771,11 +776,12 @@ const bulkGroupState = computed(() => {
   const result = {}
   for (const group of visibleGroups.value) {
     const keys = group.templateKeys || []
+    const keySet = keys.length ? new Set(keys) : null
     let enabledCount = 0
     for (const leadId of selectedLeadIdsNormalized.value) {
       const leadRows = crmStore.automationRowsCache[leadId] || []
-      const groupRows = keys.length
-        ? leadRows.filter(r => new Set(keys).has(r.key))
+      const groupRows = keySet
+        ? leadRows.filter(r => keySet.has(r.key))
         : leadRows.filter(r => r.groupKey === group.key)
       if (groupRows.some(r => r.enabled)) enabledCount++
     }
@@ -785,20 +791,39 @@ const bulkGroupState = computed(() => {
 })
 
 const automationCards = computed(() => {
-  return visibleGroups.value.map((group) => {
+  const cards = visibleGroups.value.map((group) => {
     const keys = group.templateKeys || []
     const groupRows = keys.length
       ? rows.filter(r => keys.includes(r.key))
       : rows.filter(r => r.groupKey === group.key)
+    const bulkState = bulkGroupState.value
+      ? (bulkGroupState.value[group.key] || { enabledCount: 0, totalCount: selectedLeadIdsNormalized.value.length })
+      : null
+    const enabled = bulkState
+      ? bulkState.enabledCount === bulkState.totalCount && bulkState.totalCount > 0
+      : groupRows.some(r => r.enabled)
     return {
       ...group,
       itemCount: groupRows.length,
-      enabled: groupRows.some(r => r.enabled),
+      enabled,
+      bulkState,
       author: resolveGroupAuthor(group),
       isDefault: isDefaultGroup(group),
       hasWhatsApp: groupRows.some(r => String(r.type || 'Email').toLowerCase() === 'whatsapp'),
     }
   })
+  let result = cards
+  const q = String(props.categorySearch || '').trim().toLowerCase()
+  if (q) {
+    result = result.filter(c =>
+      String(c.title || '').toLowerCase().includes(q) ||
+      String(c.description || '').toLowerCase().includes(q)
+    )
+  }
+  const f = props.categoryFilter || {}
+  if (f.type === 'whatsapp') result = result.filter(c => c.hasWhatsApp)
+  if (f.type === 'email') result = result.filter(c => !c.hasWhatsApp)
+  return result
 })
 
 const loadPatientJourneyTemplates = async (groupKey) => {
@@ -1016,7 +1041,7 @@ const buildBulkRowsFromSelectedLeads = () => {
   }
 
   return Array.from(rowMap.entries()).map(([key, leadRows]) => {
-    const fallback = crmAutomationDefaults.find((item) => item.key === key) || {}
+    const fallback = defaultAutomationMap.get(key) || {}
     const baseRow = leadRows[0] || fallback
     const triggerKeys = [...new Set(leadRows.map((row) => stableTriggerKey(row?.trigger)).filter(Boolean))]
     const hasMixedTrigger = triggerKeys.length > 1
@@ -1024,7 +1049,8 @@ const buildBulkRowsFromSelectedLeads = () => {
       ? null
       : (leadRows.find((row) => row?.trigger)?.trigger || baseRow?.trigger)
     const enabledCount = leadRows.filter((row) => !!row?.enabled).length
-    const bulkTriggerDetails = leadIds.map((leadId) => {
+    const TOOLTIP_MAX = 5
+    const allTriggerDetails = leadIds.map((leadId) => {
       const matchingRow = leadRows.find((row) => Number(row?.__sourceLeadId || 0) === leadId)
       const leadName = selectedLeadNameMap.value.get(leadId) || `Lead #${leadId}`
       const detailTrigger = matchingRow?.trigger || null
@@ -1034,6 +1060,8 @@ const buildBulkRowsFromSelectedLeads = () => {
         triggerLabel: detailTrigger ? formatLeadAwareTriggerPreview(detailTrigger) : 'No lead-specific trigger',
       }
     })
+    const bulkTriggerDetails = allTriggerDetails.slice(0, TOOLTIP_MAX)
+    const bulkTriggerOverflow = Math.max(0, allTriggerDetails.length - TOOLTIP_MAX)
 
     return {
       ...fallback,
@@ -1048,6 +1076,7 @@ const buildBulkRowsFromSelectedLeads = () => {
       bulkTotalCount: leadIds.length,
       bulkHasMixedTrigger: hasMixedTrigger,
       bulkTriggerDetails,
+      bulkTriggerOverflow,
     }
   })
 }
@@ -1099,50 +1128,92 @@ const buildPayload = (row) => {
   return payload
 }
 
-const toggleAutomationGroupBulk = async (card, val) => {
-  const keys = card?.templateKeys || []
-  const allUpdates = []
+const buildLeadScopedPayload = (row, leadId, overrides = {}) => {
+  const merged = { ...(row || {}), ...(overrides || {}) }
+  const payload = {
+    key: merged.key,
+    type: merged.type,
+    name: merged.name,
+    subject: merged.subject,
+    sending: merged.sending,
+    enabled: !!merged.enabled,
+    template: merged.template,
+    whatsappTemplateName: merged.whatsappTemplateName,
+    whatsappTemplateLanguage: merged.whatsappTemplateLanguage,
+    leadId: Number(leadId),
+  }
+  if (merged.trigger) payload.trigger = merged.trigger
+  if (merged.groupKey || activeAutomation.value?.key) {
+    payload.groupKey = merged.groupKey || activeAutomation.value?.key
+  }
+  return payload
+}
 
-  for (const leadId of props.selectedLeadIds) {
+const bulkToggleSaving = ref(false)
+
+const missingTriggerMessage = (noTriggerRows) => {
+  const names = noTriggerRows.slice(0, 2).map(r => `"${r.name || r.key}"`).join(', ')
+  const extra = noTriggerRows.length > 2 ? ` and ${noTriggerRows.length - 2} more` : ''
+  return `Cannot enable — trigger missing for ${names}${extra}. Open each automation to set a trigger.`
+}
+
+const toggleAutomationGroupBulk = async (card, val) => {
+  if (bulkToggleSaving.value) return
+  const keys = card?.templateKeys || []
+
+  if (val) {
+    const templateRows = keys.length
+      ? keys.map(k => rows.find(r => r.key === k) || defaultAutomationMap.get(k)).filter(Boolean)
+      : rows.filter(r => r.groupKey === card?.key)
+    const noTrigger = templateRows.filter(r => !r.trigger?.type)
+    if (noTrigger.length) {
+      mainStore?.setSnackbar?.({ title: missingTriggerMessage(noTrigger), type: 'error' })
+      return
+    }
+  }
+
+  const allUpdates = []
+  const rollbackByLead = new Map()
+
+  for (const leadId of selectedLeadIdsNormalized.value) {
     const numId = Number(leadId)
     const leadRows = crmStore.automationRowsCache[numId] || []
-    let groupRows
+    let targetRows
 
     if (keys.length) {
       const rowMap = new Map(leadRows.map(r => [r.key, r]))
-      groupRows = keys.map(key => {
+      const synthesized = []
+      targetRows = keys.map(key => {
         if (rowMap.has(key)) return rowMap.get(key)
-        const def = crmAutomationDefaults.find(d => d.key === key)
-        return def ? { ...def } : null
+        const def = defaultAutomationMap.get(key)
+        if (!def) return null
+        const nextRow = { ...def }
+        synthesized.push(nextRow)
+        return nextRow
       }).filter(Boolean)
+      if (synthesized.length) {
+        crmStore.setLeadAutomationsOptimistic(numId, [...leadRows, ...synthesized])
+      }
     } else {
-      groupRows = leadRows.filter(r => r.groupKey === card?.key)
+      targetRows = leadRows.filter(r => r.groupKey === card?.key)
     }
 
+    const changeMap = new Map()
     const leadUpdates = []
-    groupRows.forEach(row => {
+    targetRows.forEach(row => {
       if (!!row.enabled !== !!val) {
-        leadUpdates.push({
-          key: row.key,
-          type: row.type || 'Email',
-          name: row.name || row.key,
-          subject: row.subject || '',
-          sending: row.sending || '',
-          enabled: !!val,
-          template: row.template || '',
-          groupKey: row.groupKey || card?.key,
-          leadId: numId,
-        })
+        changeMap.set(row.key, !!val)
+        leadUpdates.push(buildLeadScopedPayload(row, numId, { enabled: !!val, groupKey: row.groupKey || card?.key }))
       }
     })
 
     if (leadUpdates.length) {
       allUpdates.push(...leadUpdates)
-      const changeKeys = new Map(leadUpdates.map(u => [u.key, u.enabled]))
+      rollbackByLead.set(numId, changeMap)
       crmStore.setLeadAutomationsOptimistic(
         numId,
         (crmStore.automationRowsCache[numId] || []).map(row =>
-          changeKeys.has(row.key) ? { ...row, enabled: changeKeys.get(row.key) } : row
+          changeMap.has(row.key) ? { ...row, enabled: changeMap.get(row.key) } : row
         )
       )
     }
@@ -1150,15 +1221,41 @@ const toggleAutomationGroupBulk = async (card, val) => {
 
   if (!allUpdates.length) return
 
+  bulkToggleSaving.value = true
   try {
-    await crmStore.saveAutomationBatch({ items: allUpdates })
+    const res = await crmStore.saveAutomationBatch({ items: allUpdates })
+    if (res?.code === 0) {
+      const groupName = card?.title || 'Automation'
+      const count = selectedLeadIdsNormalized.value.length
+      const action = val ? 'activated' : 'deactivated'
+      const leadWord = count === 1 ? 'lead' : 'leads'
+      mainStore?.setSnackbar?.({
+        title: `"${groupName}" was ${action} for ${count} ${leadWord}`,
+        type: 'success',
+      })
+      emit('bulk-toggle-done')
+    }
   } catch (e) {
-    await Promise.all(props.selectedLeadIds.map(id => crmStore.invalidateLeadAutomations(Number(id))))
+    // Roll back all optimistic updates
+    for (const [numId, changeMap] of rollbackByLead.entries()) {
+      crmStore.setLeadAutomationsOptimistic(
+        numId,
+        (crmStore.automationRowsCache[numId] || []).map(row =>
+          changeMap.has(row.key) ? { ...row, enabled: !changeMap.get(row.key) } : row
+        )
+      )
+    }
     mainStore?.setSnackbar?.({ title: e?.message || 'Failed to update automations', type: 'error' })
+  } finally {
+    bulkToggleSaving.value = false
   }
 }
 
 const toggleAutomationGroup = async (card, val) => {
+  if (selectedLeadIdsNormalized.value.length) {
+    await toggleAutomationGroupBulk(card, val)
+    return
+  }
   const keys = card?.templateKeys || []
   let groupRows
   if (keys.length) {
@@ -1166,7 +1263,7 @@ const toggleAutomationGroup = async (card, val) => {
     const synthesized = []
     groupRows = keys.map((key) => {
       if (rowMap.has(key)) return rowMap.get(key)
-      const def = crmAutomationDefaults.find((d) => d.key === key)
+      const def = defaultAutomationMap.get(key)
       if (!def) return null
       const newRow = { ...def }
       synthesized.push(newRow)
@@ -1175,6 +1272,14 @@ const toggleAutomationGroup = async (card, val) => {
     if (synthesized.length) rows.push(...synthesized)
   } else {
     groupRows = rows.filter((r) => r.groupKey === card?.key)
+  }
+
+  if (val) {
+    const noTrigger = groupRows.filter(r => !r.trigger?.type)
+    if (noTrigger.length) {
+      mainStore?.setSnackbar?.({ title: missingTriggerMessage(noTrigger), type: 'error' })
+      return
+    }
   }
 
   const updates = []
@@ -1189,7 +1294,7 @@ const toggleAutomationGroup = async (card, val) => {
   try {
     await crmStore.saveAutomationBatch({ items: updates })
     if (resolvedLeadId.value) {
-      await crmStore.invalidateLeadAutomations(resolvedLeadId.value)
+      await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force: true, silent: true })
       const syncedRows = crmStore.automationRowsCache[Number(resolvedLeadId.value)] || []
       const filteredRows = props.includeDefaults
         ? syncedRows
@@ -1206,12 +1311,17 @@ const loadRows = async ({ force = false } = {}) => {
   try {
     let apiItems = []
     if (isBulkLeadMode.value) {
-      await Promise.all(
-        selectedLeadIdsNormalized.value.map((leadId) =>
-          crmStore.fetchLeadAutomations(leadId, { force })
+      bulkLoadInProgress.value = true
+      try {
+        await Promise.all(
+          selectedLeadIdsNormalized.value.map((leadId) =>
+            crmStore.fetchLeadAutomations(leadId, { force })
+          )
         )
-      )
-      apiItems = buildBulkRowsFromSelectedLeads()
+        apiItems = buildBulkRowsFromSelectedLeads()
+      } finally {
+        bulkLoadInProgress.value = false
+      }
     } else if (resolvedLeadId.value) {
       await crmStore.fetchLeadAutomations(resolvedLeadId.value, { force })
       apiItems = crmStore.automationRowsCache[Number(resolvedLeadId.value)] || []
@@ -1289,18 +1399,23 @@ watch(
   }
 )
 
-watch(
-  () => selectedLeadIdsNormalized.value.map((leadId) => crmStore.automationRowsCache[leadId] || []),
-  () => {
-    if (!isBulkLeadMode.value) return
-    const nextRows = buildBulkRowsFromSelectedLeads()
-    const filtered = props.includeDefaults
-      ? nextRows
-      : nextRows.filter(item => !defaultAutomationKeySet.has(item.key))
-    rows.splice(0, rows.length, ...(filtered.length ? filtered : (props.includeDefaults ? crmAutomationDefaults : [])))
-  },
-  { deep: true }
-)
+// Track bulk cache changes with a version counter — avoids deep comparison of nested arrays
+const bulkCacheVersion = computed(() => {
+  if (!isBulkLeadMode.value) return 0
+  return selectedLeadIdsNormalized.value.reduce((sum, leadId) => {
+    const cached = crmStore.automationRowsCache[leadId]
+    return sum + (Array.isArray(cached) ? cached.length + 1 : 0)
+  }, 0)
+})
+
+watch(bulkCacheVersion, () => {
+  if (!isBulkLeadMode.value || bulkLoadInProgress.value) return
+  const nextRows = buildBulkRowsFromSelectedLeads()
+  const filtered = props.includeDefaults
+    ? nextRows
+    : nextRows.filter(item => !defaultAutomationKeySet.has(item.key))
+  rows.splice(0, rows.length, ...(filtered.length ? filtered : (props.includeDefaults ? crmAutomationDefaults : [])))
+})
 
 // Preview dialog state
 const show = ref(false)
@@ -1712,6 +1827,48 @@ const saveTrigger = async () => {
       // "Send Now" should dispatch immediately, so ensure row is enabled.
       selectedRow.enabled = true
     }
+    if (isBulkLeadMode.value) {
+      const leadIds = selectedLeadIdsNormalized.value
+      if (!leadIds.length) {
+        closeTriggerDialog()
+        return
+      }
+      const updates = leadIds.map((leadId) => {
+        const leadRows = crmStore.automationRowsCache[Number(leadId)] || []
+        const existing = leadRows.find((row) => row?.key === selectedRow?.key)
+        const fallback = crmAutomationDefaults.find((row) => row?.key === selectedRow?.key) || {}
+        const baseRow = { ...fallback, ...existing, ...selectedRow }
+        return buildLeadScopedPayload(baseRow, leadId, {
+          trigger: nextTrigger,
+          sending: formatLeadAwareTriggerPreview(nextTrigger),
+          enabled: isSendNow ? true : !!baseRow.enabled,
+        })
+      })
+      const res = await crmStore.saveAutomationBatch({ items: updates })
+      if (res?.code !== 0) {
+        mainStore?.setSnackbar?.({
+          title: res?.error || res?.message || 'Failed to save trigger',
+          type: 'error',
+        })
+        return
+      }
+      await Promise.all(
+        leadIds.map((leadId) => crmStore.fetchLeadAutomations(Number(leadId), { force: true, silent: true }))
+      )
+      closeTriggerDialog()
+      if (isSendNow) {
+        mainStore?.setSnackbar?.({
+          title: 'Send now completed for selected leads',
+          type: 'success',
+        })
+        return
+      }
+      mainStore?.setSnackbar?.({
+        title: 'Trigger saved successfully',
+        type: 'success',
+      })
+      return
+    }
     const payload = buildPayload(selectedRow)
     const isLeadSendNowEmail =
       isSendNow &&
@@ -1989,9 +2146,15 @@ watch(showGroupDialog, (v) => {
 
 /* Config fields */
 .trig-field-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  min-height: 32px;
   font-size: 12px;
   font-weight: 500;
   color: #6b7280;
+  line-height: 1.35;
   margin-bottom: 5px;
 }
 

@@ -67,14 +67,14 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/searchUsers?limit=10&offset=0",
+              "raw": "{{base_url}}/api/admin/users?limit=10&offset=0",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "searchUsers"
+                "users"
               ],
               "query": [
                 {
@@ -123,20 +123,22 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/getUserById?userId=123",
+              "raw": "{{base_url}}/api/admin/users/123",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getUserById"
+                "users",
+                "123"
               ],
               "query": [
                 {
                   "key": "userId",
                   "value": "123",
-                  "description": "User ID (required)"
+                  "description": "User ID (optional if present in path)",
+                  "disabled": true
                 }
               ]
             },
@@ -147,7 +149,7 @@
         {
           "name": "Update User Status (Organisation Specific)",
           "request": {
-            "method": "POST",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
@@ -156,20 +158,24 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"userId\": 123,\n  \"organisationId\": 45,\n  \"status\": \"Disabled\"\n}"
+              "raw": "{\n  \"status\": \"Disabled\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/updateUserStatus",
+              "raw": "{{base_url}}/api/admin/orgs/45/users/123/status",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateUserStatus"
+                "orgs",
+                "45",
+                "users",
+                "123",
+                "status"
               ]
             },
-            "description": "Update a user's status within a specific organisation (UserOrganisations table). This controls whether the user can access that particular organisation. Valid options: Active, Disabled, Invited, Expired."
+            "description": "Update a user's status within a specific organisation (UserOrganisations table). Org id is in the URL path only; body carries status. Valid options: Active, Disabled, Invited, Expired."
           },
           "response": []
         },
@@ -179,21 +185,18 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/getUserLoginHistory?userId=123&limit=20&offset=0",
+              "raw": "{{base_url}}/api/admin/users/123/login-history?limit=20&offset=0",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getUserLoginHistory"
+                "users",
+                "123",
+                "login-history"
               ],
               "query": [
-                {
-                  "key": "userId",
-                  "value": "123",
-                  "description": "User ID (required)"
-                },
                 {
                   "key": "limit",
                   "value": "20",
@@ -222,20 +225,24 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"userId\": 123,\n  \"organisationId\": 10\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/resendInvite",
+              "raw": "{{base_url}}/api/admin/orgs/10/users/123/resend-invite",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "resendInvite"
+                "orgs",
+                "10",
+                "users",
+                "123",
+                "resend-invite"
               ]
             },
-            "description": "Admin-assisted resend invitation email. Only works for users with status Invited. organisationId is optional."
+            "description": "Admin-assisted resend invitation email. Only works for users with status Invited. Organisation id is in the URL path only."
           },
           "response": []
         },
@@ -251,17 +258,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"userId\": 123,\n  \"newPassword\": \"newSecurePassword123\"\n}"
+              "raw": "{\n  \"newPassword\": \"newSecurePassword123\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/resetUserPassword",
+              "raw": "{{base_url}}/api/admin/users/123/reset-password",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "resetUserPassword"
+                "users",
+                "123",
+                "reset-password"
               ]
             },
             "description": "Admin-assisted password reset for any user. No OTP required. Password must be at least 8 characters."
@@ -274,31 +283,54 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/searchOrganisations?search=&page=1&limit=20",
+              "raw": "{{baseUrl}}/api/admin/orgs?search=&page=1&limit=20&sortBy=name&sortOrder=asc&createdAtFrom=&createdAtTo=",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "searchOrganisations"
+                "orgs"
               ],
               "query": [
                 {
                   "key": "search",
-                  "value": ""
+                  "value": "",
+                  "description": "Filter by org name (case-insensitive partial match)"
                 },
                 {
                   "key": "page",
-                  "value": "1"
+                  "value": "1",
+                  "description": "Page number (default: 1)"
                 },
                 {
                   "key": "limit",
-                  "value": "20"
+                  "value": "20",
+                  "description": "Results per page (default: 20)"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "name",
+                  "description": "Field to sort by. Allowed values: name, createdAt, status, licenseType (default: name)"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc",
+                  "description": "Sort direction. Allowed values: asc, desc (default: asc)"
+                },
+                {
+                  "key": "createdAtFrom",
+                  "value": "",
+                  "description": "Return orgs created on or after this date (ISO 8601, e.g. 2026-01-01T00:00:00.000Z)"
+                },
+                {
+                  "key": "createdAtTo",
+                  "value": "",
+                  "description": "Return orgs created on or before this date (ISO 8601, e.g. 2026-05-18T23:59:59.999Z)"
                 }
               ]
             },
-            "description": "Search organisations by name with pagination"
+            "description": "Search and filter organisations. Supports name search, date range filtering (createdAtFrom / createdAtTo), and sorting by name, createdAt, status, or licenseType. Role 17 sees all orgs; other admin roles see only their own org."
           },
           "response": []
         },
@@ -308,21 +340,17 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getOrganisationById?id=5",
+              "raw": "{{baseUrl}}/api/admin/orgs/5",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getOrganisationById"
+                "orgs",
+                "5"
               ],
-              "query": [
-                {
-                  "key": "id",
-                  "value": "5"
-                }
-              ]
+              "query": []
             },
             "description": "Get detailed organisation information by ID"
           },
@@ -334,14 +362,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/searchRoles?search=&page=1&limit=20",
+              "raw": "{{baseUrl}}/api/admin/roles/search?search=&page=1&limit=20",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "searchRoles"
+                "roles",
+                "search"
               ],
               "query": [
                 {
@@ -374,14 +403,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/getOrgsTrialsExpiringInXDays?days=7&limit=50&offset=0",
+              "raw": "{{base_url}}/api/admin/orgs/trials-expiring?days=7&limit=50&offset=0",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getOrgsTrialsExpiringInXDays"
+                "orgs",
+                "trials-expiring"
               ],
               "query": [
                 {
@@ -411,14 +441,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/getPastDueOrgs?limit=50&offset=0",
+              "raw": "{{base_url}}/api/admin/orgs/past-due?limit=50&offset=0",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getPastDueOrgs"
+                "orgs",
+                "past-due"
               ],
               "query": [
                 {
@@ -443,14 +474,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/getOrgsAboveSeatLimit?limit=50&offset=0",
+              "raw": "{{base_url}}/api/admin/orgs/above-seat-limit?limit=50&offset=0",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getOrgsAboveSeatLimit"
+                "orgs",
+                "above-seat-limit"
               ],
               "query": [
                 {
@@ -475,14 +507,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/getOrgsByPlanType",
+              "raw": "{{base_url}}/api/admin/orgs/by-plan",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getOrgsByPlanType"
+                "orgs",
+                "by-plan"
               ],
               "query": [
                 {
@@ -521,21 +554,19 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/exportOrgTasks?organisationId=10",
+              "raw": "{{base_url}}/api/admin/tasks/export/org/10",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "exportOrgTasks"
+                "tasks",
+                "export",
+                "org",
+                "10"
               ],
               "query": [
-                {
-                  "key": "organisationId",
-                  "value": "10",
-                  "description": "Organisation ID (required)"
-                },
                 {
                   "key": "format",
                   "value": "csv",
@@ -554,14 +585,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/exportAllTasks",
+              "raw": "{{base_url}}/api/admin/tasks/export",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "exportAllTasks"
+                "tasks",
+                "export"
               ],
               "query": [
                 {
@@ -588,14 +620,14 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/getAllRoles",
+              "raw": "{{base_url}}/api/admin/roles",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getAllRoles"
+                "roles"
               ]
             },
             "description": "Get all roles in the system."
@@ -605,40 +637,83 @@
         {
           "name": "Get Usage Metrics",
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organisationId\": 10,\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-12-31\"\n}"
+            },
             "url": {
-              "raw": "{{base_url}}/api/admin/getUsageMetrics",
+              "raw": "{{base_url}}/api/admin/orgs/metrics",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getUsageMetrics"
+                "orgs",
+                "metrics"
               ],
               "query": [
                 {
-                  "key": "organisationId",
-                  "value": "10",
-                  "description": "Filter by specific organisation (optional)",
-                  "disabled": true
-                },
-                {
                   "key": "startDate",
                   "value": "2026-01-01",
-                  "description": "Filter records from this date (optional)",
+                  "description": "Optional when not in body; filter from this date",
                   "disabled": true
                 },
                 {
                   "key": "endDate",
                   "value": "2026-12-31",
-                  "description": "Filter records until this date (optional)",
+                  "description": "Optional when not in body",
+                  "disabled": true
+                },
+                {
+                  "key": "organisationId",
+                  "value": "",
+                  "description": "Optional GET fallback; prefer JSON body for POST",
                   "disabled": true
                 }
               ]
             },
-            "description": "Get comprehensive usage metrics across all modules: users, storage, documents, leads, tasks, appointments, and notifications. Includes conversion rates and completion rates."
+            "description": "Usage metrics for one organisation or (if organisationId is omitted) across all organisations. Pass organisationId in the JSON body (`orgId` accepted). Optional date range in body or query. GET /api/admin/orgs/metrics also works: optional organisationId and dates as query params."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Usage Metrics (all organisations, GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/orgs/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "orgs",
+                "metrics"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-12-31",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Same as POST but without a body; omit organisationId to aggregate across all practices."
           },
           "response": []
         },
@@ -648,14 +723,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getStorageUsagePerPractice",
+              "raw": "{{baseUrl}}/api/admin/orgs/storage-usage",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getStorageUsagePerPractice"
+                "orgs",
+                "storage-usage"
               ]
             }
           },
@@ -666,6 +742,7 @@
     },
     {
       "name": "CRM Automation Library",
+      "description": "Global and per-org automation library endpoints, bulk upload sample, and admin automation dictionary CRUD at `/api/admin/crm/automations/groups` and `/api/admin/crm/automations/templates` (seed: `dictionary-seed`).",
       "item": [
         {
           "name": "Get Global Automation Library",
@@ -673,14 +750,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getGlobalAutomationLibrary",
+              "raw": "{{baseUrl}}/api/admin/crm/automations",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getGlobalAutomationLibrary"
+                "crm",
+                "automations"
               ]
             }
           },
@@ -692,15 +770,19 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getPracticeAutomationLibrary",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/automations",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getPracticeAutomationLibrary"
-              ]
+                "crm",
+                "org",
+                "1",
+                "automations"
+              ],
+              "query": []
             }
           },
           "response": []
@@ -717,17 +799,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{}"
+              "raw": "{\n  \"templateId\": 1,\n  \"enabled\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/toggleAutomationTemplate",
+              "raw": "{{baseUrl}}/api/admin/crm/automations/toggle-template",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "toggleAutomationTemplate"
+                "crm",
+                "automations",
+                "toggle-template"
               ]
             }
           },
@@ -742,11 +826,6 @@
               "mode": "formdata",
               "formdata": [
                 {
-                  "key": "organisationId",
-                  "value": "1",
-                  "type": "text"
-                },
-                {
                   "key": "file",
                   "type": "file",
                   "src": "public/samples/automation-sample.csv"
@@ -754,17 +833,21 @@
               ]
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/bulkUploadAutomations",
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/automations/bulk-upload",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "bulkUploadAutomations"
+                "crm",
+                "org",
+                "1",
+                "automations",
+                "bulk-upload"
               ]
             },
-            "description": "Bulk upload CRM automations into a target organisation as superadmin using a CSV/XLS/XLSX file upload. Include organisationId and a file field that matches the application template columns."
+            "description": "Bulk upload CRM automations as superadmin using a CSV/XLS/XLSX file upload. Organisation is determined from the URL path segment after `/crm/org/`. Only the file field is required in the form body."
           },
           "response": []
         },
@@ -774,19 +857,231 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/downloadAutomationTemplate",
+              "raw": "{{baseUrl}}/api/admin/crm/automations/template-sample",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "downloadAutomationTemplate"
+                "crm",
+                "automations",
+                "template-sample"
               ]
             },
             "description": "Download the CRM automation bulk upload sample CSV for admin/superadmin use."
           },
           "response": []
+        },
+        {
+          "name": "Automation dictionary",
+          "description": "Admin CRUD for global automation dictionary groups and templates (library items used when building automations). URLs live under `/api/admin/crm/automations/groups` and `/templates` (not under scripts-pool).",
+          "item": [
+            {
+              "name": "Seed automation dictionary",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/dictionary-seed",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "dictionary-seed"]
+                },
+                "description": "Runs the default seed for dictionary groups/templates if missing. Admin only."
+              },
+              "response": []
+            },
+            {
+              "name": "List dictionary groups",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/groups?status=active",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "groups"],
+                  "query": [
+                    { "key": "status", "value": "active", "disabled": true },
+                    { "key": "category", "value": "", "disabled": true }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get dictionary group by id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/groups/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "groups", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create dictionary group",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"key\": \"follow_up\",\n  \"title\": \"Follow up\",\n  \"description\": \"Post-consultation follow-ups\",\n  \"category\": \"clinical\",\n  \"ordering\": 10,\n  \"status\": \"active\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/groups",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "groups"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update dictionary group",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"key\": \"follow_up\",\n  \"title\": \"Follow up (updated)\",\n  \"description\": \"Optional description\",\n  \"category\": \"clinical\",\n  \"ordering\": 11,\n  \"status\": \"active\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/groups/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "groups", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Patch dictionary group",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Follow up (patched)\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/groups/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "groups", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete dictionary group",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/groups/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "groups", "1"]
+                },
+                "description": "Deletes the group and associated dictionary templates for that group key."
+              },
+              "response": []
+            },
+            {
+              "name": "List dictionary templates",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/templates",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "templates"],
+                  "query": [
+                    { "key": "groupKey", "value": "", "disabled": true },
+                    { "key": "status", "value": "", "disabled": true },
+                    { "key": "type", "value": "", "disabled": true }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get dictionary template by id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/templates/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "templates", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create dictionary template",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"key\": \"follow_up_email_day1\",\n  \"groupKey\": \"follow_up\",\n  \"type\": \"Email\",\n  \"name\": \"Day 1 follow-up\",\n  \"subject\": \"How are you feeling?\",\n  \"template\": \"<p>Hi {{name}}, we hope your visit went well.</p>\",\n  \"trigger\": null,\n  \"ordering\": 1,\n  \"status\": \"active\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/templates",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "templates"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update dictionary template",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"key\": \"follow_up_email_day1\",\n  \"groupKey\": \"follow_up\",\n  \"type\": \"Email\",\n  \"name\": \"Day 1 follow-up (updated)\",\n  \"subject\": \"Checking in\",\n  \"template\": \"<p>Hi {{name}}, just checking in.</p>\",\n  \"trigger\": null,\n  \"ordering\": 1,\n  \"status\": \"active\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/templates/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "templates", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Patch dictionary template",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Day 1 follow-up (patched)\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/templates/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "templates", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete dictionary template",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/crm/automations/templates/1",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "crm", "automations", "templates", "1"]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ]
     },
@@ -799,10 +1094,19 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getOrganisationCrmFeatureFlags?organisationId=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "getOrganisationCrmFeatureFlags"],
-              "query": [{ "key": "organisationId", "value": "1" }]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/feature-flags",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "feature-flags"
+              ],
+              "query": []
             },
             "description": "Get organisation-level CRM feature access flags for Meta, WhatsApp, and Chatbot."
           },
@@ -812,15 +1116,29 @@
           "name": "Update Organisation CRM Feature Flags",
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"meta\": true,\n  \"whatsapp\": false,\n  \"chatbot\": true\n}"
+              "raw": "{\n  \"meta\": true,\n  \"whatsapp\": false,\n  \"chatbot\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateOrganisationCrmFeatureFlags",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "updateOrganisationCrmFeatureFlags"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/feature-flags",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "feature-flags"
+              ]
             },
             "description": "Allow or restrict CRM Meta, WhatsApp, and Chatbot features for a specific organisation."
           },
@@ -832,10 +1150,19 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listCrmTreatments?organisationId=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "listCrmTreatments"],
-              "query": [{ "key": "organisationId", "value": "1" }]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/treatments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "treatments"
+              ],
+              "query": []
             }
           },
           "response": []
@@ -846,10 +1173,20 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getCrmTreatmentById?organisationId=1&id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "getCrmTreatmentById"],
-              "query": [{ "key": "organisationId", "value": "1" }, { "key": "id", "value": "1" }]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/treatments/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "treatments",
+                "1"
+              ],
+              "query": []
             }
           },
           "response": []
@@ -858,15 +1195,29 @@
           "name": "Create CRM Treatment",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"name\": \"Composite Bonding\",\n  \"ordering\": 1,\n  \"active\": true\n}"
+              "raw": "{\n  \"name\": \"Composite Bonding\",\n  \"ordering\": 1,\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/createCrmTreatment",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "createCrmTreatment"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/treatments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "treatments"
+              ]
             }
           },
           "response": []
@@ -875,15 +1226,30 @@
           "name": "Update CRM Treatment",
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1,\n  \"name\": \"Composite Bonding Updated\",\n  \"ordering\": 2,\n  \"active\": true\n}"
+              "raw": "{\n  \"name\": \"Composite Bonding Updated\",\n  \"ordering\": 2,\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateCrmTreatment",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "updateCrmTreatment"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/treatments/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "treatments",
+                "1"
+              ]
             }
           },
           "response": []
@@ -892,15 +1258,30 @@
           "name": "Delete CRM Treatment",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/deleteCrmTreatment",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "deleteCrmTreatment"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/treatments/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "treatments",
+                "1"
+              ]
             }
           },
           "response": []
@@ -911,10 +1292,19 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listLeadSources?organisationId=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "listLeadSources"],
-              "query": [{ "key": "organisationId", "value": "1" }]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/lead-sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "lead-sources"
+              ],
+              "query": []
             }
           },
           "response": []
@@ -925,10 +1315,20 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getLeadSourceById?organisationId=1&id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "getLeadSourceById"],
-              "query": [{ "key": "organisationId", "value": "1" }, { "key": "id", "value": "1" }]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/lead-sources/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "lead-sources",
+                "1"
+              ],
+              "query": []
             }
           },
           "response": []
@@ -937,15 +1337,29 @@
           "name": "Create Lead Source",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"name\": \"Google Ads\",\n  \"ordering\": 1,\n  \"active\": true\n}"
+              "raw": "{\n  \"name\": \"Google Ads\",\n  \"ordering\": 1,\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/createLeadSource",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "createLeadSource"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/lead-sources",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "lead-sources"
+              ]
             }
           },
           "response": []
@@ -954,15 +1368,30 @@
           "name": "Update Lead Source",
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1,\n  \"name\": \"Google Ads Updated\",\n  \"ordering\": 2,\n  \"active\": true\n}"
+              "raw": "{\n  \"name\": \"Google Ads Updated\",\n  \"ordering\": 2,\n  \"active\": true\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateLeadSource",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "updateLeadSource"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/lead-sources/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "lead-sources",
+                "1"
+              ]
             }
           },
           "response": []
@@ -971,15 +1400,30 @@
           "name": "Delete Lead Source",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"id\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/deleteLeadSource",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "deleteLeadSource"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/lead-sources/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "lead-sources",
+                "1"
+              ]
             }
           },
           "response": []
@@ -990,10 +1434,19 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listCrmAlerts?organisationId=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "listCrmAlerts"],
-              "query": [{ "key": "organisationId", "value": "1" }]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "alerts"
+              ],
+              "query": []
             }
           },
           "response": []
@@ -1004,10 +1457,20 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getCrmAlertByKey?organisationId=1&key=hot",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "getCrmAlertByKey"],
-              "query": [{ "key": "organisationId", "value": "1" }, { "key": "key", "value": "hot" }]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/alerts/hot",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "alerts",
+                "hot"
+              ],
+              "query": []
             }
           },
           "response": []
@@ -1016,15 +1479,29 @@
           "name": "Create CRM Alert",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"key\": \"vip\",\n  \"label\": \"VIP lead\",\n  \"emoji\": \"⭐\",\n  \"color\": \"warning\"\n}"
+              "raw": "{\n  \"key\": \"vip\",\n  \"label\": \"VIP lead\",\n  \"emoji\": \"\u2b50\",\n  \"color\": \"warning\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/createCrmAlert",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "createCrmAlert"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "alerts"
+              ]
             }
           },
           "response": []
@@ -1033,15 +1510,30 @@
           "name": "Update CRM Alert",
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"currentKey\": \"vip\",\n  \"key\": \"vip\",\n  \"label\": \"VIP lead updated\",\n  \"emoji\": \"⭐\",\n  \"color\": \"error\"\n}"
+              "raw": "{\n  \"label\": \"VIP lead updated\",\n  \"emoji\": \"\u2b50\",\n  \"color\": \"error\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateCrmAlert",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "updateCrmAlert"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/alerts/vip",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "alerts",
+                "vip"
+              ]
             }
           },
           "response": []
@@ -1050,15 +1542,30 @@
           "name": "Delete CRM Alert",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"key\": \"vip\"\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/deleteCrmAlert",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "deleteCrmAlert"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/alerts/vip",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "alerts",
+                "vip"
+              ]
             }
           },
           "response": []
@@ -1075,9 +1582,17 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/downloadLeadTemplate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "downloadLeadTemplate"]
+              "raw": "{{baseUrl}}/api/admin/crm/leads/template",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "leads",
+                "template"
+              ]
             },
             "description": "Download the CRM leads bulk upload sample CSV for admin/superadmin use."
           },
@@ -1092,11 +1607,6 @@
               "mode": "formdata",
               "formdata": [
                 {
-                  "key": "organisationId",
-                  "value": "1",
-                  "type": "text"
-                },
-                {
                   "key": "file",
                   "type": "file",
                   "src": "public/samples/lead-sample.csv"
@@ -1104,11 +1614,21 @@
               ]
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/bulkUploadLeads",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "bulkUploadLeads"]
+              "raw": "{{baseUrl}}/api/admin/crm/org/1/leads/bulk-upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "org",
+                "1",
+                "leads",
+                "bulk-upload"
+              ]
             },
-            "description": "Bulk upload CRM leads into a target organisation as superadmin using a CSV/XLS/XLSX file upload. Include organisationId and a file field that matches the lead sample columns."
+            "description": "Bulk upload CRM leads as superadmin using a CSV/XLS/XLSX file upload. Organisation is taken from the URL path after `/crm/org/`. Only the file field is required in the form body."
           },
           "response": []
         }
@@ -1124,9 +1644,16 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listScriptsPool",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "listScriptsPool"]
+              "raw": "{{baseUrl}}/api/admin/crm/scripts-pool",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "scripts-pool"
+              ]
             }
           },
           "response": []
@@ -1137,10 +1664,17 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getScriptPoolItemById?id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "getScriptPoolItemById"],
-              "query": [{ "key": "id", "value": "1" }]
+              "raw": "{{baseUrl}}/api/admin/crm/scripts-pool/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "scripts-pool",
+                "1"
+              ]
             }
           },
           "response": []
@@ -1149,15 +1683,27 @@
           "name": "Create Script Pool Item",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"key\": \"new_patient_intro\",\n  \"title\": \"New Patient Intro\",\n  \"content\": \"Hello [Practice Name], thank you for contacting us.\",\n  \"sortOrder\": 10\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/createScriptPoolItem",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "createScriptPoolItem"]
+              "raw": "{{baseUrl}}/api/admin/crm/scripts-pool",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "scripts-pool"
+              ]
             }
           },
           "response": []
@@ -1166,15 +1712,28 @@
           "name": "Update Script Pool Item",
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"key\": \"new_patient_intro\",\n  \"title\": \"New Patient Intro Updated\",\n  \"content\": \"Hello [Practice Name], thank you for getting in touch.\",\n  \"sortOrder\": 11\n}"
+              "raw": "{\n  \"key\": \"new_patient_intro\",\n  \"title\": \"New Patient Intro Updated\",\n  \"content\": \"Hello [Practice Name], thank you for getting in touch.\",\n  \"sortOrder\": 11\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateScriptPoolItem",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "updateScriptPoolItem"]
+              "raw": "{{baseUrl}}/api/admin/crm/scripts-pool/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "scripts-pool",
+                "1"
+              ]
             }
           },
           "response": []
@@ -1183,15 +1742,28 @@
           "name": "Delete Script Pool Item",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/deleteScriptPoolItem",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "deleteScriptPoolItem"]
+              "raw": "{{baseUrl}}/api/admin/crm/scripts-pool/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "crm",
+                "scripts-pool",
+                "1"
+              ]
             }
           },
           "response": []
@@ -1217,14 +1789,15 @@
               "raw": "{\n  \"title\": \"System Maintenance\",\n  \"message\": \"The system will be under maintenance\",\n  \"priority\": \"high\",\n  \"data\": {}\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/broadcastNotification",
+              "raw": "{{baseUrl}}/api/admin/notifications/broadcast",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "broadcastNotification"
+                "notifications",
+                "broadcast"
               ]
             }
           },
@@ -1236,14 +1809,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getNotificationDeliveryStats",
+              "raw": "{{baseUrl}}/api/admin/notifications/delivery-stats",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getNotificationDeliveryStats"
+                "notifications",
+                "delivery-stats"
               ]
             }
           },
@@ -1269,14 +1843,15 @@
               "raw": "{\n  \"userId\": 123,\n  \"points\": 50,\n  \"reason\": \"Fraudulent activity detected - refund processed\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/deductPoints",
+              "raw": "{{baseUrl}}/api/admin/points/deduct",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "deductPoints"
+                "points",
+                "deduct"
               ]
             },
             "description": "Deduct points from a user (Admin only)"
@@ -1298,14 +1873,15 @@
               "raw": "{\n  \"userId\": 123,\n  \"points\": 100,\n  \"reason\": \"Exceptional performance\",\n  \"rewardPointId\": 5\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/awardPoints",
+              "raw": "{{baseUrl}}/api/admin/points/award",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "awardPoints"
+                "points",
+                "award"
               ]
             },
             "description": "Award bonus points to a user (Admin only)"
@@ -1318,24 +1894,25 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/points/rewardPoints",
+              "raw": "{{baseUrl}}/api/admin/points/categories",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
+                "admin",
                 "points",
-                "rewardPoints"
+                "categories"
               ]
             },
-            "description": "Get all reward points definitions"
+            "description": "Get all reward point definitions (admin catalogue)"
           },
           "response": []
         },
         {
           "name": "Add Reward Points",
           "request": {
-            "method": "POST",
+            "method": "PUT",
             "header": [
               {
                 "key": "Content-Type",
@@ -1347,14 +1924,15 @@
               "raw": "{\n  \"name\": \"Complete CPD Course\",\n  \"description\": \"Reward for completing CPD\",\n  \"type\": \"CPD\",\n  \"points\": 100\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/points/addRewardPoints",
+              "raw": "{{baseUrl}}/api/admin/points/categories",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
+                "admin",
                 "points",
-                "addRewardPoints"
+                "categories"
               ]
             },
             "description": "Add new reward point definition"
@@ -1367,14 +1945,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/pointsIssuedByAdmin?startDate=2026-01-01&endDate=2026-12-31",
+              "raw": "{{baseUrl}}/api/admin/points/issued?startDate=2026-01-01&endDate=2026-12-31",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "pointsIssuedByAdmin"
+                "points",
+                "issued"
               ],
               "query": [
                 {
@@ -1397,14 +1976,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/pointsTotalsByPractice?sortBy=totalPoints",
+              "raw": "{{baseUrl}}/api/admin/points/by-practice?sortBy=totalPoints",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "pointsTotalsByPractice"
+                "points",
+                "by-practice"
               ],
               "query": [
                 {
@@ -1428,14 +2008,14 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/getTaskPool?limit=100&offset=0",
+              "raw": "{{base_url}}/api/admin/tasks?limit=100&offset=0",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getTaskPool"
+                "tasks"
               ],
               "query": [
                 {
@@ -1478,20 +2058,22 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/getTaskById?id=1",
+              "raw": "{{base_url}}/api/admin/tasks/1?id=1",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getTaskById"
+                "tasks",
+                "1"
               ],
               "query": [
                 {
                   "key": "id",
                   "value": "1",
-                  "description": "Task ID (required)"
+                  "description": "Task ID (optional if present in path)",
+                  "disabled": true
                 }
               ]
             },
@@ -1516,26 +2098,20 @@
               ]
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/bulkUploadTasks",
+              "raw": "{{base_url}}/api/admin/tasks/bulk-upload",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "bulkUploadTasks"
+                "tasks",
+                "bulk-upload"
               ]
             },
             "description": "Upload multiple tasks from CSV file. Creates tasks in the task pool WITHOUT user assignment. Requires categoryId to specify the task category."
           },
-          "response": [],
-          "body": {
-            "formdata": [
-              {
-                "description": "CSV file with columns: title, description, categoryId, roleId, defaultFrequency"
-              }
-            ]
-          }
+          "response": []
         },
         {
           "name": "Download Task Template (Admin)",
@@ -1543,17 +2119,52 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/downloadTaskTemplate",
+              "raw": "{{base_url}}/api/admin/tasks/template",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "downloadTaskTemplate"
+                "tasks",
+                "template"
               ]
             },
             "description": "Download CSV template for bulk task upload. Template does NOT include user column."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Tasks for Org (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "CSV file with columns: title, description, categoryId (or categoryName), roleId, defaultFrequency. categoryId must belong to the target org. If categoryName is given instead, a category will be auto-created if it doesn't exist."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/tasks/org/1/bulk-upload",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tasks",
+                "org",
+                "1",
+                "bulk-upload"
+              ]
+            },
+            "description": "Upload org-specific task presets (isSystemTask: false) linked to a specific organisation. Accepts categoryId (must belong to the org) or categoryName (auto-creates category if missing). Replace `1` in the URL with the target organisationId."
           },
           "response": []
         }
@@ -1575,14 +2186,15 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/getChecklists?limit=100&offset=0",
+              "raw": "{{base_url}}/api/admin/tasks/checklists?limit=100&offset=0",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getChecklists"
+                "tasks",
+                "checklists"
               ],
               "query": [
                 {
@@ -1625,20 +2237,23 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/getChecklistById?id=1",
+              "raw": "{{base_url}}/api/admin/tasks/checklists/1?id=1",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getChecklistById"
+                "tasks",
+                "checklists",
+                "1"
               ],
               "query": [
                 {
                   "key": "id",
                   "value": "1",
-                  "description": "Checklist item ID (required)"
+                  "description": "Checklist item ID (optional if present in path)",
+                  "disabled": true
                 }
               ]
             },
@@ -1649,7 +2264,7 @@
         {
           "name": "Create Checklist",
           "request": {
-            "method": "POST",
+            "method": "PUT",
             "header": [
               {
                 "key": "Authorization",
@@ -1667,14 +2282,15 @@
               "raw": "{\n  \"taskId\": 123,\n  \"question\": \"Check fire alarm\",\n  \"category\": \"Safety\",\n  \"fieldOneTitle\": \"Comments / Notes\",\n  \"fieldOneValue\": \"Last checked on 2026-01-15\",\n  \"fieldTwoTitle\": null,\n  \"fieldTwoValue\": null,\n  \"showRadio\": true,\n  \"showTime\": false,\n  \"showDate\": false,\n  \"radioValue\": \"N/A\",\n  \"timeValue\": null,\n  \"dateValue\": null\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/createChecklist",
+              "raw": "{{base_url}}/api/admin/tasks/checklists",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "createChecklist"
+                "tasks",
+                "checklists"
               ]
             },
             "description": "Create a new checklist item for a task. Required fields: taskId, question."
@@ -1684,7 +2300,7 @@
         {
           "name": "Update Checklist",
           "request": {
-            "method": "PUT",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Authorization",
@@ -1699,17 +2315,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"question\": \"Check fire alarm (updated)\",\n  \"category\": \"Safety\",\n  \"fieldOneTitle\": \"Comments / Notes\",\n  \"fieldOneValue\": \"Updated comment\",\n  \"showRadio\": true,\n  \"radioValue\": \"Yes\"\n}"
+              "raw": "{\n  \"question\": \"Check fire alarm (updated)\",\n  \"category\": \"Safety\",\n  \"fieldOneTitle\": \"Comments / Notes\",\n  \"fieldOneValue\": \"Updated comment\",\n  \"showRadio\": true,\n  \"radioValue\": \"Yes\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/updateChecklist",
+              "raw": "{{base_url}}/api/admin/tasks/checklists/1",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateChecklist"
+                "tasks",
+                "checklists",
+                "1"
               ]
             },
             "description": "Update an existing checklist item. Only provided fields will be updated."
@@ -1734,17 +2352,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1\n}"
+              "raw": ""
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/deleteChecklist",
+              "raw": "{{base_url}}/api/admin/tasks/checklists/1",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "deleteChecklist"
+                "tasks",
+                "checklists",
+                "1"
               ]
             },
             "description": "Delete a checklist item by ID."
@@ -1752,7 +2372,7 @@
           "response": []
         },
         {
-          "name": "Bulk Upload Checklists",
+          "name": "Bulk Upload Checklists (System Tasks)",
           "request": {
             "method": "POST",
             "header": [
@@ -1768,28 +2388,30 @@
                 {
                   "key": "file",
                   "type": "file",
-                  "src": "public/samples/checklist-sample.csv",
-                  "description": "CSV file with format: taskTitle,itemTitle,showRadio,defaultComment"
+                  "src": [],
+                  "description": "CSV file with columns: taskTitle, question, category, fieldOneTitle, fieldOneValue, fieldTwoTitle, fieldTwoValue, showRadio, showDate, showTime"
                 }
               ]
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/bulkUploadChecklists",
+              "raw": "{{base_url}}/api/admin/tasks/checklists/bulk-upload",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "bulkUploadChecklists"
+                "tasks",
+                "checklists",
+                "bulk-upload"
               ]
             },
-            "description": "Upload multiple checklist items from CSV file. Automatically creates tasks if they don't exist (as system tasks). Groups checklist items by taskTitle. Use downloadChecklistTemplate to get sample CSV format."
+            "description": "Upload checklist items for global system tasks (isSystemTask: true). Looks up tasks by taskTitle (case-insensitive) and auto-creates the task as a system task if not found. Use GET /api/admin/tasks/checklists/template to download the CSV template."
           },
           "response": []
         },
         {
-          "name": "Download Checklist Template",
+          "name": "Download Checklist Template (System Tasks)",
           "request": {
             "method": "GET",
             "header": [
@@ -1800,17 +2422,60 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/downloadChecklistTemplate",
+              "raw": "{{base_url}}/api/admin/tasks/checklists/template",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "downloadChecklistTemplate"
+                "tasks",
+                "checklists",
+                "template"
               ]
             },
-            "description": "Download CSV template for bulk checklist upload with sample data."
+            "description": "Download CSV template for bulk checklist upload (system tasks). Columns: taskTitle, question, category, fieldOneTitle, fieldOneValue, fieldTwoTitle, fieldTwoValue, showRadio, showDate, showTime."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Upload Checklists for Org",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "CSV file with columns: taskId (or taskTitle), question, category, fieldOneTitle, fieldOneValue, fieldTwoTitle, fieldTwoValue, showRadio, showDate, showTime. taskId must be an org-specific task belonging to the org. taskTitle does a case-insensitive lookup."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/admin/tasks/org/1/checklists/bulk-upload",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tasks",
+                "org",
+                "1",
+                "checklists",
+                "bulk-upload"
+              ]
+            },
+            "description": "Upload checklist items for org-specific task pool tasks (isSystemTask: false). Validates that all referenced tasks belong to the given organisation. Accepts taskId (numeric) or taskTitle (case-insensitive lookup). Partial success — valid rows are inserted even if some rows fail. Replace `1` in the URL with the target organisationId."
           },
           "response": []
         }
@@ -1832,14 +2497,15 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/getTaskCategories?includeSubcategories=true&includeTaskCount=true",
+              "raw": "{{base_url}}/api/admin/tasks/categories?includeSubcategories=true&includeTaskCount=true",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getTaskCategories"
+                "tasks",
+                "categories"
               ],
               "query": [
                 {
@@ -1870,20 +2536,23 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/getTaskCategoryById?id=1",
+              "raw": "{{base_url}}/api/admin/tasks/categories/1?id=1",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getTaskCategoryById"
+                "tasks",
+                "categories",
+                "1"
               ],
               "query": [
                 {
                   "key": "id",
                   "value": "1",
-                  "description": "Category ID (required)"
+                  "description": "Category ID (optional if present in path)",
+                  "disabled": true
                 }
               ]
             },
@@ -1903,20 +2572,24 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/getTaskSubcategories?parentId=1",
+              "raw": "{{base_url}}/api/admin/tasks/categories/1/subcategories",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getTaskSubcategories"
+                "tasks",
+                "categories",
+                "1",
+                "subcategories"
               ],
               "query": [
                 {
                   "key": "parentId",
                   "value": "1",
-                  "description": "Parent category ID (required)"
+                  "description": "Parent category ID (optional if present in path)",
+                  "disabled": true
                 }
               ]
             },
@@ -1927,7 +2600,7 @@
         {
           "name": "Create Task Category",
           "request": {
-            "method": "POST",
+            "method": "PUT",
             "header": [
               {
                 "key": "Authorization",
@@ -1945,14 +2618,15 @@
               "raw": "{\n  \"name\": \"New Category\",\n  \"description\": \"Category description\",\n  \"color\": \"#3498db\",\n  \"parentId\": null\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/createTaskCategory",
+              "raw": "{{base_url}}/api/admin/tasks/categories",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "createTaskCategory"
+                "tasks",
+                "categories"
               ]
             },
             "description": "Create a new task category or subcategory. Set parentId to create a subcategory, or null for parent category. Name must be unique at the same level."
@@ -1962,7 +2636,7 @@
         {
           "name": "Update Task Category",
           "request": {
-            "method": "PUT",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Authorization",
@@ -1977,17 +2651,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"name\": \"Updated Category Name\",\n  \"description\": \"Updated description\",\n  \"color\": \"#e74c3c\"\n}"
+              "raw": "{\n  \"name\": \"Updated Category Name\",\n  \"description\": \"Updated description\",\n  \"color\": \"#e74c3c\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/updateTaskCategory",
+              "raw": "{{base_url}}/api/admin/tasks/categories/1",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateTaskCategory"
+                "tasks",
+                "categories",
+                "1"
               ]
             },
             "description": "Update an existing task category. Only provided fields will be updated. Name must be unique at the same level."
@@ -2012,17 +2688,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1\n}"
+              "raw": ""
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/deleteTaskCategory",
+              "raw": "{{base_url}}/api/admin/tasks/categories/1",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "deleteTaskCategory"
+                "tasks",
+                "categories",
+                "1"
               ]
             },
             "description": "Soft delete a task category (sets isDeleted = true). Cannot delete if category has tasks or subcategories assigned."
@@ -2041,14 +2719,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/getDefaultPriorities",
+              "raw": "{{base_url}}/api/admin/tasks/priorities",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getDefaultPriorities"
+                "tasks",
+                "priorities"
               ]
             },
             "description": "Get all default priorities. These are the master priorities that all organisations inherit."
@@ -2061,14 +2740,15 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/getDefaultStatuses",
+              "raw": "{{base_url}}/api/admin/tasks/statuses",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getDefaultStatuses"
+                "tasks",
+                "statuses"
               ]
             },
             "description": "Get all default statuses. These are the master statuses that all organisations inherit."
@@ -2078,7 +2758,7 @@
         {
           "name": "Create Default Priority",
           "request": {
-            "method": "POST",
+            "method": "PUT",
             "header": [
               {
                 "key": "Content-Type",
@@ -2090,14 +2770,15 @@
               "raw": "{\n  \"key\": \"custom_priority\",\n  \"name\": \"Custom Priority\",\n  \"color\": \"#FF5722\",\n  \"sortOrder\": 5\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/createDefaultPriority",
+              "raw": "{{base_url}}/api/admin/tasks/priorities",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "createDefaultPriority"
+                "tasks",
+                "priorities"
               ]
             },
             "description": "Create a new default priority. This will be available for all organisations to use."
@@ -2107,7 +2788,7 @@
         {
           "name": "Update Default Priority",
           "request": {
-            "method": "PUT",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
@@ -2116,27 +2797,29 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"name\": \"Critical\",\n  \"color\": \"#FF0000\",\n  \"sortOrder\": 1\n}"
+              "raw": "{\n  \"name\": \"Critical\",\n  \"color\": \"#FF0000\",\n  \"sortOrder\": 1\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/updateDefaultPriority",
+              "raw": "{{base_url}}/api/admin/tasks/priorities/1",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateDefaultPriority"
+                "tasks",
+                "priorities",
+                "1"
               ]
             },
-            "description": "Update a default priority. Changes cascade to ALL organisation priorities with the same key."
+            "description": "Update a default priority by id (URL). Changes cascade to ALL organisation priorities with the same key."
           },
           "response": []
         },
         {
           "name": "Create Default Status",
           "request": {
-            "method": "POST",
+            "method": "PUT",
             "header": [
               {
                 "key": "Content-Type",
@@ -2148,14 +2831,15 @@
               "raw": "{\n  \"key\": \"custom_status\",\n  \"name\": \"Custom Status\",\n  \"color\": \"#9C27B0\",\n  \"description\": \"A custom status for special cases\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/createDefaultStatus",
+              "raw": "{{base_url}}/api/admin/tasks/statuses",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "createDefaultStatus"
+                "tasks",
+                "statuses"
               ]
             },
             "description": "Create a new default status. This will be available for all organisations to use."
@@ -2165,7 +2849,7 @@
         {
           "name": "Update Default Status",
           "request": {
-            "method": "PUT",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
@@ -2174,20 +2858,22 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"name\": \"To Do\",\n  \"color\": \"#808080\",\n  \"description\": \"Task pending completion\"\n}"
+              "raw": "{\n  \"name\": \"To Do\",\n  \"color\": \"#808080\",\n  \"description\": \"Task pending completion\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/admin/updateDefaultStatus",
+              "raw": "{{base_url}}/api/admin/tasks/statuses/1",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateDefaultStatus"
+                "tasks",
+                "statuses",
+                "1"
               ]
             },
-            "description": "Update a default status. Changes cascade to ALL organisation statuses with the same key."
+            "description": "Update a default status by id (URL). Changes cascade to ALL organisation statuses with the same key."
           },
           "response": []
         }
@@ -2203,20 +2889,22 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getUserById?userId=123",
+              "raw": "{{baseUrl}}/api/admin/users/123",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getUserById"
+                "users",
+                "123"
               ],
               "query": [
                 {
                   "key": "userId",
                   "value": "123",
-                  "description": "The ID of the user to retrieve"
+                  "description": "User ID (optional if present in path)",
+                  "disabled": true
                 }
               ]
             },
@@ -2230,22 +2918,17 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getOrganisationById?id=1",
+              "raw": "{{baseUrl}}/api/admin/orgs/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getOrganisationById"
+                "orgs",
+                "1"
               ],
-              "query": [
-                {
-                  "key": "id",
-                  "value": "1",
-                  "description": "The ID of the organisation to retrieve"
-                }
-              ]
+              "query": []
             },
             "description": "Get detailed organisation information by ID. Returns organisation details and related data."
           },
@@ -2263,17 +2946,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"extensionDays\": 30\n}"
+              "raw": "{\n  \"extensionDays\": 30\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/extendOrganisationTrial",
+              "raw": "{{baseUrl}}/api/admin/orgs/1/extend-trial",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "extendOrganisationTrial"
+                "orgs",
+                "1",
+                "extend-trial"
               ]
             },
             "description": "Extend the trial period for all users with Trial license in a specific organisation by specified number of days"
@@ -2283,7 +2968,7 @@
         {
           "name": "Update User License",
           "request": {
-            "method": "POST",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
@@ -2292,27 +2977,31 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"userId\": 123,\n  \"organisationId\": 1,\n  \"licenseType\": \"Glide\",\n  \"renewalDate\": \"2027-03-30T00:00:00.000Z\"\n}"
+              "raw": "{\n  \"licenseType\": \"Glide\",\n  \"renewalDate\": \"2027-03-30T00:00:00.000Z\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateUserLicense",
+              "raw": "{{baseUrl}}/api/admin/orgs/1/users/123/update-license",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateUserLicense"
+                "orgs",
+                "1",
+                "users",
+                "123",
+                "update-license"
               ]
             },
-            "description": "Manually update a user's license type and renewal date. Valid license types: System, Trial, Drift, Glide, Soar"
+            "description": "Manually update a user's license type and renewal date for a specific organisation. Org and user ids are in the URL path; body carries licenseType and renewalDate only. Valid license types: System, Trial, Drift, Glide, Soar"
           },
           "response": []
         },
         {
           "name": "Update Organisation Info",
           "request": {
-            "method": "POST",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
@@ -2321,27 +3010,28 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"updates\": {\n    \"name\": \"Updated Practice Name\",\n    \"address\": \"123 Main Street\",\n    \"postalCode\": \"SW1A 1AA\",\n    \"contact\": \"+44 20 1234 5678\",\n    \"type\": \"Dental\",\n    \"status\": \"Active\"\n  }\n}"
+              "raw": "{\n  \"updates\": {\n    \"name\": \"Updated Practice Name\",\n    \"address\": \"123 Main Street\",\n    \"postalCode\": \"SW1A 1AA\",\n    \"contact\": \"+44 20 1234 5678\",\n    \"type\": \"Dental\",\n    \"status\": \"Active\"\n  }\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateOrganisationInfo",
+              "raw": "{{baseUrl}}/api/admin/orgs/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateOrganisationInfo"
+                "orgs",
+                "1"
               ]
             },
-            "description": "Update general information of an organisation. Allowed fields: name, address, description, postalCode, surgeryCount, teamCount, currentApp, contact, type, managerId, logo, cqcInspectionDate, status, practiceAnniversaryDate, automationPlaceholders"
+            "description": "Update general information of an organisation. The organisation id is only in the URL path. Body must contain an `updates` object. Allowed fields: name, address, description, postalCode, surgeryCount, teamCount, currentApp, contact, type, managerId, logo, cqcInspectionDate, status, practiceAnniversaryDate, automationPlaceholders"
           },
           "response": []
         },
         {
           "name": "Update User Info",
           "request": {
-            "method": "POST",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
@@ -2350,21 +3040,23 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"userId\": 123,\n  \"updates\": {\n    \"fullName\": \"John Updated Doe\",\n    \"email\": \"john.updated@example.com\",\n    \"phone\": \"+44 7700 900000\",\n    \"address\": \"456 New Street, London\",\n    \"status\": \"Active\",\n    \"gender\": \"Male\"\n  }\n}"
+              "raw": "{\n  \"updates\": {\n    \"fullName\": \"John Updated Doe\",\n    \"email\": \"john.updated@example.com\",\n    \"phone\": \"+44 7700 900000\",\n    \"address\": \"456 New Street, London\",\n    \"status\": \"Active\",\n    \"gender\": \"Male\"\n  }\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateUserInfo",
+              "raw": "{{baseUrl}}/api/admin/users/123",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateUserInfo"
+                "users",
+                "123"
               ]
             },
-            "description": "Update general information of a user. Allowed fields: fullName, email, dob, phone, photo, address, status, gender, nextOfKin, nextOfKinContact, requiredCpdHours, roleId"
-          }
+            "description": "Update general information of a user. The user id is only in the URL path. Body must contain an `updates` object. Allowed fields: fullName, email, dob, phone, photo, address, status, gender, nextOfKin, nextOfKinContact, requiredCpdHours, roleId"
+          },
+          "response": []
         }
       ],
       "description": "Manage user licenses and trial periods"
@@ -2384,21 +3076,19 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listOrgsRotas?organisationId=1&limit=100&offset=0",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas?limit=100&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "listOrgsRotas"
+                "hr",
+                "org",
+                "1",
+                "rotas"
               ],
               "query": [
-                {
-                  "key": "organisationId",
-                  "value": "1",
-                  "description": "Organisation ID (required)"
-                },
                 {
                   "key": "limit",
                   "value": "100",
@@ -2433,27 +3123,20 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getRotaById?id=1&organisationId=1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getRotaById"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1"
               ],
-              "query": [
-                {
-                  "key": "id",
-                  "value": "1",
-                  "description": "Rota ID (required)"
-                },
-                {
-                  "key": "organisationId",
-                  "value": "1",
-                  "description": "Organisation ID (required)"
-                }
-              ]
+              "query": []
             },
             "description": "Get a specific rota by ID with all associated shifts and users."
           },
@@ -2476,17 +3159,20 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organisationId\": 1,\n  \"name\": \"Week 1 Rota\",\n  \"startDate\": \"2026-04-01\",\n  \"endDate\": \"2026-04-07\",\n  \"duration\": 7,\n  \"notes\": \"Spring week rota\"\n}"
+              "raw": "{\n  \"name\": \"Week 1 Rota\",\n  \"startDate\": \"2026-04-01\",\n  \"endDate\": \"2026-04-07\",\n  \"duration\": 7,\n  \"notes\": \"Spring week rota\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/createRota",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "createRota"
+                "hr",
+                "org",
+                "1",
+                "rotas"
               ]
             },
             "description": "Create a new rota for an organisation. Checks for date conflicts with existing rotas."
@@ -2510,17 +3196,21 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1,\n  \"name\": \"Updated Week 1 Rota\",\n  \"startDate\": \"2026-04-01\",\n  \"endDate\": \"2026-04-07\",\n  \"notes\": \"Updated notes\"\n}"
+              "raw": "{\n  \"name\": \"Updated Week 1 Rota\",\n  \"startDate\": \"2026-04-01\",\n  \"endDate\": \"2026-04-07\",\n  \"notes\": \"Updated notes\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateRota",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateRota"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1"
               ]
             },
             "description": "Update an existing rota. Only provided fields will be updated."
@@ -2544,17 +3234,21 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/deleteRota",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "deleteRota"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1"
               ]
             },
             "description": "Soft delete a rota and all its associated shifts."
@@ -2578,17 +3272,22 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/publishRota",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/publish",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "publishRota"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1",
+                "publish"
               ]
             },
             "description": "Publish a rota to make it visible to staff. Sets isPublished to true and records publishedDate."
@@ -2612,17 +3311,22 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/unpublishRota",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/unpublish",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "unpublishRota"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1",
+                "unpublish"
               ]
             },
             "description": "Unpublish a rota to hide it from staff. Sets isPublished to false."
@@ -2647,26 +3351,21 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listRotaShifts?rotaId=1&organisationId=1&limit=500&offset=0",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts?limit=500&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "listRotaShifts"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1",
+                "shifts"
               ],
               "query": [
-                {
-                  "key": "rotaId",
-                  "value": "1",
-                  "description": "Rota ID (required)"
-                },
-                {
-                  "key": "organisationId",
-                  "value": "1",
-                  "description": "Organisation ID (required)"
-                },
                 {
                   "key": "limit",
                   "value": "500",
@@ -2695,27 +3394,22 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getRotaShiftById?id=1&organisationId=1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getRotaShiftById"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1",
+                "shifts",
+                "1"
               ],
-              "query": [
-                {
-                  "key": "id",
-                  "value": "1",
-                  "description": "Shift ID (required)"
-                },
-                {
-                  "key": "organisationId",
-                  "value": "1",
-                  "description": "Organisation ID (required)"
-                }
-              ]
+              "query": []
             },
             "description": "Get a specific shift by ID with all associated staff and rota details."
           },
@@ -2738,17 +3432,22 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"rotaId\": 1,\n  \"organisationId\": 1,\n  \"dentistId\": 10,\n  \"nurseId\": 11,\n  \"surgeryId\": 1,\n  \"label\": \"Morning Shift\",\n  \"color\": \"#3498db\",\n  \"startDate\": \"2026-04-01T09:00:00\",\n  \"endDate\": \"2026-04-01T17:00:00\",\n  \"breakTime\": 60,\n  \"notes\": \"Regular morning shift\"\n}"
+              "raw": "{\n  \"dentistId\": 10,\n  \"nurseId\": 11,\n  \"surgeryId\": 1,\n  \"label\": \"Morning Shift\",\n  \"color\": \"#3498db\",\n  \"startDate\": \"2026-04-01T09:00:00\",\n  \"endDate\": \"2026-04-01T17:00:00\",\n  \"breakTime\": 60,\n  \"notes\": \"Regular morning shift\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/createRotaShift",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "createRotaShift"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1",
+                "shifts"
               ]
             },
             "description": "Create a new shift for a rota. Checks for conflicts with other shifts. Use forceCreate=true to override cross-org conflict warnings."
@@ -2772,17 +3471,23 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1,\n  \"dentistId\": 10,\n  \"nurseId\": 12,\n  \"label\": \"Updated Morning Shift\",\n  \"startDate\": \"2026-04-01T09:00:00\",\n  \"endDate\": \"2026-04-01T17:30:00\",\n  \"breakTime\": 45\n}"
+              "raw": "{\n  \"dentistId\": 10,\n  \"nurseId\": 12,\n  \"label\": \"Updated Morning Shift\",\n  \"startDate\": \"2026-04-01T09:00:00\",\n  \"endDate\": \"2026-04-01T17:30:00\",\n  \"breakTime\": 45\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateRotaShift",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateRotaShift"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1",
+                "shifts",
+                "1"
               ]
             },
             "description": "Update an existing shift. Only provided fields will be updated. Use forceCreate=true to override cross-org conflict warnings."
@@ -2806,17 +3511,23 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/deleteRotaShift",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "deleteRotaShift"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1",
+                "shifts",
+                "1"
               ]
             },
             "description": "Soft delete a rota shift."
@@ -2840,17 +3551,24 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/startRotaShift",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts/1/start",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "startRotaShift"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1",
+                "shifts",
+                "1",
+                "start"
               ]
             },
             "description": "Mark a shift as started. Sets startedAt timestamp to current time."
@@ -2874,17 +3592,24 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/completeRotaShift",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/rotas/1/shifts/1/complete",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "completeRotaShift"
+                "hr",
+                "org",
+                "1",
+                "rotas",
+                "1",
+                "shifts",
+                "1",
+                "complete"
               ]
             },
             "description": "Mark a shift as completed. Sets completedAt timestamp to current time. Shift must have startedAt set first."
@@ -2909,21 +3634,19 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listOrgDocumentFolders?organisationId=1&limit=100&offset=0",
+              "raw": "{{baseUrl}}/api/admin/orgs/1/docs/folders?limit=100&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "listOrgDocumentFolders"
+                "orgs",
+                "1",
+                "docs",
+                "folders"
               ],
               "query": [
-                {
-                  "key": "organisationId",
-                  "value": "1",
-                  "description": "Organisation ID (required)"
-                },
                 {
                   "key": "limit",
                   "value": "100"
@@ -2950,27 +3673,20 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getOrgDocumentFolderById?id=1&organisationId=1",
+              "raw": "{{baseUrl}}/api/admin/orgs/1/docs/folders/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getOrgDocumentFolderById"
+                "orgs",
+                "1",
+                "docs",
+                "folders",
+                "1"
               ],
-              "query": [
-                {
-                  "key": "id",
-                  "value": "1",
-                  "description": "Folder ID (required)"
-                },
-                {
-                  "key": "organisationId",
-                  "value": "1",
-                  "description": "Organisation ID (required)"
-                }
-              ]
+              "query": []
             },
             "description": "Get a specific document folder by ID with all its documents."
           },
@@ -2988,21 +3704,18 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listOrgDocuments?organisationId=1&folderId=1&userId=1&search=&limit=100&offset=0",
+              "raw": "{{baseUrl}}/api/admin/orgs/1/docs?folderId=1&userId=1&search=&limit=100&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "listOrgDocuments"
+                "orgs",
+                "1",
+                "docs"
               ],
               "query": [
-                {
-                  "key": "organisationId",
-                  "value": "1",
-                  "description": "Organisation ID (required)"
-                },
                 {
                   "key": "folderId",
                   "value": "1",
@@ -3047,27 +3760,19 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getOrgDocumentById?id=1&organisationId=1",
+              "raw": "{{baseUrl}}/api/admin/orgs/1/docs/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getOrgDocumentById"
+                "orgs",
+                "1",
+                "docs",
+                "1"
               ],
-              "query": [
-                {
-                  "key": "id",
-                  "value": "1",
-                  "description": "Document ID (required)"
-                },
-                {
-                  "key": "organisationId",
-                  "value": "1",
-                  "description": "Organisation ID (required)"
-                }
-              ]
+              "query": []
             },
             "description": "Get a specific document by ID."
           },
@@ -3091,14 +3796,15 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listHrDocuments?type=Recruitment&limit=100&offset=0",
+              "raw": "{{baseUrl}}/api/admin/hr/docs?type=Recruitment&limit=100&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "listHrDocuments"
+                "hr",
+                "docs"
               ],
               "query": [
                 {
@@ -3133,21 +3839,16 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getHrDocumentById?id=1",
+              "raw": "{{baseUrl}}/api/admin/hr/docs/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getHrDocumentById"
-              ],
-              "query": [
-                {
-                  "key": "id",
-                  "value": "1",
-                  "description": "HR Document ID (required)"
-                }
+                "hr",
+                "docs",
+                "1"
               ]
             },
             "description": "Get a specific HR document template by ID."
@@ -3174,14 +3875,15 @@
               "raw": "{\n  \"name\": \"Employment Contract\",\n  \"type\": \"Recruitment\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/createHrDocument",
+              "raw": "{{baseUrl}}/api/admin/hr/docs",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "createHrDocument"
+                "hr",
+                "docs"
               ]
             },
             "description": "Create a new HR document template. Types: Recruitment, Training, Flossly."
@@ -3205,17 +3907,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"name\": \"Updated Document Name\",\n  \"type\": \"Training\"\n}"
+              "raw": "{\n  \"name\": \"Updated Document Name\",\n  \"type\": \"Training\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateHrDocument",
+              "raw": "{{baseUrl}}/api/admin/hr/docs/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateHrDocument"
+                "hr",
+                "docs",
+                "1"
               ]
             },
             "description": "Update an existing HR document template."
@@ -3239,17 +3943,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/deleteHrDocument",
+              "raw": "{{baseUrl}}/api/admin/hr/docs/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "deleteHrDocument"
+                "hr",
+                "docs",
+                "1"
               ]
             },
             "description": "Delete an HR document template."
@@ -3268,24 +3974,21 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/getUserHrDocumentStatus?userId=1",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/user-docs/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "getUserHrDocumentStatus"
-              ],
-              "query": [
-                {
-                  "key": "userId",
-                  "value": "1",
-                  "description": "User ID (required)"
-                }
+                "hr",
+                "org",
+                "1",
+                "user-docs",
+                "1"
               ]
             },
-            "description": "Get a specific user's HR document completion status with summary stats."
+            "description": "Get a specific user's HR document completion status with summary stats. The path id is the user id."
           },
           "response": []
         },
@@ -3301,21 +4004,19 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listOrgUsersHrDocumentStatus?organisationId=1&type=Recruitment",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/user-docs&type=Recruitment",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "listOrgUsersHrDocumentStatus"
+                "hr",
+                "org",
+                "1",
+                "user-docs&type=Recruitment"
               ],
               "query": [
-                {
-                  "key": "organisationId",
-                  "value": "1",
-                  "description": "Organisation ID (required)"
-                },
                 {
                   "key": "type",
                   "value": "Recruitment",
@@ -3353,20 +4054,24 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"status\": \"Completed\",\n  \"link\": \"https://example.com/document.pdf\"\n}"
+              "raw": "{\n  \"status\": \"Completed\",\n  \"link\": \"https://example.com/document.pdf\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/updateUserHrDocument",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/user-docs/1",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "updateUserHrDocument"
+                "hr",
+                "org",
+                "1",
+                "user-docs",
+                "1"
               ]
             },
-            "description": "Update (mark complete/incomplete) a user's HR document status."
+            "description": "Update (mark complete/incomplete) a user's HR document row. The path id is the UserHrDocument record id."
           },
           "response": []
         }
@@ -3388,21 +4093,19 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/admin/listLeaveRequests?organisationId=1&status=Pending&limit=100&offset=0",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/leaves&status=Pending&limit=100&offset=0",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "listLeaveRequests"
+                "hr",
+                "org",
+                "1",
+                "leaves&status=Pending&limit=100&offset=0"
               ],
               "query": [
-                {
-                  "key": "organisationId",
-                  "value": "1",
-                  "description": "Organisation ID (required)"
-                },
                 {
                   "key": "status",
                   "value": "Pending",
@@ -3448,17 +4151,22 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/approveLeave",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/leaves/1/approve",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "approveLeave"
+                "hr",
+                "org",
+                "1",
+                "leaves",
+                "1",
+                "approve"
               ]
             },
             "description": "Approve a pending leave request"
@@ -3482,17 +4190,22 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"organisationId\": 1\n}"
+              "raw": "{}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/admin/rejectLeave",
+              "raw": "{{baseUrl}}/api/admin/hr/org/1/leaves/1/reject",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "admin",
-                "rejectLeave"
+                "hr",
+                "org",
+                "1",
+                "leaves",
+                "1",
+                "reject"
               ]
             },
             "description": "Reject a pending leave request"

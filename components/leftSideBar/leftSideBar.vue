@@ -22,6 +22,7 @@
             <template #activator="{ props: tooltipProps }">
               <v-list-item
                 v-bind="tooltipProps"
+                :data-tour-id="item.value"
                 :to="item.to"
                 :active="isExact(item.to)"
                 :class="[
@@ -41,6 +42,7 @@
 
           <v-list-item
             v-else-if="!item.children || !item.children.length"
+            :data-tour-id="item.value"
             :title="item.title"
             :to="item.to"
             :active="isExact(item.to)"
@@ -60,7 +62,7 @@
           </v-list-item>
 
           <!-- Parent with children -->
-          <div v-else class="group-with-line" :class="{ 'no-line': rail }">
+          <div v-else class="group-with-line" :data-tour-id="item.value" :class="{ 'no-line': rail }">
             <v-list-group v-model="openGroups[item.value]">
               <template #activator="{ props }">
                 <v-tooltip v-if="rail" location="right">
@@ -100,47 +102,51 @@
                 <template v-for="child in item.children" :key="child.value">
                   <v-tooltip v-if="rail" location="right">
                     <template #activator="{ props: tooltipProps }">
-                      <v-list-item
-                        v-bind="tooltipProps"
-                        :to="child.to"
-                        :active="isExact(child.to)"
-                        :class="['custom-list-item']"
-                        @click="handleItemClick"
-                      >
-                        <template #prepend>
-                          <img
-                            :src="child.imgPath"
-                            class="list-icon"
-                            alt="icon"
-                          />
-                        </template>
-                      </v-list-item>
-                    </template>
-                    <span>{{ child.title }}</span>
-                  </v-tooltip>
+              <v-list-item
+                v-bind="tooltipProps"
+                :to="child.locked ? undefined : child.to"
+                :active="isExact(child.to)"
+                :class="['custom-list-item']"
+                @click="handleChildClick($event, child)"
+              >
+                <template #prepend>
+                  <img
+                    :src="child.imgPath"
+                    class="list-icon"
+                    alt="icon"
+                  />
+                </template>
+                <template #append>
+                  <v-icon v-if="child.locked" size="16" color="warning">mdi-lock-outline</v-icon>
+                </template>
+              </v-list-item>
+            </template>
+            <span>{{ child.title }}</span>
+          </v-tooltip>
 
-                  <v-list-item
-                    v-else
-                    :title="child.title"
-                    :to="child.to"
-                    :active="isExact(child.to)"
-                    :class="['custom-list-item not-intended']"
-                    @click="handleItemClick"
-                  >
-                    <template #title>
-                      <span>{{ child.title }}</span>
-                      <v-chip
-                        v-if="child.beta"
+          <v-list-item
+            v-else
+            :title="child.title"
+            :to="child.locked ? undefined : child.to"
+            :active="isExact(child.to)"
+            :class="['custom-list-item not-intended']"
+            @click="handleChildClick($event, child)"
+          >
+            <template #title>
+              <span>{{ child.title }}</span>
+              <v-chip
+                v-if="child.beta"
                         size="x-small"
                         color="primary"
                         variant="flat"
-                        class="ml-2 text-capitalize"
-                        style="font-size: 9px; height: 16px; padding: 0 5px;"
-                      >beta</v-chip>
-                    </template>
-                  </v-list-item>
-                </template>
-              </div>
+                class="ml-2 text-capitalize"
+                style="font-size: 9px; height: 16px; padding: 0 5px;"
+              >beta</v-chip>
+              <v-icon v-if="child.locked" size="14" color="warning" class="ml-2">mdi-lock-outline</v-icon>
+            </template>
+          </v-list-item>
+        </template>
+      </div>
             </v-list-group>
           </div>
         </template>
@@ -148,8 +154,35 @@
 
       <v-spacer />
 
-      <div 
-        :class="['sidebar-toggle-wrapper', rail ? 'collapsed-state' : 'expanded-state']" 
+      <!-- Plan tier indicator -->
+      <div id="tour-plan-chip" :class="rail ? 'px-0 pb-2 d-flex justify-center' : 'px-3 pb-2'">
+        <!-- Collapsed: avatar icon with tooltip -->
+        <v-tooltip v-if="rail" location="right" :text="planChipLabel">
+          <template #activator="{ props: tipProps }">
+            <div
+              v-bind="tipProps"
+              class="plan-avatar"
+              :class="`plan-avatar--${resolvedPlan.toLowerCase()}`"
+              @click="router.push('/settings?setting=billing')"
+            >
+              {{ planAvatarLetter }}
+            </div>
+          </template>
+        </v-tooltip>
+
+        <!-- Expanded: full chip -->
+        <div
+          v-else
+          class="plan-chip-full"
+          :class="`plan-chip-full--${resolvedPlan.toLowerCase()}`"
+          @click="router.push('/settings?setting=billing')"
+        >
+          {{ planChipLabel }}
+        </div>
+      </div>
+
+      <div
+        :class="['sidebar-toggle-wrapper', rail ? 'collapsed-state' : 'expanded-state']"
         v-if="!smAndDown"
       >
         <v-btn
@@ -204,6 +237,22 @@ const handleItemClick = () => {
     emit("update:drawer", false);
   }
 };
+const triggerUpgradeRequired = (feature) => {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('upgrade-required', {
+    detail: { feature: feature || 'upgrade', code: 'FEATURE_NOT_AVAILABLE' },
+  }))
+}
+const handleChildClick = (event, child) => {
+  if (child?.locked) {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    triggerUpgradeRequired(child.lockedFeature || child.featureKey)
+    if (smAndDown.value) emit("update:drawer", false)
+    return
+  }
+  handleItemClick()
+}
 
 // Helper function to get organization data consistently
 const getOrgData = (orgWrapper) => {
@@ -293,8 +342,35 @@ watch(
   },
   { immediate: true }
 );
-const { user } = useUser(); 
+const { user } = useUser();
+const authStore = useAuthStore()
 const currentOrg = ref({});
+
+const LEGACY_MAP = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' }
+const resolvedPlan = computed(() => {
+  const lt = authStore.loggedUser?.licenseType ?? 'Lite'
+  return LEGACY_MAP[lt] ?? lt
+})
+const isTrialPlan = computed(() =>
+  ['CRM', 'Pro'].includes(resolvedPlan.value) &&
+  !authStore.loggedUser?.licenseBillingCycle &&
+  !!authStore.loggedUser?.licenseRenewalDate
+)
+const planChipLabel = computed(() => {
+  if (isTrialPlan.value) return `${resolvedPlan.value} Trial`
+  const map = { Lite: 'Lite Plan', CRM: 'CRM Plan', Pro: 'Pro Plan' }
+  return map[resolvedPlan.value] ?? resolvedPlan.value
+})
+const planChipColor = computed(() => {
+  const map = { Lite: 'default', CRM: 'primary', Pro: 'deep-purple' }
+  return map[resolvedPlan.value] ?? 'default'
+})
+
+const planAvatarLetter = computed(() => {
+  if (isTrialPlan.value) return resolvedPlan.value[0]
+  const map = { Lite: 'L', CRM: 'C', Pro: 'P' }
+  return map[resolvedPlan.value] ?? resolvedPlan.value[0] ?? '?'
+})
 
 const appBarHeight = 70;
 const drawerOffset = `${appBarHeight}px + var(--trial-banner-height, 0px)`;
@@ -480,5 +556,68 @@ watch(() => user.value, (newUser) => {
 }
 .v-navigation-drawer__scrim {
   display: none !important;
+}
+
+.plan-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  color: #fff;
+
+  &:hover {
+    transform: scale(1.12);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  }
+}
+
+.plan-avatar--lite {
+  background: linear-gradient(90deg, #FFA977 0%, #FF85DA 32.21%, #7D77FF 63.94%, #68ECE6 100%);
+}
+
+.plan-avatar--crm {
+  background: #0061fb;
+}
+
+.plan-avatar--pro {
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+}
+
+.plan-chip-full {
+  width: 100%;
+  height: 26px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.18s ease;
+  color: #fff;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
+.plan-chip-full--lite {
+  background: linear-gradient(90deg, #FFA977 0%, #FF85DA 32.21%, #7D77FF 63.94%, #68ECE6 100%);
+}
+
+.plan-chip-full--crm {
+  background: rgba(0, 97, 251, 0.12);
+  color: #0061fb;
+}
+
+.plan-chip-full--pro {
+  background: rgba(109, 40, 217, 0.1);
+  color: #6d28d9;
 }
 </style>

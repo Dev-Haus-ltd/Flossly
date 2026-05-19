@@ -19,6 +19,31 @@
         </p>
       </template>
     </div>
+    <div v-if="isLite && storageMB" class="px-5 pt-4">
+      <v-card rounded="lg" elevation="0" border class="usage-card">
+        <v-card-text class="pa-4">
+          <div class="d-flex align-center justify-space-between flex-wrap ga-3 mb-2">
+            <div>
+              <p class="text-subtitle-2 font-weight-semibold mb-0">Lite storage usage</p>
+              <p class="text-caption text-medium-emphasis mb-0">
+                {{ storageUsedLabel }} of {{ storageLimitLabel }} used
+              </p>
+            </div>
+            <v-chip size="small" :color="storageTone" variant="tonal">
+              {{ storageRemainingLabel }} left
+            </v-chip>
+          </div>
+          <v-progress-linear
+            :model-value="storagePct"
+            :color="storageTone"
+            bg-color="#e8eefc"
+            rounded
+            height="8"
+          />
+        </v-card-text>
+      </v-card>
+    </div>
+
     <div v-if="!showFolderDetails">
       <!-- recently assessed  -->
       <div class="py-2 px-5" v-if="recentFiles.length">
@@ -75,7 +100,7 @@
       </div>
     </div>
     <div v-else>
-      <!-- Show folders section when inside a folder (at depth < 2 for subfolder creation) -->
+      <!-- Show folders section when inside a folder (up to 6 nested levels) -->
       <div class="mt-5 px-5" v-if="canCreateSubfolder">
         <DocsMyDocsFolders
           :folders="foldersList"
@@ -159,10 +184,36 @@
 
 <script setup>
 import { downloadFile } from "~/lib/misc";
+import { resetUsageState } from "~/composables/useUsageSummary";
 
 const route = useRoute();
 const router = useRouter();
 const showFolderDetails = ref(false);
+
+const { usage, isLite, fetchUsage } = useUsageSummary()
+const storageMB = computed(() => usage.value?.storageMB || null)
+const storagePct = computed(() => {
+  const current = Number(storageMB.value?.current || 0)
+  const max = Number(storageMB.value?.max || 0)
+  if (!max) return 0
+  return Math.min(100, Math.round((current / max) * 100))
+})
+const formatStorage = (value) => {
+  const mb = Number(value || 0)
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
+  return `${mb.toFixed(1)} MB`
+}
+const storageUsedLabel = computed(() => formatStorage(storageMB.value?.current))
+const storageLimitLabel = computed(() => formatStorage(storageMB.value?.max))
+const storageRemainingLabel = computed(() => {
+  const remaining = Math.max(0, Number(storageMB.value?.max || 0) - Number(storageMB.value?.current || 0))
+  return formatStorage(remaining)
+})
+const storageTone = computed(() => {
+  if (storagePct.value >= 100) return 'error'
+  if (storagePct.value >= 80) return 'warning'
+  return 'primary'
+})
 const showAddFolderDialog = ref(false);
 const showAddFileDialog = ref(false);
 const viewFileDialog = ref(false);
@@ -194,16 +245,17 @@ const deleteLoading = ref(false);
 const itemToDelete = ref(null);
 const isDeleteFolder = ref(false);
 
-// Track folder navigation stack for breadcrumb and depth (max 2 levels)
+// Track folder navigation stack for breadcrumb and depth (max 6 levels)
 const folderStack = ref([]);
 
-// Computed property for current depth (0 = root, 1 = first level, 2 = second level)
+// Computed property for current depth (0 = root, 1 = first level, etc.)
 const currentDepth = computed(() => folderStack.value.length);
 
-// Check if we can create more subfolders (only allowed at depth 0 and 1)
-const canCreateSubfolder = computed(() => currentDepth.value < 2);
+// Check if we can create more subfolders (allow nesting through level 6)
+const canCreateSubfolder = computed(() => currentDepth.value < 6);
 
 onMounted(async () => {
+  fetchUsage();
   await Promise.all([
     getFolders(),
     getRecentDocs(),
@@ -216,6 +268,8 @@ const updateView = () => {
   const parentId = selectedFolder.value?.id || null;
   getFolders(parentId);
   getDocs({ folderId: parentId });
+  resetUsageState();
+  fetchUsage();
 };
 
 const getFolders = (parentId = null) => {
@@ -439,6 +493,8 @@ const confirmDelete = async () => {
         title: `${isDeleteFolder.value ? 'Folder' : 'File'} deleted successfully`,
         type: "success",
       });
+      resetUsageState();
+      await fetchUsage();
       updateView();
       getRecentDocs();
     } else {

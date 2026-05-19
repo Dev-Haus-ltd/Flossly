@@ -1,4 +1,17 @@
 const APIURL = "/api";
+const UPGRADE_EVENT_CODES = new Set(['UPGRADE_REQUIRED', 'FEATURE_NOT_AVAILABLE', 'LIMIT_REACHED']);
+
+const dispatchUpgradeRequired = (data) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('upgrade-required', {
+      detail: {
+        feature: data?.feature || data?.resource || 'upgrade',
+        code: data?.code,
+        resource: data?.resource,
+      },
+    }))
+  }
+}
 
 export const Get = async (url) => {
   const args = {
@@ -7,6 +20,9 @@ export const Get = async (url) => {
   const response = await fetch(APIURL + url  , args)
   const data = await response.json();
   if (!response.ok) {
+    if (response.status === 403 && UPGRADE_EVENT_CODES.has(data?.data?.code)) {
+      dispatchUpgradeRequired(data?.data)
+    }
     throw data;
   }
   return data;
@@ -21,11 +37,32 @@ export const Post = async (url, body) => {
   };
   const response = await fetch(APIURL + url, args);
   const data = await response.json();
-  
+
+  if (!response.ok) {
+    if (response.status === 403 && UPGRADE_EVENT_CODES.has(data?.data?.code)) {
+      dispatchUpgradeRequired(data?.data)
+    }
+    throw data;
+  }
+
+  return data;
+};
+
+export const Patch = async (url, body) => {
+  const args = {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  };
+  const response = await fetch(APIURL + url, args);
+  const data = await response.json();
+
   if (!response.ok) {
     throw data;
   }
-  
+
   return data;
 };
 

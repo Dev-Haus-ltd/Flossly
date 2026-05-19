@@ -17,15 +17,22 @@
         "
       >
         <div class="logo-wrapper">
-          <!-- Expanded state: logo + title -->
+          <!-- Expanded state: plan-specific logo -->
           <template v-if="!rail">
             <img
+              v-if="!smAndDown"
+              :src="planLogo"
+              :alt="planLogoAlt"
+              height="36"
+              style="max-width: 160px; object-fit: contain"
+            />
+            <img
+              v-else
               :src="logoIcon"
-              alt="My Logo"
-              width="35"
+              alt="Flossly"
+              width="30"
               height="100%"
             />
-            <span class="text-h6 text-sm-h5 text-md-h5 font-weight-bold text-white ml-4 text-no-wrap">Flossly</span>
           </template>
 
           <!-- Collapsed state: only icon -->
@@ -73,8 +80,32 @@
 
 <script setup>
 const { user } = useUser();
+import { useDisplay } from "vuetify";
 import logoIcon from "@/assets/logos/Logoicon2.svg";
+import logoLiteSvg from "/logo-appbar/lite.svg";
+import logoCrmSvg from "/logo-appbar/crm.svg";
+import logoProSvg from "/logo-appbar/pro.svg";
 const emit = defineEmits(["small-screen-drawer"]);
+const { smAndDown } = useDisplay();
+const authStore = useAuthStore();
+
+const LEGACY_MAP = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' };
+const resolvedPlan = computed(() => {
+  const lt = authStore.loggedUser?.licenseType ?? 'Lite';
+  return LEGACY_MAP[lt] ?? lt;
+});
+
+const planLogo = computed(() => {
+  if (resolvedPlan.value === 'CRM') return logoCrmSvg;
+  if (resolvedPlan.value === 'Pro') return logoProSvg;
+  return logoLiteSvg;
+});
+
+const planLogoAlt = computed(() => {
+  if (resolvedPlan.value === 'CRM') return 'Flossly CRM';
+  if (resolvedPlan.value === 'Pro') return 'Flossly Pro';
+  return 'Flossly Lite';
+});
 
 const props = defineProps({
   drawer: Boolean,

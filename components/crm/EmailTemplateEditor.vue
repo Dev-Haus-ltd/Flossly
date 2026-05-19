@@ -58,6 +58,7 @@
 </template>
 
 <script setup>
+import { PostFormData, Post } from '@/services/apiWrapper'
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 
 const props = defineProps({
@@ -73,20 +74,50 @@ const editorHolder = ref(null)
 let EditorCtor = null
 let Header = null
 let List = null
+let ImageTool = null
 let ej = null
 let suppressExternalSync = false
 const lastEditorHtml = ref('')
+
+// ── Uploader for @editorjs/image ────────────────────────
+const imageUploader = {
+  async uploadByFile(file) {
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await PostFormData('/misc/uploadEmailImage', fd)
+      if (res?.code === 0 && res.data?.url) {
+        return { success: 1, file: { url: res.data.url } }
+      }
+      return { success: 0 }
+    } catch {
+      return { success: 0 }
+    }
+  },
+  async uploadByUrl(url) {
+    try {
+      const res = await Post('/misc/uploadEmailImageByUrl', { url })
+      if (res?.code === 0 && res.data?.url) {
+        return { success: 1, file: { url: res.data.url } }
+      }
+      return { success: 0 }
+    } catch {
+      return { success: 0 }
+    }
+  },
+}
 
 // ── EditorJS lifecycle ──────────────────────────────────
 
 const loadModules = async () => {
   if (EditorCtor) return
-  const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
+  const [{ default: E }, { default: H }, { default: L }, { default: I }] = await Promise.all([
     import('@editorjs/editorjs'),
     import('@editorjs/header'),
     import('@editorjs/list'),
+    import('@editorjs/image'),
   ])
-  EditorCtor = E; Header = H; List = L
+  EditorCtor = E; Header = H; List = L; ImageTool = I
 }
 
 const destroyEditor = () => {
@@ -102,7 +133,14 @@ const initEditor = async (html) => {
   lastEditorHtml.value = html || ''
   ej = new EditorCtor({
     holder: editorHolder.value,
-    tools: { header: Header, list: List },
+    tools: {
+      header: Header,
+      list: List,
+      image: {
+        class: ImageTool,
+        config: { uploader: imageUploader },
+      },
+    },
     data: htmlToBlocks(html || ''),
     onChange: async (api) => {
       const saved = await api.saver.save()

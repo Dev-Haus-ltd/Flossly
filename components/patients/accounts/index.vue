@@ -1,43 +1,50 @@
 <template>
   <div class="accounts-page">
+    <!-- Stats bar -->
     <div class="accounts-stats">
       <CommonStatCard
         :icon="poundIcon"
         icon-type="image"
-        :label="activeSection === 'payments' ? 'Patient' : 'Patient Outstanding'"
-        :value="stats.outstanding"
+        label="Patient Outstanding"
+        :value="store.fmtOutstanding"
         uid="accounts-outstanding"
         hide-chip
-      />
-
-      <CommonStatCard
-        :icon="payAsYouGoIcon"
-        icon-type="image"
-        label="Pay As You Go"
-        :value="stats.payAsYouGo"
-        uid="accounts-payg"
-        hide-chip
-        :select="selectedPlan"
-        :select-items="payAsYouGoOptions"
-        @update:select="selectedPlan = $event"
       />
 
       <CommonStatCard
         :icon="poundIcon"
         icon-type="image"
         label="Total Paid"
-        :value="stats.totalPaid"
+        :value="store.fmtTotalPaid"
         uid="accounts-paid"
         hide-chip
       />
 
+      <!-- <CommonStatCard
+        :icon="poundIcon"
+        icon-type="image"
+        label="Unallocated Credit"
+        :value="store.fmtUnallocated"
+        uid="accounts-unallocated"
+        hide-chip
+      /> -->
+
       <div
         class="finance-card"
-        :class="{ 'finance-card--summary': isFinanceSummaryCard }"
+        @click="
+          () => {
+            showFinanceDialog = true;
+          }
+        "
+        :class="{ 'finance-card--summary': isSecondarySection }"
       >
-        <template v-if="isFinanceSummaryCard">
+        <template v-if="isSecondarySection">
           <div class="finance-card__header">
-            <img :src="financeIcon" alt="" class="finance-card__icon finance-card__icon--small" />
+            <img
+              :src="financeIcon"
+              alt=""
+              class="finance-card__icon finance-card__icon--small"
+            />
             <span>Finance Calculator</span>
           </div>
           <strong class="finance-card__value">£0.00</strong>
@@ -49,53 +56,81 @@
       </div>
     </div>
 
+    <!-- Main panel -->
     <section class="accounts-panel">
-      <div
-        v-if="!['finance', 'practice-plan'].includes(activeSection)"
-        class="accounts-toolbar"
-      >
+      <!-- Toolbar -->
+      <div v-if="activeSection === 'invoices'" class="accounts-toolbar">
         <div class="accounts-toolbar__left">
           <h2>Accounts</h2>
-
-          <div class="toolbar-input">
-            <input
-              v-model="searchTerm"
-              type="text"
-              placeholder="Search"
-            />
-            <img :src="searchIcon" alt="" />
-          </div>
-
-          <button type="button" class="toolbar-filter-btn">
-            <span>Filters</span>
-            <img :src="filterIcon" alt="" />
-          </button>
         </div>
-
         <div class="accounts-toolbar__right">
-          <button type="button" class="outline-action-btn">
-            <v-icon start>mdi-plus-circle-outline</v-icon>
-            <span>Payment</span>
+          <button
+            type="button"
+            class="outline-action-btn"
+            :disabled="store.isSaving"
+            @click="generateFromTreatments"
+          >
+            <v-icon start size="16">mdi-auto-fix</v-icon>
+            <span>Generate Invoice</span>
           </button>
 
-          <button type="button" class="primary-action-btn">
+          <!-- <button
+            type="button"
+            class="primary-action-btn"
+            @click="showStatementDialog = true"
+          >
             <img :src="downloadIcon" alt="" />
             <span>Statement</span>
-          </button>
+          </button> -->
         </div>
       </div>
 
-      <div v-else class="finance-panel-header">
-        <h2>{{ activeSection === "finance" ? "Finance" : "Accounts" }}</h2>
-        <div v-if="activeSection === 'practice-plan'" class="accounts-toolbar__right">
+      <div v-else-if="activeSection === 'payments'" class="accounts-toolbar">
+        <div class="accounts-toolbar__left">
+          <h2>Payments</h2>
+        </div>
+        <div class="accounts-toolbar__right">
+          <button
+            type="button"
+            class="outline-action-btn"
+            @click="showPaymentDialog = true"
+          >
+            <v-icon start size="16">mdi-plus-circle-outline</v-icon>
+            <span>New Payment</span>
+          </button>
+          <!-- <button
+            type="button"
+            class="primary-action-btn"
+            @click="showStatementDialog = true"
+          >
+            <img :src="downloadIcon" alt="" />
+            <span>Statement</span>
+          </button> -->
+        </div>
+      </div>
+
+      <div v-else-if="activeSection === 'gocardless'" class="accounts-toolbar">
+        <div class="accounts-toolbar__left">
+          <h2>GoCardless</h2>
+        </div>
+      </div>
+
+      <div
+        v-else-if="
+          activeSection === 'finance' || activeSection === 'practice-plan'
+        "
+        class="finance-panel-header"
+      >
+        <h2>{{ activeSection === "finance" ? "Finance" : "Practice Plan" }}</h2>
+        <div
+          v-if="activeSection === 'practice-plan'"
+          class="accounts-toolbar__right"
+        >
           <button type="button" class="primary-action-btn">
-            <img :src="refunIcon" alt="" />
+            <img :src="refundIcon" alt="" />
             <span>Refund</span>
           </button>
-          <button type="button" class="outline-action-btn">
-            <v-icon start>mdi-plus-circle-outline</v-icon>
-            <span>Make Payment</span>
-          </button>
+
           <button type="button" class="primary-action-btn">
             <img :src="downloadIcon" alt="" />
             <span>Statement</span>
@@ -103,6 +138,7 @@
         </div>
       </div>
 
+      <!-- Body -->
       <div class="accounts-content">
         <aside class="accounts-sidebar">
           <button
@@ -117,245 +153,353 @@
           </button>
         </aside>
 
-        <PatientAccountsPayment v-if="activeSection === 'payments'" />
-        <PatientAccountsFinance v-else-if="activeSection === 'finance'" />
-        <PatientAccountsPracticePlan v-else-if="activeSection === 'practice-plan'" />
-
-        <div v-else class="accounts-table-wrap">
-          <table class="accounts-table">
-            <thead>
-              <tr>
-                <th class="checkbox-cell">
-                  <input type="checkbox" />
-                </th>
-                <th>Invoice</th>
-                <th>Status</th>
-                <th>Date</th>
-                <th>Patient</th>
-                <th>Summary</th>
-                <th>Practitioner</th>
-                <th>Balance</th>
-                <th>Total Invoices</th>
-                <th class="menu-cell"></th>
-              </tr>
-            </thead>
-
-            <tbody>
-              <tr v-for="invoice in activeRows" :key="invoice.id">
-                <td class="checkbox-cell">
-                  <input type="checkbox" />
-                </td>
-                <td>
-                  <div class="invoice-link">
-                    <a href="#" @click.prevent>{{ invoice.invoice }}</a>
-                    <img :src="expandDetailIcon" alt="" />
-                  </div>
-                </td>
-                <td>
-                  <span
-                    class="status-badge"
-                    :class="{
-                      'status-badge--paid': invoice.status === 'Paid',
-                      'status-badge--unpaid': invoice.status === 'Unpaid',
-                    }"
-                  >
-                    {{ invoice.status }}
-                  </span>
-                </td>
-                <td>{{ invoice.date }}</td>
-                <td>{{ invoice.patient }}</td>
-                <td>{{ invoice.summary }}</td>
-                <td>
-                  <div class="practitioner-cell">
-                    <div class="avatar">{{ invoice.initials }}</div>
-                    <span>{{ invoice.practitioner }}</span>
-                  </div>
-                </td>
-                <td :class="{ 'balance-due': invoice.balance.includes('due') }">
-                  {{ invoice.balance }}
-                </td>
-                <td>{{ invoice.total }}</td>
-                <td class="menu-cell">
-                  <span aria-hidden="true">&#8942;</span>
-                </td>
-              </tr>
-            </tbody>
-
-            <tfoot>
-              <tr>
-                <td colspan="7"></td>
-                <td class="totals-label">Totals:</td>
-                <td class="totals-value">{{ totals.balance }}</td>
-                <td class="totals-value">{{ totals.invoice }}</td>
-              </tr>
-            </tfoot>
-          </table>
+        <!-- Loading -->
+        <div v-if="store.isLoading" class="loading-state">
+          <v-progress-circular indeterminate size="28" color="primary" />
         </div>
+
+        <!-- Invoices tab -->
+        <PatientAccountsInvoice
+          v-else-if="activeSection === 'invoices'"
+          :invoices="store.invoices"
+          :loading="store.isLoading"
+          :invoice-totals="store.invoiceTotals"
+          @view-invoice="openInvoiceDetails"
+          @take-payment="openInvoicePayment"
+          @update-status="updateStatus"
+          @delete-invoice="confirmDeleteInvoice"
+        />
+
+        <!-- Payments tab -->
+        <PatientAccountsPayment
+          :invoices="store.invoices"
+          v-else-if="activeSection === 'payments'"
+          :payments="store.payments"
+          @delete-payment="confirmDeletePayment"
+          @unallocate-payment="confirmUnallocatePayment"
+        />
+
+        <!-- Finance tab -->
+        <PatientAccountsFinance v-else-if="activeSection === 'finance'" />
+
+        <!-- Practice Plan tab -->
+        <PatientAccountsPracticePlan
+          v-else-if="activeSection === 'practice-plan'"
+        />
+
+        <!-- GoCardless management tab -->
+        <PatientAccountsGoCardlessManagement
+          v-else-if="activeSection === 'gocardless'"
+          :patient-id="patientId"
+          @view-invoice="openInvoiceDetails"
+        />
       </div>
     </section>
+
+    <!-- Record payment dialog -->
+    <PatientAccountsRecordPaymentDialog
+      v-model="showPaymentDialog"
+      :invoice="invoiceToPay"
+      :patient-name="patientName"
+      @proceed-gocardless="openGoCardlessPayment"
+    />
+
+    <!-- GoCardless payment dialog -->
+    <PatientAccountsGoCardlessPaymentDialog
+      v-model="showGoCardlessPaymentDialog"
+      :invoice="invoiceToPay"
+      :patient-name="patientName"
+      :patient-email="props.patient?.email"
+      :patient-phone="patientPhone"
+    />
+
+    <PatientAccountsInvoiceDetailDialog
+      v-model="showInvoiceDialog"
+      :invoice="selectedInvoice"
+      :patient="patient"
+      @take-payment="openInvoicePayment"
+    />
+    <PatientAccountsFinanceCalculatorDialog v-model="showFinanceDialog" />
+    <PatientAccountsStatementDialog v-model="showStatementDialog" />
+    <!-- Delete confirmation dialog -->
+    <CommonConfirmDialog
+      v-model="paymentDeleteDialog.open"
+      :title="paymentDeleteDialog.title"
+      :message="paymentDeleteDialog.message"
+      :loading="paymentDeleteDialog.loading"
+      confirm-text="Delete"
+      @confirm="handleConfirmDeletePayment"
+      @cancel="() => (paymentDeleteDialog.open = false)"
+    />
+
+    <!-- Invoice delete confirmation dialog -->
+    <CommonConfirmDialog
+      v-model="invoiceDeleteDialog.open"
+      :title="invoiceDeleteDialog.title"
+      :message="invoiceDeleteDialog.message"
+      :loading="invoiceDeleteDialog.loading"
+      confirm-text="Delete"
+      @confirm="handleConfirmDeleteInvoice"
+      @cancel="() => (invoiceDeleteDialog.open = false)"
+    />
+
+    <!-- Unallocate payment confirmation dialog -->
+    <CommonConfirmDialog
+      v-model="unallocateDialog.open"
+      :title="unallocateDialog.title"
+      :message="unallocateDialog.message"
+      :loading="unallocateDialog.loading"
+      confirm-text="Unallocate"
+      @confirm="handleConfirmUnallocate"
+      @cancel="() => (unallocateDialog.open = false)"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { useAccountsStore } from "@/stores/accounts";
+import { useMainStore } from "@/stores/index";
 import CommonStatCard from "@/components/Common/statCard.vue";
+import PatientAccountsInvoice from "@/components/patients/accounts/invoice.vue";
 import PatientAccountsFinance from "@/components/patients/accounts/finance.vue";
 import PatientAccountsPayment from "@/components/patients/accounts/payment.vue";
 import PatientAccountsPracticePlan from "@/components/patients/accounts/practicePlan.vue";
+import PatientAccountsGoCardlessManagement from "@/components/patients/accounts/GoCardlessManagement.vue";
+import PatientAccountsRecordPaymentDialog from "@/components/patients/accounts/RecordPaymentDialog.vue";
+import PatientAccountsGoCardlessPaymentDialog from "@/components/patients/accounts/GoCardlessPaymentDialog.vue";
+import PatientAccountsStatementDialog from "@/components/patients/accounts/AccountStatementDialog.vue";
+import PatientAccountsInvoiceDetailDialog from "@/components/patients/accounts/InvoiceDetailDialog.vue";
+import PatientAccountsFinanceCalculatorDialog from "@/components/patients/accounts/FinanceCalculatorDialog.vue";
 import financeIcon from "@/assets/diary/finance_icon.svg";
-import payAsYouGoIcon from "@/assets/diary/payasyougo_icon.svg";
 import poundIcon from "@/assets/diary/pound_icon.svg";
 import downloadIcon from "@/assets/diary/statements_icon.svg";
-import refunIcon from "@/assets/diary/refund_icon.svg";
-import filterIcon from "@/assets/icons/listView/filter-icon.svg";
-import searchIcon from "@/assets/icons/listView/serach-icon.svg";
-import expandDetailIcon from "@/assets/diary/expand_detail_icon.svg";
+import refundIcon from "@/assets/diary/refund_icon.svg";
 
-const selectedPlan = ref("Monthly");
-const searchTerm = ref("");
+const props = defineProps({
+  patient: { type: Object, default: null },
+  patientName: { type: String, default: "" },
+});
+console.log("PatientAccounts props:", props.patient);
+const store = useAccountsStore();
+const mainStore = useMainStore();
+
+const patientId = computed(() =>
+  props.patient?.id ? Number(props.patient.id) : null,
+);
+const patientPhone = computed(() =>
+  String(
+    props.patient?.preferredPhone ||
+      props.patient?.mobile ||
+      props.patient?.telephone ||
+      props.patient?.phone ||
+      "",
+  ).trim(),
+);
+
 const activeSection = ref("invoices");
-
-const stats = {
-  outstanding: "-\u00A355.00",
-  payAsYouGo: "\u00A355.00",
-  totalPaid: "\u00A30.00",
-};
-
-const payAsYouGoOptions = ["Monthly", "Quarterly", "Yearly"];
+const showPaymentDialog = ref(false);
+const showGoCardlessPaymentDialog = ref(false);
+const showStatementDialog = ref(false);
+const showInvoiceDialog = ref(false);
+const selectedInvoice = ref(null);
+const invoiceToPay = ref(null);
+const showFinanceDialog = ref(false);
+const paymentDeleteDialog = ref({
+  open: false,
+  id: null,
+  title: "Delete Payment",
+  message: "",
+  loading: false,
+});
+const unallocateDialog = ref({
+  open: false,
+  payment: null,
+  title: "Unallocate Payment",
+  message:
+    "Unallocating this payment will remove its association with the invoice. The payment will remain available for future allocations.",
+  loading: false,
+});
+const invoiceDeleteDialog = ref({
+  open: false,
+  id: null,
+  title: "Delete Invoice",
+  message:
+    "Are you sure you want to delete this invoice? This action cannot be undone.",
+  loading: false,
+});
 
 const sections = [
-  { label: "Payments", value: "payments" },
   { label: "Invoices", value: "invoices" },
+  { label: "Payments", value: "payments" },
+  { label: "GoCardless", value: "gocardless" },
   { label: "Finance", value: "finance" },
   { label: "Practice Plan", value: "practice-plan" },
 ];
 
-const rowsBySection = {
-  payments: [
-    {
-      id: 1,
-      invoice: "01051",
-      status: "Paid",
-      date: "14 Oct 2025",
-      patient: "John Doe",
-      summary: "Hygiene Visit",
-      practitioner: "John Doe",
-      initials: "JD",
-      balance: "-",
-      total: "\u00A380.00",
-    },
-    {
-      id: 2,
-      invoice: "01052",
-      status: "Paid",
-      date: "01 Oct 2025",
-      patient: "Marta Ogrodnik",
-      summary: "Whitening Deposit",
-      practitioner: "Marta Ogrodnik",
-      initials: "MO",
-      balance: "-",
-      total: "\u00A3130.00",
-    },
-  ],
-  invoices: [
-    {
-      id: 3,
-      invoice: "01047",
-      status: "Unpaid",
-      date: "9 Oct 2025",
-      patient: "John Doe",
-      summary: "Scale & Polish",
-      practitioner: "John Doe",
-      initials: "JD",
-      balance: "\u00A355.00 due",
-      total: "\u00A360.00",
-    },
-    {
-      id: 4,
-      invoice: "110045",
-      status: "Paid",
-      date: "9 Sep 2025",
-      patient: "Marta Ogrodnik",
-      summary: "Teeth Whitening",
-      practitioner: "Marta Ogrodnik",
-      initials: "MO",
-      balance: "-",
-      total: "\u00A3130.00",
-    },
-    {
-      id: 5,
-      invoice: "101045",
-      status: "Paid",
-      date: "9 Jun 2025",
-      patient: "John Doe",
-      summary: "Periodontal Scaling & Root Planing",
-      practitioner: "John Doe",
-      initials: "JD",
-      balance: "\u00A355.00 due",
-      total: "\u00A320.00",
-    },
-    {
-      id: 6,
-      invoice: "110040",
-      status: "Paid",
-      date: "9 Jan 2025",
-      patient: "Marta Ogrodnik",
-      summary: "Scale & Polish",
-      practitioner: "Marta Ogrodnik",
-      initials: "MO",
-      balance: "-",
-      total: "\u00A3160.00",
-    },
-  ],
-  finance: [
-    {
-      id: 7,
-      invoice: "02001",
-      status: "Paid",
-      date: "2 Dec 2025",
-      patient: "Alex Brown",
-      summary: "Finance Agreement",
-      practitioner: "John Doe",
-      initials: "AB",
-      balance: "-",
-      total: "\u00A3450.00",
-    },
-  ],
-  "practice-plan": [
-    {
-      id: 8,
-      invoice: "03010",
-      status: "Paid",
-      date: "11 Nov 2025",
-      patient: "Marta Ogrodnik",
-      summary: "Practice Plan Subscription",
-      practitioner: "Marta Ogrodnik",
-      initials: "MO",
-      balance: "-",
-      total: "\u00A339.00",
-    },
-  ],
-};
-
-const activeRows = computed(() => rowsBySection[activeSection.value] || []);
-
-const isFinanceSummaryCard = computed(() =>
-  ["payments", "finance", "practice-plan"].includes(activeSection.value),
+const isSecondarySection = computed(() =>
+  ["payments", "gocardless", "finance", "practice-plan"].includes(
+    activeSection.value,
+  ),
 );
 
-const totals = computed(() => {
-  if (activeSection.value === "invoices") {
-    return {
-      balance: "\u00A355.00",
-      invoice: "\u00A3505.00",
-    };
-  }
+const confirmUnallocatePayment = (payment) => {
+  unallocateDialog.value.open = true;
+  unallocateDialog.value.payment = payment;
+};
+const handleConfirmUnallocate = async () => {
+  unallocateDialog.value.loading = true;
 
-  return {
-    balance: "-",
-    invoice: activeRows.value[0]?.total || "\u00A30.00",
+  setTimeout(() => {
+    unallocateDialog.value.loading = false;
+    unallocateDialog.value.open = false;
+
+    mainStore.setSnackbar({
+      message: "Payment unallocated (UI only)",
+      color: "success",
+    });
+  }, 500);
+};
+const confirmDeletePayment = (id) => {
+  paymentDeleteDialog.value = {
+    open: true,
+    id,
+    title: "Delete Payment",
+    message:
+      "Are you sure you want to delete this payment? This action cannot be undone.",
+    loading: false,
   };
+};
+
+const handleConfirmDeletePayment = async () => {
+  paymentDeleteDialog.value.loading = true;
+
+  try {
+    const res = await store.deletePayment(paymentDeleteDialog.value.id);
+
+    if (res?.code === 0) {
+      mainStore.setSnackbar({
+        message: "Payment deleted successfully",
+        color: "success",
+      });
+      paymentDeleteDialog.value.open = false;
+    } else {
+      mainStore.setSnackbar({
+        message: res?.message || "Failed to delete payment",
+        color: "error",
+      });
+    }
+  } catch (e) {
+    mainStore.setSnackbar({
+      message: "Server error while deleting payment",
+      color: "error",
+    });
+  } finally {
+    paymentDeleteDialog.value.loading = false;
+  }
+};
+
+const openInvoiceDetails = (invoiceOrId) => {
+  if (!invoiceOrId) return;
+
+  const invoice =
+    typeof invoiceOrId === "object"
+      ? invoiceOrId
+      : store.invoices.find((inv) => Number(inv.id) === Number(invoiceOrId));
+
+  if (!invoice) return;
+
+  selectedInvoice.value = invoice;
+  showInvoiceDialog.value = true;
+};
+
+const openInvoicePayment = (invoice) => {
+  invoiceToPay.value = invoice;
+  showPaymentDialog.value = true;
+};
+
+const openGoCardlessPayment = (invoice) => {
+  invoiceToPay.value = invoice;
+  showGoCardlessPaymentDialog.value = true;
+};
+
+const confirmDeleteInvoice = async (id) => {
+  invoiceDeleteDialog.value.id = id;
+  invoiceDeleteDialog.value.open = true;
+};
+
+const handleConfirmDeleteInvoice = async () => {
+  invoiceDeleteDialog.value.loading = true;
+
+  try {
+    const res = await store.deleteInvoice(invoiceDeleteDialog.value.id);
+
+    if (res?.code === 0) {
+      mainStore.setSnackbar({
+        message: "Invoice deleted successfully",
+        color: "success",
+      });
+      invoiceDeleteDialog.value.open = false;
+    } else {
+      mainStore.setSnackbar({
+        message: res?.message || "Failed to delete invoice",
+        color: "error",
+      });
+    }
+  } catch (e) {
+    mainStore.setSnackbar({
+      message: "Server error while deleting invoice",
+      color: "error",
+    });
+  } finally {
+    invoiceDeleteDialog.value.loading = false;
+  }
+};
+
+// Load data when patientId is available
+onMounted(() => {
+  if (patientId.value) store.loadAll(patientId.value);
 });
+
+watch(patientId, (id) => {
+  if (id) store.loadAll(id);
+});
+
+// Cleanup when component unmounts to avoid stale state in next patient
+onUnmounted(() => store.reset());
+
+// ── Actions ─────────────────────────────────────────────────────────────
+
+const generateFromTreatments = async () => {
+  const res = await store.generateFromTreatments();
+  if (res?.code === 0) {
+    const count = Array.isArray(res.data) ? res.data.length : 1;
+    mainStore.setSnackbar({
+      message: `${count} invoice${count !== 1 ? "s" : ""} generated successfully`,
+      color: "success",
+    });
+  } else {
+    mainStore.setSnackbar({
+      message: res?.message || "No uninvoiced treatments found",
+      color: "warning",
+    });
+  }
+};
+
+const updateStatus = async (invoice, status) => {
+  const res = await store.updateInvoice(invoice.id, { status });
+  if (res?.code === 0) {
+    mainStore.setSnackbar({
+      message: `Invoice marked as ${status.replace("_", " ")}`,
+      color: "success",
+    });
+  } else {
+    mainStore.setSnackbar({
+      message: "Failed to update invoice",
+      color: "error",
+    });
+  }
+};
 </script>
 
 <style scoped lang="scss">
@@ -365,7 +509,7 @@ const totals = computed(() => {
 
 .accounts-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -375,7 +519,7 @@ const totals = computed(() => {
   border: 0;
   border-radius: 20px;
   background: #b9308a;
-  color: #ffffff;
+  color: #fff;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -386,7 +530,7 @@ const totals = computed(() => {
 }
 
 .finance-card--summary {
-  background: #ffffff;
+  background: #fff;
   border: 1px solid #f1d9ea;
   color: #3b4252;
   align-items: flex-start;
@@ -419,7 +563,7 @@ const totals = computed(() => {
 }
 
 .accounts-panel {
-  background: #ffffff;
+  background: #fff;
   border: 1px solid #e8edf3;
   border-radius: 20px;
   overflow: hidden;
@@ -432,12 +576,12 @@ const totals = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
 
-.finance-panel-header h2 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #242424;
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #242424;
+  }
 }
 
 .accounts-toolbar {
@@ -447,6 +591,13 @@ const totals = computed(() => {
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid #edf1f5;
+
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #242424;
+    margin-right: 8px;
+  }
 }
 
 .accounts-toolbar__left,
@@ -456,41 +607,6 @@ const totals = computed(() => {
   gap: 10px;
 }
 
-.accounts-toolbar h2 {
-  font-size: 24px;
-  font-weight: 700;
-  color: #242424;
-  margin-right: 8px;
-}
-
-.toolbar-input {
-  width: 120px;
-  height: 34px;
-  border-radius: 8px;
-  background: #f5f6f8;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-}
-
-.toolbar-input input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  font-size: 13px;
-  color: #4b5563;
-}
-
-.toolbar-input img,
-.toolbar-filter-btn img,
-.primary-action-btn img {
-  width: 14px;
-  height: 14px;
-}
-
-.toolbar-filter-btn,
 .outline-action-btn,
 .primary-action-btn {
   height: 34px;
@@ -499,49 +615,30 @@ const totals = computed(() => {
   font-weight: 500;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   padding: 0 14px;
-}
 
-.toolbar-filter-btn {
-  border: 0;
-  background: #f5f6f8;
-  color: #6b7280;
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  img {
+    width: 14px;
+    height: 14px;
+  }
 }
 
 .outline-action-btn {
   border: 1px solid #0061fb;
-  background: #ffffff;
+  background: #fff;
   color: #1f2937;
-}
-
-.btn-icon-circle {
-  width: 16px;
-  height: 16px;
-  border: 1px solid #9ca3af;
-  border-radius: 50%;
-  font-size: 9px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #9ca3af;
 }
 
 .primary-action-btn {
   border: 0;
   background: #0061fb;
-  color: #ffffff;
-}
-
-.refund-action-btn {
-  height: 34px;
-  border: 0;
-  border-radius: 8px;
-  padding: 0 16px;
-  background: #8b79ff;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 500;
+  color: #fff;
 }
 
 .accounts-content {
@@ -567,124 +664,19 @@ const totals = computed(() => {
   font-size: 13px;
   text-align: left;
   padding: 0 12px;
+
+  &.sidebar-tab--active {
+    background: #edf4f8;
+    color: #394150;
+    font-weight: 500;
+  }
 }
 
-.sidebar-tab--active {
-  background: #edf4f8;
-  color: #394150;
-  font-weight: 500;
-}
-
-.accounts-table-wrap {
-  overflow-x: auto;
-}
-
-.accounts-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 860px;
-}
-
-.accounts-table th,
-.accounts-table td {
-  border-bottom: 1px solid #edf1f5;
-  border-right: 1px solid #edf1f5;
-  padding: 10px 12px;
-  font-size: 12px;
-  color: #4b5563;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.accounts-table th {
-  font-size: 11px;
-  font-weight: 600;
-  color: #757f8f;
-  background: #ffffff;
-}
-
-.accounts-table th:last-child,
-.accounts-table td:last-child {
-  border-right: 0;
-}
-
-.checkbox-cell,
-.menu-cell {
-  width: 34px;
-  text-align: center !important;
-}
-
-.invoice-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.invoice-link a {
-  color: #0061fb;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.invoice-link img {
-  width: 13px;
-  height: 13px;
-}
-
-.status-badge {
-  display: inline-flex;
+.loading-state {
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 50px;
-  height: 22px;
-  border-radius: 6px;
-  padding: 0 8px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.status-badge--paid {
-  background: #eaf8e6;
-  color: #5daf4d;
-}
-
-.status-badge--unpaid {
-  background: #ffe8ea;
-  color: #ff6b76;
-}
-
-.practitioner-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #f2c6aa, #b97a56);
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.balance-due {
-  color: #ff6b76 !important;
-}
-
-tfoot td {
-  border-bottom: 0;
-  background: #ffffff;
-}
-
-.totals-label,
-.totals-value {
-  font-weight: 700;
-  color: #303846 !important;
+  padding: 60px;
 }
 
 @media (max-width: 1200px) {
@@ -694,11 +686,7 @@ tfoot td {
 }
 
 @media (max-width: 900px) {
-  .accounts-toolbar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
+  .accounts-toolbar,
   .finance-panel-header {
     flex-direction: column;
     align-items: flex-start;
@@ -725,15 +713,6 @@ tfoot td {
 @media (max-width: 640px) {
   .accounts-stats {
     grid-template-columns: 1fr;
-  }
-
-  .toolbar-input {
-    width: 100%;
-  }
-
-  .accounts-toolbar h2 {
-    width: 100%;
-    margin-right: 0;
   }
 }
 </style>

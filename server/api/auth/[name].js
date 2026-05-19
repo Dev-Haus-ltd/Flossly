@@ -25,7 +25,11 @@ import {
   exchangeShortLivedToken,
   resendVerificationEmail,
   resendOrganisationInvitation,
-  recordOnboardingEvent
+  recordOnboardingEvent,
+  sendMagicLink,
+  verifyMagicLink,
+  getUsageSummary,
+  updateSetupStep
 } from "../../controllers/auth";
 import bcrypt from "bcrypt";
 export default defineEventHandler(async (event) => {
@@ -87,6 +91,14 @@ export default defineEventHandler(async (event) => {
       return await exchangeShortLivedToken(event);
     case "onboardingEvent":
       return await recordOnboardingEvent(event);
+    case "magicLink":
+      return await sendMagicLink(event);
+    case "verifyMagicLink":
+      return await verifyMagicLink(event);
+    case "usageSummary":
+      return await getUsageSummary(event);
+    case "updateSetupStep":
+      return await updateSetupStep(event);
     default:
       return { code: 0, error: "Not found" };
   }

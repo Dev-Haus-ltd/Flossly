@@ -98,10 +98,6 @@ export const useCrmStore = defineStore("crmStore", {
     _notifyAutomationUpdate({ groupsChanged = false, leadIds = [] } = {}) {
       this._ensureAutomationOrgScope();
       const normalizedLeadIds = this._normalizeAutomationLeadIds(leadIds);
-      this._clearAutomationLeadCaches(groupsChanged ? [] : normalizedLeadIds);
-      if (groupsChanged) {
-        this.automationGroupRows = [];
-      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('crm-automations-updated', {
           detail: {
@@ -370,6 +366,7 @@ export const useCrmStore = defineStore("crmStore", {
     },
 
     getLeadAutomationLog(leadId, params = {}) { return this._wrap(() => crmService.getLeadAutomationLog(leadId, params)); },
+    getLeadAutomationPreview(leadId, key) { return this._wrap(() => crmService.getLeadAutomationPreview(leadId, key)); },
 
     // Mail
     sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },

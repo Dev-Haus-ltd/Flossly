@@ -5,8 +5,9 @@ import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crm
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
+import { requireUsageAllowed } from '../utils/requireUsageAllowed'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
-import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName } from '../utils/crmAutomation.js'
+import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName, buildEffectiveCrmTemplates, buildCrmTemplatesByOrg, buildCrmEmail, buildCrmWhatsAppMessage } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
@@ -16,6 +17,7 @@ import { uploadBufferFile } from '../utils/storage'
 import { getS3Object } from '../utils/s3'
 import DB from '../utils/db'
 import { parseJsonBody } from "../utils/body";
+import { createEventNotification } from '../utils/notificationService.js';
 
 const EMAIL_REGEX = /^(?:[a-zA-Z0-9_'^&+\-]+(?:\.[a-zA-Z0-9_'^&+\-]+)*|".+")@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/
 const SEND_NOW_JOB_TTL_MS = 30 * 60 * 1000
@@ -554,6 +556,7 @@ export const listLeads = async (event) => {
 export const createLead = async (event) => {
   try {
     const logged = event.context.user
+    await requireUsageAllowed(event, 'leads')
     const body = await readBody(event)
     const payload = typeof body === 'string' ? parseJsonBody(body) : body
     const required = ['name', 'email', 'telephone']
@@ -652,11 +655,20 @@ export const createLead = async (event) => {
     }
 
     try {
+      const leadCount = await CrmLead.count({ where: { organisationId: logged.orgId } })
+      if (leadCount === 80) {
+        await createEventNotification(logged.orgId, logged.userId, 'upgrade_f1_leads_80pct')
+      } else if (leadCount >= 100) {
+        await createEventNotification(logged.orgId, logged.userId, 'upgrade_f2_leads_limit')
+      }
+    } catch {}
+
+    try {
       await sendImmediateCrmAutomationsForLead(created)
     } catch (automationErr) {
       console.error('[CRM] Immediate automation dispatch failed:', automationErr?.message || automationErr)
     }
-    
+
     return success(created)
   } catch (e) {
     return error(500, e.message)
@@ -859,6 +871,16 @@ export const bulkUploadLeads = async (event) => {
         message: `0 leads added successfully, ${results.length} failed`,
         results,
       })
+    }
+
+    if (!admin) {
+      const { current, max } = await requireUsageAllowed(event, 'leads')
+      if (max !== Infinity && current + validLeads.length > max) {
+        return error(
+          403,
+          `Lead limit reached. Your current plan allows ${max} leads and you already have ${current}.`
+        )
+      }
     }
 
     const transaction = await DB.transaction()
@@ -1758,17 +1780,11 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     const overrides = { ...(raw.crmAutomationOverrides || {}) }
     const activationDates = { ...(raw.crmAutomationActivationDates || {}) }
     const existingOverride = overrides[key] || {}
-    const existingTemplate = await CrmAutomationTemplate.findOne({
-      where: { organisationId: Number(orgId), key },
-      transaction,
-    })
-    const defaultTemplate = crmAutomationDefaults.find((item) => item.key === key) || null
-    const previousEnabled =
-      existingOverride?.enabled !== undefined
-        ? !!existingOverride.enabled
-        : existingTemplate?.enabled !== undefined
-          ? !!existingTemplate.enabled
-          : !!defaultTemplate?.enabled
+    // Per-lead opt-in model: no override = automation was not active for this lead,
+    // regardless of the global template's enabled state.
+    const previousEnabled = existingOverride?.enabled !== undefined
+      ? !!existingOverride.enabled
+      : false
     const becameEnabled = !!enabled && !previousEnabled
     overrides[key] = {
       key,
@@ -1780,7 +1796,7 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
       template: template || '',
       whatsappTemplateName: whatsappTemplateName || '',
       whatsappTemplateLanguage: whatsappTemplateLanguage || '',
-      trigger: trigger ?? null,
+      trigger: trigger !== undefined ? (trigger ?? null) : (existingOverride?.trigger ?? null),
     }
     if (becameEnabled) {
       const activatedAt = new Date().toISOString()
@@ -2366,13 +2382,19 @@ export const getLeadAutomationLog = async (event) => {
     if (!lead) return error(404, 'Lead not found')
 
     const sentKeys = lead.rawData?.automationSentKeys || {}
+    const automationHistory = Array.isArray(lead.rawData?.crmAutomationHistory)
+      ? lead.rawData.crmAutomationHistory
+      : []
     const manualLog = Array.isArray(lead.rawData?.manualSentLog) ? lead.rawData.manualSentLog : []
 
-    if (!Object.keys(sentKeys).length && !manualLog.length) return success({ rows: [], total: 0 })
+    if (!Object.keys(sentKeys).length && !automationHistory.length && !manualLog.length) {
+      return success({ rows: [], total: 0 })
+    }
 
     const allRows = []
+    const seenAutomationRows = new Set()
 
-    if (Object.keys(sentKeys).length) {
+    if (Object.keys(sentKeys).length || automationHistory.length) {
       const templates = await CrmAutomationTemplate.findAll({
         where: { organisationId: orgId },
         attributes: ['key', 'name', 'type'],
@@ -2380,7 +2402,24 @@ export const getLeadAutomationLog = async (event) => {
       const templateMap = new Map(templates.map((t) => [t.key, t]))
       const defaultMap = new Map(crmAutomationDefaults.map((d) => [d.key, d]))
 
+      automationHistory.forEach((entry) => {
+        const key = String(entry?.key || '')
+        const tpl = templateMap.get(key)
+        const def = defaultMap.get(key)
+        const sentAt = entry?.sentAt
+        if (!sentAt) return
+        seenAutomationRows.add(`${key}::${sentAt}`)
+        allRows.push({
+          key,
+          name: entry?.name || tpl?.name || def?.name || key || 'Automation',
+          type: entry?.type || tpl?.type || def?.type || 'Email',
+          sentAt,
+          source: entry?.source || 'automation',
+        })
+      })
+
       Object.entries(sentKeys).forEach(([key, sentAt]) => {
+        if (seenAutomationRows.has(`${key}::${sentAt}`)) return
         const tpl = templateMap.get(key)
         const def = defaultMap.get(key)
         allRows.push({
@@ -2411,6 +2450,35 @@ export const getLeadAutomationLog = async (event) => {
     const rows = allRows.slice((pageNum - 1) * limitNum, pageNum * limitNum)
 
     return success({ rows, total })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const getLeadAutomationPreview = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const { leadId, key } = getQuery(event)
+    if (!leadId || !key) return error(400, 'leadId and key required')
+
+    const lead = await CrmLead.findOne({ where: { id: leadId, organisationId: orgId } })
+    if (!lead) return error(404, 'Lead not found')
+
+    const org = await Organisation.findByPk(Number(orgId))
+    const templates = await CrmAutomationTemplate.findAll({ where: { organisationId: orgId } })
+    const templatesByOrg = buildCrmTemplatesByOrg(templates)
+    const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg)
+    const tpl = effectiveTemplates.find((t) => t.key === key)
+    if (!tpl) return error(404, 'Template not found')
+
+    const type = String(tpl.type || 'Email').toLowerCase()
+    if (type === 'whatsapp') {
+      const message = buildCrmWhatsAppMessage(lead, tpl, org)
+      return success({ type: 'WhatsApp', name: tpl.name || key, message })
+    }
+    const { subject, html } = buildCrmEmail(lead, tpl, org)
+    return success({ type: 'Email', name: tpl.name || key, subject, html })
   } catch (e) {
     return error(500, e.message)
   }

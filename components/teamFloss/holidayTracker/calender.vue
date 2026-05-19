@@ -89,12 +89,17 @@
                 <div class="d-flex flex-column">
                   <div class="d-flex align-center justify-space-between mb-1">
                     <CommonAvatar :user="event.user" :size="40" />
-                    <v-icon
+                    <v-btn
+                      icon
+                      variant="text"
+                      size="x-small"
                       color="error"
-                      size="18"
-                      style="cursor: pointer"
-                      @click.stop="emit('onDelete', event.id)"
-                    >mdi-trash-can-outline</v-icon>
+                      :loading="deletingId === event.id"
+                      :disabled="deletingId !== null"
+                      @click.stop="handleDelete(event.id)"
+                    >
+                      <v-icon size="18">mdi-trash-can-outline</v-icon>
+                    </v-btn>
                   </div>
                   <h3>{{ event.user.fullName }}</h3>
                   <p>{{ formatDate(event.start) }}</p>
@@ -131,11 +136,33 @@ import { differenceInCalendarDays } from "date-fns";
 const { events } = defineProps({
   events: Array,
 });
-const emit = defineEmits(["onUpdate", "onDelete"]);
+const emit = defineEmits(["onUpdate"]);
 const calender = ref(null)
 const addLeaveDrawer = ref(false)
 const selectedDate = ref(null)
 const focus = ref('')
+const deletingId = ref(null)
+
+const userStore = useUserStore()
+const mainStore = useMainStore()
+
+const handleDelete = async (id) => {
+  if (deletingId.value !== null) return
+  deletingId.value = id
+  try {
+    const res = await userStore.deleteLeave({ id })
+    if (res?.code === 0) {
+      mainStore.setSnackbar({ title: "Leave deleted successfully", type: "success" })
+      emit("onUpdate")
+    } else {
+      mainStore.setSnackbar({ title: res?.data?.message || res?.data || "Failed to delete leave", type: "error" })
+    }
+  } catch (err) {
+    mainStore.setSnackbar({ title: err?.data?.message || err?.message || "Failed to delete leave", type: "error" })
+  } finally {
+    deletingId.value = null
+  }
+}
 
 const onFiltersUpdated = (filters) => {
   emit("onUpdate", filters);

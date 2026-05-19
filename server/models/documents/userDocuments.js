@@ -56,6 +56,11 @@ export const UserDocument = sequelize.define(
         key: "id",
       },
     },
+    fileSizeBytes: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      defaultValue: 0,
+    },
     lastViewedOn: {
       type: DataTypes.DATE,
       allowNull: true,

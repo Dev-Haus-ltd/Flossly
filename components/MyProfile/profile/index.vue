@@ -246,8 +246,10 @@ const logValue = (e, key) => {
   console.log(`${key}:`, user[key]);
 };
 
+const PROFILE_LEGACY_MAP = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' }
 const getAccountType = () => {
-  return user?.preferences?.[0]?.licenseType || "-";
+  const lt = user?.licenseType || 'Lite';
+  return PROFILE_LEGACY_MAP[lt] ?? lt;
 };
 
 const getPracticeName = () => {

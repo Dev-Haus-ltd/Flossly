@@ -383,6 +383,7 @@ import { useMainStore } from "@/stores/index";
 definePageMeta({ layout: false });
 
 const route = useRoute();
+const router = useRouter();
 const consentStore = useConsentStore();
 const mainStore = useMainStore();
 
@@ -633,6 +634,18 @@ const loadDocument = async () => {
     }, 200);
   } catch (err) {
     console.error("Error loading document:", err);
+    try {
+      const leadFormRes = await $fetch("/api/form/meta", {
+        query: { token: token.value },
+      });
+      if (leadFormRes?.code === 0 && leadFormRes?.data) {
+        await router.replace(`/lead-form/${token.value}`);
+        return;
+      }
+    } catch {
+      // Ignore and fall back to consent error state.
+    }
+
     error.value =
       err.message || "Failed to load consent form. The link may be invalid.";
   } finally {

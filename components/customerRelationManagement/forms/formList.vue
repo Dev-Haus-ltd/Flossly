@@ -89,28 +89,55 @@
           variant="flat"
           rounded="lg"
           class="add-task-btn"
-          @click="openBuilder(null)"
+          @click="handleNewFormClick"
         >
           <template #prepend><v-icon size="18">mdi-plus-circle-outline</v-icon></template>
           New Form
         </v-btn>
       </div>
 
+      <div v-if="isLite" class="px-5 mb-4">
+        <div class="d-flex align-center justify-space-between flex-wrap" style="gap: 12px;">
+          <v-chip
+            v-if="formsUsageSummary"
+            color="primary"
+            variant="tonal"
+            label
+          >
+            {{ formsUsageSummary }}
+          </v-chip>
+          <span
+            v-if="formsUsageHint"
+            style="font-size: 13px; color: #6b7280;"
+          >
+            {{ formsUsageHint }}
+          </span>
+        </div>
+
+        <v-alert
+          v-if="showLiteFormsAlert"
+          :type="isAtLimit('forms') ? 'warning' : 'info'"
+          variant="tonal"
+          class="mt-3"
+        >
+          {{ liteFormsAlertMessage }}
+        </v-alert>
+      </div>
+
       <div class="px-5">
         <v-expansion-panels v-model="openedPanels" flat multiple class="table-panels">
           <v-expansion-panel rounded="lg" class="border-sm pb-1">
-            <v-expansion-panel-title>
-              <div class="d-flex align-center justify-space-between w-100">
-                <div class="d-flex align-center">
-                  <v-chip color="primary" label>
-                    <v-icon class="mr-2">mdi-form-select</v-icon>
+            <v-expansion-panel-title hide-actions>
+              <template #default="{ expanded }">
+                <div class="d-flex align-center" style="gap: 8px;">
+                  <v-icon size="18" color="#6b7280" :style="{ transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s' }">mdi-chevron-down</v-icon>
+                  <v-chip color="#16a34a" variant="tonal" label>
+                    <img src="/lead-forms/active.svg" class="mr-2" style="width:16px;height:16px;" alt="" />
                     Active Forms
                   </v-chip>
-                  <v-chip class="ml-2" color="primary" label>
-                    {{ activeTotal }}
-                  </v-chip>
+                  <v-chip color="#16a34a" variant="tonal" label>{{ activeTotal }}</v-chip>
                 </div>
-              </div>
+              </template>
             </v-expansion-panel-title>
             <v-expansion-panel-text class="pt-0">
               <v-card elevation="0" rounded="lg" border>
@@ -177,10 +204,30 @@
                   </template>
 
                   <template #item.active="{ item }">
-                    <DataTableColumnsFormStatus
-                      :selected="item"
-                      @toggle="(val) => toggleActive(item, val)"
-                    />
+                    <v-menu :close-on-content-click="true" offset-y>
+                      <template #activator="{ props: menuProps }">
+                        <v-chip
+                          v-bind="menuProps"
+                          size="small"
+                          :color="item.active ? '#16a34a' : '#ef4444'"
+                          variant="tonal"
+                          class="status-chip"
+                          style="cursor: pointer;"
+                        >
+                          {{ item.active ? 'Active' : 'Inactive' }}
+                        </v-chip>
+                      </template>
+                      <v-card width="160" class="pa-1">
+                        <v-list density="compact" nav>
+                          <v-list-item rounded="lg" @click="toggleActive(item, true)">
+                            <v-list-item-title style="font-size:13px;">Active</v-list-item-title>
+                          </v-list-item>
+                          <v-list-item rounded="lg" @click="toggleActive(item, false)">
+                            <v-list-item-title style="font-size:13px;">Inactive</v-list-item-title>
+                          </v-list-item>
+                        </v-list>
+                      </v-card>
+                    </v-menu>
                   </template>
 
                   <template #item.createdAt="{ item }">
@@ -192,19 +239,19 @@
                   <template #item.actions="{ item }">
                     <div class="d-flex align-center justify-end action-cell">
                       <v-btn icon size="small" variant="text" @click.stop="openPreview(item)">
-                        <img :src="viewIcon" alt="View" class="row-action-icon" />
+                        <img src="/lead-forms/Frame.svg" class="row-action-icon" alt="View" />
                         <v-tooltip activator="parent" location="top">View</v-tooltip>
                       </v-btn>
-                      <v-btn icon size="small" variant="text" @click.stop="openShare(item)">
-                        <v-icon size="18">mdi-share-variant</v-icon>
-                        <v-tooltip activator="parent" location="top">Share / Embed</v-tooltip>
-                      </v-btn>
                       <v-btn icon size="small" variant="text" @click.stop="openBuilder(item)">
-                        <v-icon size="18">mdi-pencil-outline</v-icon>
+                        <img src="/lead-forms/Frame-1.svg" class="row-action-icon" alt="Edit" />
                         <v-tooltip activator="parent" location="top">Edit</v-tooltip>
                       </v-btn>
+                      <v-btn icon size="small" variant="text" @click.stop="openShare(item)">
+                        <img src="/lead-forms/Frame-2.svg" class="row-action-icon" alt="Share" />
+                        <v-tooltip activator="parent" location="top">Share / Embed</v-tooltip>
+                      </v-btn>
                       <v-btn icon size="small" variant="text" @click.stop="archiveOne(item)">
-                        <img :src="archiveIcon" alt="Archive" class="row-action-icon" />
+                        <img src="/lead-forms/Frame-3.svg" class="row-action-icon" alt="Archive" />
                         <v-tooltip activator="parent" location="top">Archive</v-tooltip>
                       </v-btn>
                     </div>
@@ -235,7 +282,7 @@
 
                 <div class="actions-container d-flex align-center" style="gap: 8px;">
                   <div class="action-item d-flex flex-column align-center" @click="confirmBulkArchive = true">
-                    <img :src="archiveIcon" alt="Archive" class="action-icon" />
+                    <img src="/lead-forms/Frame-3.svg" class="action-icon" alt="Archive" />
                     <span class="action-label">Archive</span>
                   </div>
                   <v-divider vertical class="mx-2" style="height: 40px;" />
@@ -249,18 +296,17 @@
           </v-expansion-panel>
 
           <v-expansion-panel rounded="lg" class="border-sm pb-1">
-            <v-expansion-panel-title>
-              <div class="d-flex align-center justify-space-between w-100">
-                <div class="d-flex align-center">
-                  <v-chip color="#9E9E9E" label>
-                    <v-icon class="mr-2">mdi-archive-outline</v-icon>
+            <v-expansion-panel-title hide-actions>
+              <template #default="{ expanded }">
+                <div class="d-flex align-center" style="gap: 8px;">
+                  <v-icon size="18" color="#6b7280" :style="{ transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s' }">mdi-chevron-down</v-icon>
+                  <v-chip color="#9333ea" variant="tonal" label>
+                    <img src="/lead-forms/Frame-3.svg" class="mr-2" style="width:16px;height:16px;" alt="" />
                     Archived Forms
                   </v-chip>
-                  <v-chip class="ml-2" color="#9E9E9E" label>
-                    {{ archivedTotal }}
-                  </v-chip>
+                  <v-chip color="#9333ea" variant="tonal" label>{{ archivedTotal }}</v-chip>
                 </div>
-              </div>
+              </template>
             </v-expansion-panel-title>
             <v-expansion-panel-text class="pt-0">
               <v-alert
@@ -321,8 +367,15 @@
                     </div>
                   </template>
 
-                  <template #item.active>
-                    <v-chip size="x-small" color="grey" variant="tonal">Archived</v-chip>
+                  <template #item.active="{ item }">
+                    <v-chip
+                      size="small"
+                      :color="item.active ? '#16a34a' : '#ef4444'"
+                      variant="tonal"
+                      style="font-size: 12px; font-weight: 500;"
+                    >
+                      {{ item.active ? 'Active' : 'Inactive' }}
+                    </v-chip>
                   </template>
 
                   <template #item.createdAt="{ item }">
@@ -333,17 +386,9 @@
 
                   <template #item.actions="{ item }">
                     <div class="d-flex align-center justify-end action-cell">
-                      <v-btn icon size="small" variant="text" @click.stop="openPreview(item)">
-                        <img :src="viewIcon" alt="View" class="row-action-icon" />
-                        <v-tooltip activator="parent" location="top">View</v-tooltip>
-                      </v-btn>
                       <v-btn icon size="small" variant="text" @click.stop="restoreOne(item)">
-                        <v-icon size="18">mdi-restore</v-icon>
+                        <img src="/lead-forms/restore.svg" class="row-action-icon" alt="Restore" />
                         <v-tooltip activator="parent" location="top">Restore</v-tooltip>
-                      </v-btn>
-                      <v-btn icon size="small" variant="text" color="error" @click.stop="deleteOne(item)">
-                        <img :src="deleteIcon" alt="Delete" class="row-action-icon" />
-                        <v-tooltip activator="parent" location="top">Delete Permanently</v-tooltip>
                       </v-btn>
                     </div>
                   </template>
@@ -364,12 +409,8 @@
 
                 <div class="actions-container d-flex align-center" style="gap: 8px;">
                   <div class="action-item d-flex flex-column align-center" @click="confirmBulkRestore = true">
-                    <v-icon size="22" color="#6d6d6d">mdi-restore</v-icon>
+                    <img src="/lead-forms/restore.svg" class="action-icon" alt="Restore" />
                     <span class="action-label">Restore</span>
-                  </div>
-                  <div class="action-item d-flex flex-column align-center" @click="confirmBulkDelete = true">
-                    <img :src="deleteIcon" alt="Delete" class="action-icon" />
-                    <span class="action-label">Delete</span>
                   </div>
                   <v-divider vertical class="mx-2" style="height: 40px;" />
                   <div class="action-item d-flex flex-column align-center" @click="selectedArchivedForms = []">
@@ -435,16 +476,15 @@
 </template>
 
 <script setup>
-import archiveIcon from '@/assets/crm/archive.svg'
-import deleteIcon from '@/assets/crm/delete.svg'
-import viewIcon from '@/assets/icons/view.svg'
 import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
+import { resetUsageState, useUsageSummary } from '@/composables/useUsageSummary'
 
 const emit = defineEmits(['builder-open', 'builder-close'])
 
 const crmStore = useCrmStore()
 const mainStore = useMainStore()
+const { usage, isLite, fetchUsage, isAtLimit } = useUsageSummary()
 
 const openedPanels = ref([0])
 
@@ -474,15 +514,15 @@ const statusFilterOptions = [
 
 const activeHeaders = [
   { title: 'Form Name', key: 'name', sortable: false, width: 280 },
-  { title: 'Status', key: 'active', sortable: false, width: 120 },
   { title: 'Created', key: 'createdAt', sortable: false, width: 140 },
+  { title: 'Status', key: 'active', sortable: false, width: 120 },
   { title: '', key: 'actions', sortable: false, align: 'end', width: 170 },
 ]
 
 const archivedHeaders = [
   { title: 'Form Name', key: 'name', sortable: false, width: 280 },
-  { title: 'Status', key: 'active', sortable: false, width: 120 },
   { title: 'Created', key: 'createdAt', sortable: false, width: 140 },
+  { title: 'Status', key: 'active', sortable: false, width: 120 },
   { title: '', key: 'actions', sortable: false, align: 'end', width: 150 },
 ]
 
@@ -535,6 +575,45 @@ const onNameBlur = async (item) => {
 const onNameEscape = (item) => {
   item.name = nameOriginals[item.id] ?? item.name
   focusedCells.value[`${item.id}:name`] = false
+}
+
+const formsUsage = computed(() => usage.value?.forms || null)
+const formsUsageSummary = computed(() => {
+  if (!isLite.value || !formsUsage.value?.max) return ''
+  return `${formsUsage.value.current}/${formsUsage.value.max} active forms used`
+})
+const formsUsageHint = computed(() => {
+  if (!isLite.value || !formsUsage.value?.max) return ''
+  return isAtLimit('forms')
+    ? 'Lite has reached its active lead form limit.'
+    : 'Lite includes 1 active lead form.'
+})
+const showLiteFormsAlert = computed(() => isLite.value && Boolean(formsUsage.value?.max))
+const liteFormsAlertMessage = computed(() => (
+  isAtLimit('forms')
+    ? 'Lite includes 1 active lead form. Deactivate your current form or upgrade to create or restore more.'
+    : 'Lite includes 1 active lead form. Upgrade to CRM if you need multiple forms.'
+))
+
+const refreshUsage = async () => {
+  resetUsageState()
+  await fetchUsage()
+}
+
+const triggerLeadFormsUpgrade = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('upgrade-required', {
+      detail: { feature: 'leadForms', code: 'LIMIT_REACHED' },
+    }))
+  }
+}
+
+const handleFormLimitReached = (message) => {
+  triggerLeadFormsUpgrade()
+  mainStore.setSnackbar({
+    title: message || 'Lite includes 1 active lead form. Upgrade to add more.',
+    type: 'warning',
+  })
 }
 
 const formatDate = (d) => {
@@ -594,7 +673,7 @@ const loadArchivedForms = async () => {
 }
 
 const loadForms = async () => {
-  await Promise.all([loadActiveForms(), loadArchivedForms()])
+  await Promise.all([loadActiveForms(), loadArchivedForms(), fetchUsage()])
 }
 
 watch(searchInput, () => {
@@ -647,6 +726,14 @@ const openBuilder = (form) => {
   emit('builder-open', form?.name || 'New Form')
 }
 
+const handleNewFormClick = () => {
+  if (isLite.value && isAtLimit('forms')) {
+    handleFormLimitReached('Lite includes 1 active lead form. Deactivate your current form or upgrade to create another.')
+    return
+  }
+  openBuilder(null)
+}
+
 const closeBuilder = () => {
   builderOpen.value = false
   selectedForm.value = null
@@ -693,19 +780,32 @@ const toggleAllArchived = () => {
 const onFormSaved = () => {
   activePage.value = 1
   archivedPage.value = 1
-  loadForms()
+  refreshUsage().then(loadForms)
 }
 
 const toggleActive = async (form, newVal) => {
+  if (newVal && !form.active && isLite.value && isAtLimit('forms')) {
+    handleFormLimitReached('Lite includes 1 active lead form. Deactivate your current form or upgrade to activate another.')
+    return
+  }
   try {
     const res = await crmStore.updateForm({ id: form.id, active: newVal })
     if (res?.code === 0) {
       form.active = newVal
+      await refreshUsage()
       mainStore.setSnackbar({ title: newVal ? 'Form activated' : 'Form deactivated', type: 'success' })
     } else {
+      if ((res?.message || '').toLowerCase().includes('active lead form')) {
+        handleFormLimitReached(res?.message)
+        return
+      }
       mainStore.setSnackbar({ title: res?.message || 'Failed to update status', type: 'error' })
     }
   } catch (e) {
+    if ((e?.message || '').toLowerCase().includes('active lead form')) {
+      handleFormLimitReached(e?.message)
+      return
+    }
     mainStore.setSnackbar({ title: e?.message || 'Failed to update status', type: 'error' })
   }
 }
@@ -737,6 +837,7 @@ const doArchive = async () => {
       selectedForms.value = []
       activePage.value = 1
       archivedPage.value = 1
+      await refreshUsage()
       await loadForms()
     } else {
       mainStore.setSnackbar({ title: res?.message || 'Failed to archive forms', type: 'error' })
@@ -760,11 +861,20 @@ const doRestore = async () => {
       selectedArchivedForms.value = []
       activePage.value = 1
       archivedPage.value = 1
+      await refreshUsage()
       await loadForms()
     } else {
+      if ((res?.message || '').toLowerCase().includes('active lead form')) {
+        handleFormLimitReached(res?.message)
+        return
+      }
       mainStore.setSnackbar({ title: res?.message || 'Failed to restore forms', type: 'error' })
     }
   } catch (e) {
+    if ((e?.message || '').toLowerCase().includes('active lead form')) {
+      handleFormLimitReached(e?.message)
+      return
+    }
     mainStore.setSnackbar({ title: e?.message || 'Failed to restore forms', type: 'error' })
   } finally {
     restoring.value = false
@@ -783,6 +893,7 @@ const doDelete = async () => {
       selectedArchivedForms.value = []
       activePage.value = 1
       archivedPage.value = 1
+      await refreshUsage()
       await loadForms()
     } else {
       mainStore.setSnackbar({ title: res?.message || 'Failed to delete forms', type: 'error' })
@@ -794,7 +905,10 @@ const doDelete = async () => {
   }
 }
 
-onMounted(loadForms)
+onMounted(async () => {
+  await refreshUsage()
+  await loadForms()
+})
 onBeforeUnmount(() => {
   if (searchDebounce) clearTimeout(searchDebounce)
 })
@@ -854,9 +968,41 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
+:deep() .v-table thead tr {
+  background-color: #f9fafb !important;
+}
+
+:deep() .v-table thead tr th {
+  color: #6b7280 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+:deep() .v-table .v-table__wrapper > table > tbody > tr > td {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+:deep() .v-table .v-table__wrapper > table > thead > tr > th {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+.status-chip {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
 .row-action-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+}
+
+.action-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .action-cell {
@@ -885,11 +1031,15 @@ onBeforeUnmount(() => {
 }
 
 .action-bar {
-  border: 1px solid #ececec;
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: white;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   width: fit-content;
-  max-width: 100%;
-  margin-left: auto;
-  margin-right: auto;
+  border: 1px solid #ececec;
 }
 
 .action-item {

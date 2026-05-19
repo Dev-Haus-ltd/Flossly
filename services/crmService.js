@@ -558,6 +558,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getLeadAutomationPreview(leadId, key) {
+    return new Promise((resolve, reject) => {
+      Get(`/lead/automationLogPreview?leadId=${encodeURIComponent(leadId)}&key=${encodeURIComponent(key)}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // Mail
   sendLeadMail(payload) {
     return new Promise((resolve, reject) => {

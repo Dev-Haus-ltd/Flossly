@@ -82,6 +82,19 @@ export const Organisation = sequelize.define(
       type: DataTypes.ENUM("Invited", "Active", "InActive"),
       allowNull: true,
       },
+    licenseType: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'Lite',
+    },
+    licenseBillingCycle: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+    },
+    licenseRenewalDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     hasUsedTrial: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

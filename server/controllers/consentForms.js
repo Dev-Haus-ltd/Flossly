@@ -7,6 +7,7 @@ import {
   DiaryPatient,
   User,
   Organisation,
+  DiaryPatientCommunicationLogs,
 } from "../models";
 import { success, error } from "../utils/response";
 import { normalizeConsentHtmlForDigitalFlow } from "~/utils/consentHtml";
@@ -43,6 +44,7 @@ import { resolveWhapiConfig } from "../utils/whatsappProvider";
 import path from "path";
 import fs from "fs";
 import os from "os";
+// import { CommunicationLogger } from "../utils/communicationLogger";
 
 // =============================================================================
 // CONSENT FORM TEMPLATE ROUTES
@@ -524,18 +526,19 @@ export const sendConsentDocument = async (event) => {
       tokenExpiresAt: generateExpiryDate(body.expiryDays || 30),
       customNotes: body.notes || null,
       customTitle: body.title || template.name,
-metadata: {
-  totalPages: pageCount,
-  signatureCoordinates: signatureCoords,
-  originalCoordinates: template.signatureCoordinates,
-  detectedSignaturePosition: signaturePosition,
-  // Store both to ensure we have the best available coordinates
-  pdfConvertedCoordinates: pdfCoordinates,
-  pdfPreparedAtSend: !!unsignedS3Key,
-  pdfGenerationFallbackReason,
-  coordinateSource: pdfCoordinates ? 'detected_and_converted' : (signaturePosition ? 'detected_raw' : (template.signatureCoordinates ? 'template' : 'default')),
-  sentVia: sendVia,
-},
+      metadata: {
+        totalPages: pageCount,
+        signatureCoordinates: signatureCoords,
+        originalCoordinates: template.signatureCoordinates,
+        detectedSignaturePosition: signaturePosition,
+        attachments: Array.isArray(body.attachments) ? body.attachments : [],
+        // Store both to ensure we have the best available coordinates
+        pdfConvertedCoordinates: pdfCoordinates,
+        pdfPreparedAtSend: !!unsignedS3Key,
+        pdfGenerationFallbackReason,
+        coordinateSource: pdfCoordinates ? 'detected_and_converted' : (signaturePosition ? 'detected_raw' : (template.signatureCoordinates ? 'template' : 'default')),
+        sentVia: sendVia,
+      },
       isFinalized: false,
     });
 
@@ -562,6 +565,11 @@ metadata: {
     const deliveryErrors = [];
     const successfulDeliveries = [];
 
+    const config = useRuntimeConfig();
+    const baseUrl = (config?.public?.BASE_URL || process.env.BASE_URL || 'http://localhost:3000')
+      .replace(/\/+$/, '');
+    const accessUrl = `${baseUrl}/form/${plainToken}`;
+
     const practiceInfo = {
       name: organisation?.name || "Flossly",
       organisationName: organisation?.name || "Flossly",
@@ -575,6 +583,7 @@ metadata: {
         if (!patientEmail) {
           deliveryErrors.push("Email: Patient has no email address");
         } else {
+          const emailSubject = body.title?.trim() || `Please Review & Sign: ${template.name}`;
           await sendConsentFormEmail({
             orgId: Number(orgId),
             patientEmail,
@@ -584,12 +593,36 @@ metadata: {
             formName: template.name,
             practiceInfo,
             customMessage: body.notes || "",
+            customSubject: emailSubject,
+            attachments: Array.isArray(body.attachments) ? body.attachments : [],
             expiryDays: body.expiryDays || 30,
             expiresAt: document.tokenExpiresAt,
             token: plainToken,
           });
 
           successfulDeliveries.push("email");
+
+          // Log communication
+          await DiaryPatientCommunicationLogs.create({
+            organisationId: Number(orgId),
+            patientId,
+            practitionerId: userId,
+            type: 'Email',
+            subject: emailSubject,
+            content: `Consent form "${template.name}" sent via email to ${patientEmail}`,
+            status: 'Sent',
+            sentAt: new Date(),
+            metadata: {
+              category: 'consent-form',
+              documentId: document.id,
+              templateId,
+              deliveryMethod: 'email',
+              recipientEmail: patientEmail,
+              formName: template.name,
+              expiresAt: document.tokenExpiresAt,
+              attachments: Array.isArray(body.attachments) ? body.attachments : [],
+            },
+          });
 
           await ConsentFormSignatureAudit.create({
             documentId: document.id,
@@ -654,25 +687,21 @@ metadata: {
                     "Content-Type": "application/json",
                   };
 
-                  const whatsappMessage = `Hello ${
-                    patient.firstName || "there"
-                  },
-
-Please review and sign the following document: *${
-                    template.name
-                  }*
-
-A secure link has been sent to your registered email. If you need another copy, please contact us.
-
-Link expires: ${new Date(
+                  const expiryText = new Date(
                     document.tokenExpiresAt
                   ).toLocaleDateString("en-GB", {
                     day: "2-digit",
                     month: "long",
                     year: "numeric",
-                  })}
+                  });
 
-Thank you! 📋`;
+                  const customMessage = String(body.notes || "").trim();
+                  const whatsappMessage = customMessage
+                    ? `Hello ${patient.firstName || "there"},\n\n${customMessage}\n\n` +
+                      `Please review and sign the following document: *${template.name}*\n\n` +
+                      `Open the secure link here: ${accessUrl}\n\n` +
+                      `Link expires: ${expiryText}`
+                    : `Hello ${patient.firstName || "there"},\n\nPlease review and sign the following document: *${template.name}*\n\nOpen the secure link here: ${accessUrl}\n\nLink expires: ${expiryText}`;
 
                   await $fetch(`${whapiBase}/messages/text`, {
                     method: "POST",
@@ -683,8 +712,6 @@ Thank you! 📋`;
                     },
                   });
 
-                  successfulDeliveries.push("whatsapp");
-
                   await logWhatsAppMessage({
                     organisationId: orgId,
                     to: normalizedPhone,
@@ -692,6 +719,72 @@ Thank you! 📋`;
                     type: "text",
                     status: "sent",
                     content: whatsappMessage,
+                  });
+
+                  const attachmentsToSend = Array.isArray(body.attachments)
+                    ? body.attachments.filter((item) => item && item.url)
+                    : [];
+
+                  for (let i = 0; i < attachmentsToSend.length; i += 1) {
+                    const att = attachmentsToSend[i];
+                    const mime = String(att?.mimeType || att?.contentType || "").toLowerCase();
+                    const type =
+                      att?.type ||
+                      (mime.startsWith("image/") ? "image" :
+                        mime.startsWith("video/") ? "video" :
+                          mime.startsWith("audio/") ? "audio" : "document");
+                    const endpoint =
+                      type === "image" ? "image" :
+                        type === "video" ? "video" :
+                          type === "audio" ? "audio" : "document";
+                    const media = att.url || att.link || att.path || "";
+                    if (!media) continue;
+
+                    const resp = await $fetch(`${whapiBase}/messages/${endpoint}`, {
+                      method: "POST",
+                      headers,
+                      body: {
+                        to: normalizedPhone,
+                        media,
+                        ...(endpoint === "document" && att.name ? { filename: att.name } : {}),
+                      },
+                    });
+
+                    const providerMessageId = resp?.message?.id || resp?.id || null;
+                    await logWhatsAppMessage({
+                      organisationId: orgId,
+                      to: normalizedPhone,
+                      direction: "outbound",
+                      type,
+                      status: "sent",
+                      providerMessageId,
+                      content: att.name || `Attachment ${i + 1}`,
+                      attachments: [{ ...att }],
+                    });
+                  }
+
+                  successfulDeliveries.push("whatsapp");
+
+                  // Log communication
+                  await DiaryPatientCommunicationLogs.create({
+                    organisationId: Number(orgId),
+                    patientId,
+                    practitionerId: userId,
+                    type: 'WhatsApp',
+                    subject: `Consent Form Sent: ${template.name}`,
+                    content: whatsappMessage,
+                    status: 'Sent',
+                    sentAt: new Date(),
+                    metadata: {
+                      category: 'consent-form',
+                      documentId: document.id,
+                      templateId,
+                      deliveryMethod: 'whatsapp',
+                      recipientPhone: normalizedPhone,
+                      formName: template.name,
+                      expiresAt: document.tokenExpiresAt,
+                      attachments: attachmentsToSend,
+                    },
                   });
 
                   await ConsentFormSignatureAudit.create({
@@ -1246,6 +1339,66 @@ export const voidConsentDocument = async (event) => {
     });
   } catch (e) {
     console.error("Error voiding document:", e);
+    const msg =
+      (e &&
+        (e.message ||
+          (e.data && e.data.message) ||
+          (e.original && e.original.detail))) ||
+      "Internal server error";
+    return error(500, msg);
+  }
+};
+
+// Add new function for Communication Hub PDF viewing
+export const getConsentDocumentById = async (event) => {
+  try {
+    const { orgId } = event.context.user;
+    const query = getQuery(event);
+    const documentId = Number(query.id || 0);
+
+    if (!documentId) {
+      return error(400, "Document ID is required");
+    }
+
+    const document = await ConsentFormDocument.findOne({
+      where: {
+        id: documentId,
+        organisationId: Number(orgId),
+      },
+      include: [
+        {
+          model: DiaryPatient,
+          as: "patient",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
+        {
+          model: ConsentFormTemplate,
+          as: "template",
+          attributes: ["id", "name"],
+        },
+      ],
+    });
+
+    if (!document) {
+      return error(404, "Document not found");
+    }
+
+    let pdfUrl = null;
+    if (document.pdfS3Key) {
+      pdfUrl = await generateSignedUrl(document.pdfS3Key);
+    }
+
+    return success({
+      id: document.id,
+      title: document.title,
+      patient: document.patient,
+      template: document.template,
+      status: document.status,
+      createdAt: document.createdAt,
+      sentAt: document.sentAt,
+      pdfUrl,
+    });
+  } catch (e) {
     const msg =
       (e &&
         (e.message ||

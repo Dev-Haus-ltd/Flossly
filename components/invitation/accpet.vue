@@ -175,13 +175,17 @@ const getProfile = () => {
       if (res.code === 0) {
         const user = res.data;
         localStorage.setItem("user", JSON.stringify(user));
+        const preference = Array.isArray(user.preferences)
+          ? user.preferences[0]
+          : user.preferences || null;
+        const hasStartedSetup = Number(preference?.setupStepsCompleted || 0) > 0;
         if (
-          user.profileCompletion === 1 &&
+          user.profileCompletion <= 1 &&
           (user.roleId === 1 || user.roleId === 8) &&
-          user.isOrganisationCreator
+          user.isOrganisationCreator &&
+          !hasStartedSetup
         ) {
-          // Force a full page refresh when redirecting to onboarding
-          window.location.href = "/onboarding";
+          window.location.href = "/setup";
         } else {
           router.push("/");
         }

@@ -109,13 +109,6 @@ let autoPlayInterval = null;
 
 const cards = ref([
   {
-    imageSrc: event2,
-    heading: 'The Dental Owners Club',
-    date: 'April 23rd, 2026',
-    buttonText: 'Book Ticket',
-    bookingUrl: 'https://dentist-times.co.uk/events'
-  },
-  {
     imageSrc: event3,
     heading: 'The Dentistry Show',
     date: 'May 15th and 16th, 2026',

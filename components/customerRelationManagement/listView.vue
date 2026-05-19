@@ -1191,50 +1191,6 @@
       @confirm="doDeleteArchived"
       @cancel="confirmArchivedDelete = false"
     />
-    <v-dialog v-model="showBookPlanDialog" max-width="560">
-      <v-card class="plan-upgrade-dialog rounded-xl overflow-hidden">
-        <div class="plan-upgrade-dialog__hero">
-          <div>
-            <div class="plan-upgrade-dialog__eyebrow">Plan Access</div>
-            <div class="plan-upgrade-dialog__title">Upgrade to Soar</div>
-            <div class="plan-upgrade-dialog__subtitle">
-              Unlock deeper CRM and diary workflows for your team.
-            </div>
-          </div>
-          <v-chip size="small" color="white" variant="flat" class="plan-upgrade-dialog__chip">
-            Current: {{ currentOrgLicenseLabel }}
-          </v-chip>
-        </div>
-        <v-card-text class="plan-upgrade-dialog__body">
-          <p class="plan-upgrade-dialog__copy">
-            Your current plan covers the essentials. Soar adds the full premium workflow layer for high-volume CRM operations.
-          </p>
-          <div class="plan-upgrade-dialog__feature-list">
-            <div class="plan-upgrade-dialog__feature">
-              <v-icon size="18" color="primary">mdi-calendar-check-outline</v-icon>
-              <span>Advanced diary and patient workflow tooling</span>
-            </div>
-            <div class="plan-upgrade-dialog__feature">
-              <v-icon size="18" color="primary">mdi-robot-outline</v-icon>
-              <span>Deeper automation and premium CRM capabilities</span>
-            </div>
-            <div class="plan-upgrade-dialog__feature">
-              <v-icon size="18" color="primary">mdi-chart-line</v-icon>
-              <span>Broader growth, conversion, and team coordination features</span>
-            </div>
-          </div>
-        </v-card-text>
-        <v-card-actions class="plan-upgrade-dialog__actions">
-          <v-spacer />
-          <v-btn variant="text" @click="showBookPlanDialog = false">
-            Close
-          </v-btn>
-          <v-btn color="primary" variant="flat" @click="showBookPlanDialog = false">
-            Got it
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
     <TeamFlossSideBarAddNewstaff
       v-model="addStaffDrawer"
       :rolesList="rolesList"
@@ -1284,6 +1240,7 @@
                 :disable-toggle="false"
                 :show-sent-status-column="false"
                 :show-resend-action="false"
+                @bulk-toggle-done="showBulkAutomationsDialog = false"
               />
             </v-tabs-window-item>
             <v-tabs-window-item value="my-automations">
@@ -1297,6 +1254,7 @@
                 :disable-toggle="false"
                 :show-sent-status-column="false"
                 :show-resend-action="false"
+                @bulk-toggle-done="showBulkAutomationsDialog = false"
               />
             </v-tabs-window-item>
           </v-tabs-window>
@@ -1369,7 +1327,7 @@ import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { formatDateDDMMYYYY, formatDateTime } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
-import { LICENSE_TYPES, resolveUserLicenseType } from '@/stores/index'
+import { LICENSE_TYPES } from '@/stores/index'
 import { useDiaryStore } from '@/stores/diary'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
 const defaultAutomationMap = new Map(crmAutomationDefaults.map((d) => [d.key, d]))
@@ -1688,7 +1646,7 @@ watch(showBulkAutomationsDialog, async (open) => {
       selectedLeads.value
         .map((lead) => Number(lead?.id || 0))
         .filter(Boolean)
-        .map((id) => crmStore.invalidateLeadAutomations(id))
+        .map((id) => crmStore.fetchLeadAutomations(id, { force: true, silent: true }))
     );
   }
 });
@@ -1865,7 +1823,6 @@ const whatsappTokens = [
 ];
 const rolesList = ref([]);
 const automationSaving = reactive({});
-const showBookPlanDialog = ref(false);
 
 const resolveLeadName = (lead) => getLeadDisplayName(lead);
 const resolveLeadEmail = (lead) => getLeadEmail(lead);
@@ -1916,17 +1873,16 @@ const currentOrgLicense = computed(() => {
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
-  return normalizeLicenseType(match?.licenseType || resolveUserLicenseType(user.value));
+  return String(match?.licenseType || 'Trial').trim();
 });
 
-const currentOrgLicenseLabel = computed(() => currentOrgLicense.value || LICENSE_TYPES.TRIAL);
-const canBookAppointments = computed(() => {
-  return [
-    LICENSE_TYPES.TRIAL,
-    LICENSE_TYPES.SOAR,
-    LICENSE_TYPES.SYSTEM,
-  ].includes(currentOrgLicense.value);
+
+const resolvedTier = computed(() => {
+  const raw = String(currentOrgLicense.value || '').trim();
+  const map = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' };
+  return map[raw] ?? (raw || 'Lite');
 });
+const canBookAppointments = computed(() => ['Pro', 'Soar', 'System'].includes(resolvedTier.value));
 
 const renderTemplateWithContext = (input, ctx, lead) => {
   const withMustache = String(input || '')
@@ -2149,7 +2105,7 @@ const buildAutomationPayload = (row, leadId, groupKey) => {
 const toggleLeadGroup = async (lead, group, enabled) => {
   const leadId = lead?.id;
   if (!leadId || !group) return;
-  await crmStore.fetchLeadAutomations(leadId, { force: true });
+  await crmStore.fetchLeadAutomations(leadId);
 
   const currentRows = crmStore.automationRowsCache[Number(leadId)] || [];
   const keys = group?.templateKeys || [];
@@ -2206,7 +2162,7 @@ const toggleLeadGroup = async (lead, group, enabled) => {
   automationSaving[leadId] = true;
   try {
     await crmStore.saveAutomationBatch({ items: updates });
-    await crmStore.invalidateLeadAutomations(leadId);
+    await crmStore.fetchLeadAutomations(leadId, { force: true, silent: true });
   } catch (e) {
     // Roll back optimistic update
     crmStore.setLeadAutomationsOptimistic(
@@ -2306,7 +2262,7 @@ const onActionClick = (key) => {
   if (!selectedLeads.value.length) return;
   if (key === 'book') {
     if (!canBookAppointments.value) {
-      showBookPlanDialog.value = true;
+      window.dispatchEvent(new CustomEvent('upgrade-required', { detail: { feature: 'patientBooking' } }));
       return;
     }
     emit('book', [...selectedLeads.value])
@@ -2314,9 +2270,6 @@ const onActionClick = (key) => {
   else if (key === 'automations') {
     bulkAutomationsTab.value = 'automation'
     showBulkAutomationsDialog.value = true
-    selectedLeads.value.forEach(lead => {
-      if (lead?.id) crmStore.fetchLeadAutomations(lead.id, { force: true })
-    })
   }
   else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') confirmArchive.value = true;
@@ -2325,7 +2278,10 @@ const onActionClick = (key) => {
   else if (key === 'whatsapp') openWhatsAppCompose();
   else if (key === 'sendPrice') openSendPriceCompose();
   else if (key === 'sendForm') {
-    if (!canBookAppointments.value) { showBookPlanDialog.value = true; return; }
+    if (!canBookAppointments.value) {
+      window.dispatchEvent(new CustomEvent('upgrade-required', { detail: { feature: 'patientBooking' } }));
+      return;
+    }
     openConsentFormSelect()
   }
   else if (['mail','shareLocation'].includes(key)) openCompose(key)

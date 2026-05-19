@@ -13,11 +13,12 @@
  * batch calls, which keeps us well within Meta's rate limits.
  */
 
-import { MetaUserToken, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, MetaPage } from '../models/index.js'
+import { MetaUserToken, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, MetaPage, Organisation } from '../models/index.js'
 import { decrypt } from './crypto.js'
 import { getRedisClient } from './redis.js'
 import { metaBatch, withRetry } from './metaBatch.js'
 import { downloadUrlToS3 } from './storage.js'
+import { getMetaAssetLimits } from './commercialPolicy.js'
 
 const META_VERSION = 'v24.0'
 
@@ -118,9 +119,15 @@ export const runStructureSync = async (orgId) => {
     const allAccounts = Array.isArray(accResp?.data) ? accResp.data : []
 
     // Filter to only ad accounts belonging to the org's connected business(es)
-    const accounts = allowedBusinessIds.size > 0
+    let accounts = allowedBusinessIds.size > 0
       ? allAccounts.filter((acc) => acc.business?.id && allowedBusinessIds.has(acc.business.id))
       : allAccounts
+
+    const org = await Organisation.findByPk(orgId, { attributes: ['id', 'licenseType'] })
+    const metaLimits = getMetaAssetLimits(org)
+    if (metaLimits) {
+      accounts = accounts.slice(0, metaLimits.adAccounts)
+    }
 
     for (const acc of accounts) {
       await MetaAdAccount.upsert(

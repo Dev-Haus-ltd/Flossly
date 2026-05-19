@@ -57,87 +57,90 @@
         </v-btn>
       </template>
     </div>
-
-    <!-- Forms view -->
-    <div v-if="showForms">
-      <CustomerRelationManagementFormsFormList />
-    </div>
-
-    <!-- Default CRM view -->
-    <div v-else>
-      <div class="mt-5 px-5">
-        <v-row class="stat-row" align="stretch">
-          <v-col style="flex: 1 1 0" v-for="(stat, i) in leadStats" :key="i">
-            <CommonStatCard
-              :icon="stat.icon"
-              :label="stat.label"
-              :value="stat.value"
-              :value-color="stat.valueColor"
-              :uid="i"
-              hide-chip
-            />
-          </v-col>
-        </v-row>
-      </div>
-      <div class="mt-5 px-5">
-        <v-alert
-          v-if="activeMetaFilter"
-          type="info"
-          variant="tonal"
-          density="compact"
-          rounded="lg"
-          class="mb-3"
-          closable
-          @click:close="clearMetaFilter"
-        >
-          Showing leads filtered by {{ activeMetaFilter.type }}:
-          <strong>{{ activeMetaFilter.label }}</strong>
-        </v-alert>
-        <div
-          class="d-flex align-center mb-2"
-          style="
-            flex-wrap: nowrap;
-            justify-content: space-between;
-            overflow-x: auto;
-          "
-        >
-          <!-- Left: Search + Filters -->
-          <div
-            class="d-inline-flex align-center toolbar-wrapper"
-            style="flex-wrap: nowrap"
-          >
-            <div style="width: 120px">
-              <v-text-field
-                v-model="searchInput"
-                placeholder="Search"
-                clearable
-                @click:clear="clearSearch"
-                variant="solo"
-                :elevation="0"
-                density="compact"
-                hide-details
-                bg-color="#F3F4F6"
-                flat
-                class="custom-search"
-              >
-                <template #append-inner>
-                  <img
-                    :src="searchicon"
-                    alt="search icon"
-                    width="14"
-                    height="14"
-                  />
-                </template>
-              </v-text-field>
+    <CustomerRelationManagementFormsFormList v-if="showForms" />
+    <template v-else>
+    <div class="mt-5 px-5">
+      <v-card v-if="isLite && usage?.leads" rounded="lg" elevation="0" border class="mb-4 usage-card">
+        <v-card-text class="pa-4">
+          <div class="d-flex align-center justify-space-between flex-wrap ga-3 mb-2">
+            <div>
+              <p class="text-subtitle-2 font-weight-semibold mb-0">Lite lead allowance</p>
+              <p class="text-caption text-medium-emphasis mb-0">
+                {{ leadsUsedLabel }} of {{ leadsLimitLabel }} leads used
+              </p>
             </div>
-            <CustomerRelationManagementFilterMenu
-              :leadSources="leadSources"
-              :treatmentSources="treatmentSources"
-              :alertOptions="
-                alertOptions.length ? alertOptions : DEFAULT_ALERT_OPTIONS
-              "
-              @update:filters="onLeadsFilterUpdate"
-            />
+            <v-chip size="small" :color="leadUsageTone" variant="tonal">
+              {{ leadsRemainingLabel }} remaining
+            </v-chip>
+          </div>
+          <v-progress-linear
+            :model-value="leadUsagePct"
+            :color="leadUsageTone"
+            bg-color="#e8eefc"
+            rounded
+            height="8"
+          />
+        </v-card-text>
+      </v-card>
+      <v-row class="stat-row" align="stretch">
+        <v-col style="flex: 1 1 0;" v-for="(stat, i) in leadStats" :key="i">
+          <CommonStatCard
+            :icon="stat.icon"
+            :label="stat.label"
+            :value="stat.value"
+            :value-color="stat.valueColor"
+            :uid="i"
+            hide-chip
+          />
+        </v-col>
+      </v-row>
+    </div>
+    <div class="mt-5 px-5">
+      <v-alert
+        v-if="activeMetaFilter"
+        type="info"
+        variant="tonal"
+        density="compact"
+        rounded="lg"
+        class="mb-3"
+        closable
+        @click:close="clearMetaFilter"
+      >
+        Showing leads filtered by {{ activeMetaFilter.type }}: <strong>{{ activeMetaFilter.label }}</strong>
+      </v-alert>
+      <div class="d-flex align-center mb-2" style="flex-wrap: nowrap; justify-content: space-between; overflow-x: auto;">
+        <!-- Left: Search + Filters -->
+        <div class="d-inline-flex align-center toolbar-wrapper" style="flex-wrap: nowrap;">
+          <div style="width: 120px">
+            <v-text-field
+            v-model="searchInput"
+              placeholder="Search"
+              clearable
+              @click:clear="clearSearch"
+              variant="solo"
+              :elevation="0"
+              density="compact"
+              hide-details
+              bg-color="#F3F4F6"
+              flat
+              class="custom-search"
+            >
+              <template #append-inner>
+                <img
+                  :src="searchicon"
+                  alt="search icon"
+                  width="14"
+                  height="14"
+                />
+              </template>
+            </v-text-field>
+          </div>
+          <CustomerRelationManagementFilterMenu
+            :leadSources="leadSources"
+            :treatmentSources="treatmentSources"
+            :alertOptions="alertOptions.length ? alertOptions : DEFAULT_ALERT_OPTIONS"
+            @update:filters="onLeadsFilterUpdate"
+          />
 
             <v-menu :close-on-content-click="false">
               <template #activator="{ props: menuProps }">
@@ -211,46 +214,48 @@
               Refresh Meta Leads
             </v-btn>
 
-            <v-btn
-              color="secondary"
-              variant="flat"
-              rounded="lg"
-              class="add-task-btn"
-              @click="showForms = true"
-            >
-              <template #prepend>
-                <v-icon size="18">mdi-form-select</v-icon>
-              </template>
-              Lead Forms
-            </v-btn>
+          <v-btn
+            color="secondary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn"
+            @click="showForms = true"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-form-select</v-icon>
+            </template>
+            Lead Forms
+          </v-btn>
 
-            <v-btn
-              color="secondary"
-              variant="flat"
-              rounded="lg"
-              class="add-task-btn mx-2"
-              @click="bulkLeadUploadDialog = true"
-            >
-              <template #prepend>
-                <v-icon size="18">mdi-upload</v-icon>
-              </template>
-              Upload bulk leads
-            </v-btn>
+          <v-btn
+            color="secondary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn mx-2"
+            data-tour-id="crm-upgrade-upload"
+            @click="openBulkLeadUploadDialog"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-upload</v-icon>
+            </template>
+            Upload bulk leads
+          </v-btn>
 
-            <v-btn
-              color="primary"
-              variant="flat"
-              rounded="lg"
-              class="add-task-btn"
-              @click="handleAddLeadClick"
-            >
-              <template #prepend>
-                <v-icon size="18">mdi-plus-circle-outline</v-icon>
-              </template>
-              Add New Lead
-            </v-btn>
-          </div>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="add-task-btn"
+            @click="handleAddLeadClick"
+          >
+            <template #prepend>
+              <v-icon size="18">mdi-plus-circle-outline</v-icon>
+            </template>
+            Add New Lead
+          </v-btn>
+
         </div>
+      </div>
 
       <!-- List View (child) -->
       <CustomerRelationManagementListView
@@ -393,89 +398,78 @@
           :data="metaHealthData"
         />
 
-        <v-dialog v-model="whapiDialog" max-width="520">
-          <v-card class="pa-4">
-            <v-card-title
-              class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center"
+      <v-dialog v-model="whapiDialog" max-width="520">
+        <v-card class="pa-4">
+          <v-card-title class="text-subtitle-1 pa-0 mb-2 d-flex justify-space-between align-center">
+            <span>Connect WhatsApp</span>
+            <v-chip v-if="whapiStatusLabel" :color="whapiStatusColor" size="small" label>
+              {{ whapiStatusLabel }}
+            </v-chip>
+          </v-card-title>
+          <v-card-text class="pa-0">
+            <v-alert
+              v-if="whapiActivationMessage"
+              type="info"
+              variant="tonal"
+              class="mb-2"
             >
-              <span>Connect WhatsApp</span>
-              <v-chip
-                v-if="whapiStatusLabel"
-                :color="whapiStatusColor"
-                size="small"
-                label
-              >
-                {{ whapiStatusLabel }}
-              </v-chip>
-            </v-card-title>
-            <v-card-text class="pa-0">
-              <v-alert
-                v-if="whapiActivationMessage"
-                type="info"
-                variant="tonal"
-                class="mb-2"
-              >
-                {{ whapiActivationMessage }}
-                <div
-                  v-if="whapiCooldown"
-                  class="text-caption text-medium-emphasis mt-1"
-                >
-                  Refresh available in {{ whapiCooldown }}s
-                </div>
-              </v-alert>
-              <div v-if="whapiQr" class="d-flex flex-column align-center gap-2">
-                <img
-                  :src="whapiQr"
-                  alt="WhatsApp QR"
-                  style="max-width: 260px"
-                />
-                <div class="text-caption text-medium-emphasis">
-                  Scan this QR code using WhatsApp on the phone you want to
-                  connect or switch to.
-                </div>
+              {{ whapiActivationMessage }}
+              <div v-if="whapiCooldown" class="text-caption text-medium-emphasis mt-1">
+                Refresh available in {{ whapiCooldown }}s
               </div>
-              <v-alert
-                v-else-if="whapiStatus.phoneNumber || whapiStatus.displayName"
-                type="info"
-                variant="tonal"
-                class="mb-2"
-              >
-                Connected phone:
-                {{
-                  whapiStatus.displayName
-                    ? `${whapiStatus.displayName} (${whapiStatus.phoneNumber})`
-                    : whapiStatus.phoneNumber
-                }}
-              </v-alert>
-              <v-alert v-else type="info" variant="tonal" class="mb-2">
-                QR code not ready yet. If the channel is Stopped/Overdue,
-                activate it first and then refresh after about a minute.
-              </v-alert>
-            </v-card-text>
-            <v-card-actions class="pa-0 mt-4">
-              <v-btn variant="text" @click="whapiDialog = false">Close</v-btn>
-              <v-spacer />
-              <v-btn
-                v-if="whapiCanActivate && !whapiQr"
-                :loading="whapiLoading"
-                variant="flat"
-                color="warning"
-                @click="activateWhapiChannel"
-              >
-                Activate (1 day)
-              </v-btn>
-              <v-btn
-                :loading="whapiLoading"
-                :disabled="whapiCooldown > 0"
-                variant="flat"
-                color="primary"
-                @click="refreshWhapiQr"
-              >
-                Refresh QR
-              </v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
+            </v-alert>
+            <v-alert
+              v-else-if="!canManageWhapi"
+              type="warning"
+              variant="tonal"
+              class="mb-2"
+            >
+              Live WhatsApp connection is available on paid CRM and Pro subscriptions only.
+            </v-alert>
+            <div v-if="whapiQr" class="d-flex flex-column align-center gap-2">
+              <img :src="whapiQr" alt="WhatsApp QR" style="max-width: 260px;" />
+              <div class="text-caption text-medium-emphasis">
+                Scan this QR code using WhatsApp on the phone you want to connect or switch to.
+              </div>
+            </div>
+            <v-alert
+              v-else-if="whapiStatus.phoneNumber || whapiStatus.displayName"
+              type="info"
+              variant="tonal"
+              class="mb-2"
+            >
+              Connected phone:
+              {{ whapiStatus.displayName ? `${whapiStatus.displayName} (${whapiStatus.phoneNumber})` : whapiStatus.phoneNumber }}
+            </v-alert>
+            <v-alert v-else type="info" variant="tonal" class="mb-2">
+              QR code not ready yet. If the channel is Stopped/Overdue, activate it first and then refresh after about a minute.
+            </v-alert>
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-btn variant="text" @click="whapiDialog = false">Close</v-btn>
+            <v-spacer />
+            <v-btn
+              v-if="whapiCanActivate && !whapiQr"
+              :loading="whapiLoading"
+              :disabled="!canManageWhapi"
+              variant="flat"
+              color="warning"
+              @click="activateWhapiChannel"
+            >
+              Activate (1 day)
+            </v-btn>
+            <v-btn
+              :loading="whapiLoading"
+              :disabled="whapiCooldown > 0 || !canManageWhapi"
+              variant="flat"
+              color="primary"
+              @click="refreshWhapiQr"
+            >
+              Refresh QR
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
 
         <v-dialog v-model="confirmWhapiDisconnect" max-width="520">
           <v-card class="pa-4">
@@ -571,80 +565,71 @@
                 class="mb-3"
               />
 
-              <div
-                v-if="businessPagesFiltered.length"
-                class="business-page-list"
-              >
-                <v-list density="compact">
-                  <v-list-item
-                    v-for="page in businessPagesFiltered"
-                    :key="page.id"
-                  >
-                    <template #prepend>
-                      <v-checkbox-btn
-                        :model-value="selectedPageIds.includes(page.id)"
-                        :disabled="
-                          page.connectedElsewhere || page.connectedToOrg
-                        "
-                        @click.stop="toggleBusinessPage(page)"
-                      />
-                    </template>
-                    <v-list-item-title>{{
-                      page.name || page.id
-                    }}</v-list-item-title>
-                    <v-list-item-subtitle>
-                      {{ page.statusLabel }}
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                </v-list>
-              </div>
-              <div v-else class="text-caption text-medium-emphasis">
-                No pages found for this portfolio.
-              </div>
-            </v-card-text>
-            <v-card-actions class="pa-0 mt-4">
-              <v-btn variant="text" @click="businessDialog = false">
-                Close
-              </v-btn>
-              <v-spacer />
-              <v-btn
-                variant="text"
-                :disabled="!businessPagesSelectable.length"
-                @click="selectAllBusinessPages"
-              >
-                Select All
-              </v-btn>
-              <v-btn
-                color="primary"
-                variant="flat"
-                :loading="businessSaving"
-                :disabled="!selectedPageIds.length"
-                @click="connectSelectedBusinessPages"
-              >
-                Connect Selected
-              </v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-      </div>
+            <div v-if="businessPagesFiltered.length" class="business-page-list">
+              <v-list density="compact">
+                <v-list-item
+                  v-for="page in businessPagesFiltered"
+                  :key="page.id"
+                >
+                  <template #prepend>
+                    <v-checkbox-btn
+                      :model-value="selectedPageIds.includes(page.id)"
+                      :disabled="page.connectedElsewhere || page.connectedToOrg"
+                      @click.stop="toggleBusinessPage(page)"
+                    />
+                  </template>
+                  <v-list-item-title>{{ page.name || page.id }}</v-list-item-title>
+                  <v-list-item-subtitle>
+                    {{ page.statusLabel }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+              </v-list>
+            </div>
+            <div v-else class="text-caption text-medium-emphasis">
+              No pages found for this portfolio.
+            </div>
+          </v-card-text>
+          <v-card-actions class="pa-0 mt-4">
+            <v-btn variant="text" @click="businessDialog = false">
+              Close
+            </v-btn>
+            <v-spacer />
+            <v-btn
+              variant="text"
+              :disabled="!businessPagesSelectable.length"
+              @click="selectAllBusinessPages"
+            >
+              Select All
+            </v-btn>
+            <v-btn
+              color="primary"
+              variant="flat"
+              :loading="businessSaving"
+              :disabled="!selectedPageIds.length"
+              @click="connectSelectedBusinessPages"
+            >
+              Connect Selected
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
     </div>
+    </template>
     <!-- end v-else CRM default view -->
   </v-sheet>
 </template>
 
 <script setup>
-import { storeToRefs } from "pinia";
-import AddAppointment from "@/components/diary/addAppointment.vue";
-import CustomerRelationManagementMetaHealthDialog from "@/components/customerRelationManagement/metaHealthDialog.vue";
-import { useDiaryStore } from "@/stores/diary";
-import {
-  LICENSE_TYPES,
-  resolveUserLicenseType,
-  useMainStore,
-} from "@/stores/index";
-import { useCrmStore } from "@/stores/crm";
-import { useUserStore } from "@/stores/user";
-import { useAuthStore } from "@/stores/auth";
+import { storeToRefs } from 'pinia'
+import AddAppointment from '@/components/diary/addAppointment.vue'
+import CustomerRelationManagementMetaHealthDialog from '@/components/customerRelationManagement/metaHealthDialog.vue'
+import { useDiaryStore } from '@/stores/diary'
+import { useMainStore } from '@/stores/index'
+import { useCrmStore } from '@/stores/crm'
+import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
+import { useUsageSummary } from '@/composables/useUsageSummary'
 import searchicon from "@/assets/icons/listView/serach-icon.svg";
 import crmService from "@/services/crmService";
 const crmStore = useCrmStore();
@@ -652,6 +637,7 @@ const userStore = useUserStore();
 const { users: storeUsers } = storeToRefs(userStore);
 const userList = computed(() => storeUsers.value || []);
 const authStore = useAuthStore();
+const { usage, isLite, fetchUsage } = useUsageSummary()
 const route = useRoute();
 const router = useRouter();
 const diaryStore = useDiaryStore();
@@ -834,22 +820,45 @@ const normalizeLicenseType = (value) => {
   return exact || LICENSE_TYPES.TRIAL;
 };
 const currentOrgLicense = computed(() => {
+  const licenseType = String(authStore.loggedUser?.licenseType || user.value?.licenseType || '').trim();
+  if (licenseType) return licenseType;
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences)
     ? user.value.preferences
     : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);
-  return normalizeLicenseType(
-    match?.licenseType || resolveUserLicenseType(user.value),
-  );
+  return String(match?.licenseType || 'Lite').trim();
 });
-const canBookAppointments = computed(() => {
-  return [
-    LICENSE_TYPES.TRIAL,
-    LICENSE_TYPES.SOAR,
-    LICENSE_TYPES.SYSTEM,
-  ].includes(currentOrgLicense.value);
+const resolvedTier = computed(() => {
+  const raw = String(currentOrgLicense.value || '').trim();
+  const map = { System: 'Pro', Trial: 'Lite', Drift: 'Lite', Glide: 'CRM', Soar: 'Pro' };
+  return map[raw] ?? (raw || 'Lite');
 });
+const leadsUsage = computed(() => usage.value?.leads || null)
+const leadUsagePct = computed(() => {
+  const current = Number(leadsUsage.value?.current || 0)
+  const max = Number(leadsUsage.value?.max || 0)
+  if (!max) return 0
+  return Math.min(100, Math.round((current / max) * 100))
+})
+const leadsUsedLabel = computed(() => Number(leadsUsage.value?.current || 0))
+const leadsLimitLabel = computed(() => Number(leadsUsage.value?.max || 0))
+const leadsRemainingLabel = computed(() =>
+  Math.max(0, Number(leadsUsage.value?.max || 0) - Number(leadsUsage.value?.current || 0))
+)
+const leadUsageTone = computed(() => {
+  if (leadUsagePct.value >= 100) return 'error'
+  if (leadUsagePct.value >= 80) return 'warning'
+  return 'primary'
+})
+const canBulkUploadLeads = computed(() => ['CRM', 'Pro'].includes(resolvedTier.value));
+const canManageWhapi = computed(() => {
+  const type = String(currentOrgLicense.value || '').toLowerCase();
+  if (type === 'system') return true;
+  const billingCycle = authStore.loggedUser?.licenseBillingCycle || user.value?.licenseBillingCycle || null;
+  return ['crm', 'pro', 'glide', 'soar'].includes(type) && !!billingCycle;
+});
+const canBookAppointments = computed(() => ['Pro', 'Soar', 'System'].includes(resolvedTier.value));
 watch(bookingPractitionerOptions, (opts) => {
   if (!bookingInitialPractitioner.value && opts.length) {
     bookingInitialPractitioner.value = opts[0].value;
@@ -979,6 +988,13 @@ const loadWhapiStatus = async () => {
 };
 
 const connectWhapi = async () => {
+  if (!canManageWhapi.value) {
+    mainStore?.setSnackbar?.({
+      title: 'Live WhatsApp connection is available on paid CRM and Pro subscriptions only.',
+      type: 'warning',
+    });
+    return;
+  }
   try {
     whapiLoading.value = true;
     whapiActivationPending.value = false;
@@ -1020,6 +1036,7 @@ const connectWhapi = async () => {
 };
 
 const refreshWhapiQr = async () => {
+  if (!canManageWhapi.value) return;
   try {
     whapiLoading.value = true;
     const res = await crmStore.getWhapiQr();
@@ -1044,7 +1061,7 @@ const refreshWhapiQr = async () => {
 };
 
 const activateWhapiChannel = async () => {
-  if (whapiLoading.value || whapiActivationPending.value) return;
+  if (whapiLoading.value || whapiActivationPending.value || !canManageWhapi.value) return;
   try {
     whapiLoading.value = true;
     const res = await crmStore.extendWhapiChannel();
@@ -1366,6 +1383,7 @@ const onSelect = (selection) => {
 onMounted(() => {
   const metaConnected = route.query.meta === "connected";
   const metaError = route.query.error;
+  fetchUsage();
   initLeads(metaConnected);
   checkConnection();
   loadWhatsAppUsage();
@@ -1624,10 +1642,13 @@ const onBookLeads = async (selection) => {
   const picked = Array.isArray(selection) ? selection : [];
   if (!picked.length) return;
   if (picked.length > 1) {
-    mainStore?.setSnackbar?.({
-      title: "Select only one lead to book an appointment",
-      type: "error",
-    });
+    mainStore?.setSnackbar?.({ title: 'Select only one lead to book an appointment', type: 'error' });
+    return;
+  }
+  if (!canBookAppointments.value) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('upgrade-required', { detail: { feature: 'patientBooking' } }));
+    }
     return;
   }
   const lead = picked[0];
@@ -1736,6 +1757,17 @@ const updateLeads = async () => {
 const handleAddLeadClick = () => {
   addLeadDrawer.value = true;
 };
+const openBulkLeadUploadDialog = () => {
+  if (canBulkUploadLeads.value) {
+    bulkLeadUploadDialog.value = true;
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('upgrade-required', {
+      detail: { feature: 'leadBulkUpload', code: 'FEATURE_NOT_AVAILABLE' },
+    }));
+  }
+};
 
 const resolveLeadSource = (source) => {
   if (source && typeof source === "object") {
@@ -1763,10 +1795,14 @@ const resolveLeadSource = (source) => {
 
 const handleSuccess = async () => {
   addLeadDrawer.value = false;
+  resetUsageState();
+  await fetchUsage();
   await fetchLeads(activeFilters.value);
 };
 const handleBulkUploadComplete = async () => {
   bulkLeadUploadDialog.value = false;
+  resetUsageState();
+  await fetchUsage();
   await fetchLeads(activeFilters.value);
 };
 
@@ -1891,6 +1927,8 @@ const onItemsPerPageChange = async (val) => {
 };
 
 const handleLeadsRefresh = async () => {
+  resetUsageState();
+  await fetchUsage();
   await fetchLeads(activeFilters.value);
 };
 
