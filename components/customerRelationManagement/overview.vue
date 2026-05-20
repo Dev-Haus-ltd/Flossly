@@ -452,7 +452,16 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="autoReplyConfigDialog" max-width="600" persistent>
+    <CommonConfirmDialog
+      v-model="confirmDisconnectMeta"
+      title="Disconnect Meta?"
+      message="This will remove the Meta integration. New leads from Facebook forms will stop arriving until you reconnect."
+      confirm-text="Disconnect"
+      @confirm="doDisconnectMeta"
+      @cancel="confirmDisconnectMeta = false"
+    />
+
+    <v-dialog v-model="autoReplyConfigDialog" max-width="600" persistent scrollable>
       <v-card>
         <v-card-title class="d-flex align-center justify-space-between pa-4">
           <span>Auto-Reply Configuration</span>
@@ -461,7 +470,7 @@
           </v-btn>
         </v-card-title>
         <v-divider />
-        <v-card-text class="pa-4">
+        <v-card-text class="pa-4" style="max-height: 70vh; overflow-y: auto;">
           <p class="text-caption text-medium-emphasis mb-4">
             Provide context about your practice so the bot can respond intelligently to incoming leads. All fields are required to enable auto-reply.
           </p>
@@ -495,6 +504,17 @@
             persistent-hint
             rows="4"
           />
+          <v-divider class="my-4" />
+          <div class="text-subtitle-2 mb-2">Appointment Booking</div>
+          <v-switch
+            v-model="autoReplyConfig.bookingEnabled"
+            label="Enable appointment booking in Flossly Diary via DM"
+            density="compact"
+            class="mb-2"
+          />
+          <div v-if="autoReplyConfig.bookingEnabled" class="text-caption text-medium-emphasis mb-4">
+            The AI will collect the customer's name, phone, and preferred time, then book a real appointment and create a CRM lead automatically.
+          </div>
         </v-card-text>
         <v-divider />
         <v-card-actions class="pa-4">
@@ -599,7 +619,7 @@ const googleStatus = reactive({
 const autoReplyEnabled = ref(false)
 const whatsappAutoReplyEnabled = ref(false)
 const autoReplyLoading = ref(false)
-const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "" })
+const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "", bookingEnabled: false })
 const autoReplyConfigDialog = ref(false)
 const autoReplyConfigLoading = ref(false)
 
