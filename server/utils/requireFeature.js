@@ -1,6 +1,7 @@
 import { createError } from 'h3'
 import { getEntitlements } from '../config/entitlements.js'
 import { Organisation } from '../models/index.js'
+import { createEventNotification } from './notificationService.js'
 
 /**
  * Throws 403 if the org's plan does not include the requested feature flag.
@@ -8,11 +9,14 @@ import { Organisation } from '../models/index.js'
  * Reads licenseType live from DB so plan changes take effect immediately without re-login.
  */
 export const requireFeature = async (event, feature) => {
-  const { orgId } = event.context.user ?? {}
+  const { orgId, userId } = event.context.user ?? {}
   const org = await Organisation.findByPk(orgId, { attributes: ['licenseType'] })
   const licenseType = org?.licenseType ?? 'Lite'
   const ent = getEntitlements(licenseType)
   if (!ent[feature]) {
+    if (orgId && userId) {
+      await createEventNotification(orgId, userId, 'upgrade_f4_feature_locked')
+    }
     throw createError({
       statusCode: 403,
       data: {

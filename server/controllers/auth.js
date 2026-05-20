@@ -60,7 +60,6 @@ import { getPendingEventNotifications } from "../utils/notificationService.js";
 import {
   CLIENT_ONBOARDING_KEYS,
   ensureOnboardingStartEvent,
-  getDiffDaysFromStart,
   getOnboardingEventMap,
   getOnboardingKeys,
   getOnboardingMetrics,
@@ -75,6 +74,75 @@ import { TRIAL_DAYS } from "@shared/defaults/commercialPolicy.js";
 
 const config = useRuntimeConfig();
 const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
+const EMPTY_ONBOARDING_STATE = {
+  showWelcomePopup: false,
+  showWelcomeVideoPopup: false,
+  inAppMessages: [],
+};
+
+const buildCommercialOnboardingState = async ({
+  userObj,
+  loggedUser,
+  now = new Date(),
+}) => {
+  const { event: startEvent, created } = await ensureOnboardingStartEvent({
+    userId: loggedUser.userId,
+    organisationId: loggedUser.orgId,
+  });
+  const onboardingKeys = getOnboardingKeys();
+  const eventMap = await getOnboardingEventMap({
+    userId: loggedUser.userId,
+    organisationId: loggedUser.orgId,
+    keys: onboardingKeys,
+  });
+  const showWelcomePopup = !eventMap.has("welcome_quiz_done");
+  const showWelcomeVideoPopup =
+    eventMap.has("welcome_quiz_done") && !eventMap.has("welcome_video_done");
+  const startAt = startEvent?.createdAt || userObj?.createdAt;
+  const organisation = await Organisation.findByPk(loggedUser.orgId);
+  const preference = userObj.preferences?.[0];
+  const metrics = await getOnboardingMetrics(loggedUser.orgId);
+  const ctx = buildOnboardingContext({
+    user: userObj,
+    organisation,
+    userPreference: preference,
+    metrics,
+    config,
+    startAt,
+    now,
+  });
+  const pendingEventKeys = await getPendingEventNotifications(
+    loggedUser.orgId,
+    loggedUser.userId,
+    new Set(eventMap.keys())
+  );
+  const conditionData = {
+    leadsCount: Number(metrics?.leadsCount || 0),
+    tasksCount: Number(metrics?.tasksCount || 0),
+    automationsCount: Number(metrics?.automationsCount || 0),
+    setupStepsCompleted: Number(preference?.setupStepsCompleted || 0),
+  };
+  const inAppMessages = buildOnboardingInAppMessages({
+    startAt,
+    now,
+    ctx,
+    seenKeys: new Set(eventMap.keys()),
+    pendingEventKeys,
+    conditionData,
+  });
+
+  return {
+    created,
+    ctx,
+    eventMap,
+    onboarding: {
+      startAt,
+      showWelcomePopup,
+      showWelcomeVideoPopup,
+      inAppMessages,
+    },
+  };
+};
 
 export const login = async (event) => {
   try {
@@ -627,69 +695,21 @@ export const profile = async (event) => {
 
     try {
       if (!shouldShowCommercialOnboarding) {
-        userObj.onboarding = {
-          showWelcomePopup: false,
-          showWelcomeVideoPopup: false,
-          inAppMessages: [],
-        };
+        userObj.onboarding = { ...EMPTY_ONBOARDING_STATE };
       } else {
-      const { event: startEvent, created } = await ensureOnboardingStartEvent({
-        userId: loggedUser.userId,
-        organisationId: loggedUser.orgId,
-      });
-      const onboardingKeys = getOnboardingKeys();
-      const eventMap = await getOnboardingEventMap({
-        userId: loggedUser.userId,
-        organisationId: loggedUser.orgId,
-        keys: onboardingKeys,
-      });
-      const showWelcomePopup = !eventMap.has("welcome_quiz_done");
-      const showWelcomeVideoPopup =
-        eventMap.has("welcome_quiz_done") && !eventMap.has("welcome_video_done");
-      const startAt = startEvent?.createdAt || user?.createdAt;
-      const diffDays = getDiffDaysFromStart(startAt);
+        const onboardingState = await buildCommercialOnboardingState({
+          userObj,
+          loggedUser,
+        });
+        userObj.onboarding = onboardingState.onboarding;
 
-      const organisation = await Organisation.findByPk(loggedUser.orgId);
-      const preference = userObj.preferences?.[0];
-      const metrics =
-        diffDays === 7 || diffDays === 13
-          ? await getOnboardingMetrics(loggedUser.orgId)
-          : null;
-      const ctx = buildOnboardingContext({
-        user: userObj,
-        organisation,
-        userPreference: preference,
-        metrics,
-        config,
-        startAt,
-      });
-
-      const pendingEventKeys = await getPendingEventNotifications(
-        loggedUser.orgId,
-        loggedUser.userId,
-        new Set(eventMap.keys())
-      );
-      const inAppMessages = buildOnboardingInAppMessages({
-        startAt,
-        ctx,
-        seenKeys: new Set(eventMap.keys()),
-        pendingEventKeys,
-      });
-
-      userObj.onboarding = {
-        startAt,
-        showWelcomePopup,
-        showWelcomeVideoPopup,
-        inAppMessages,
-      };
-
-      if (created && userObj?.email && isOnboardingRecipientRole(userObj.roleId)) {
-        if (!eventMap.has("onboarding_email_day0")) {
+        if (onboardingState.created && userObj?.email && isOnboardingRecipientRole(userObj.roleId)) {
+          if (!onboardingState.eventMap.has("onboarding_email_day0")) {
           try {
             await sendOnboardingEmail({
               key: "onboarding_email_day0",
               to: userObj.email,
-              ctx,
+              ctx: onboardingState.ctx,
               orgId: loggedUser.orgId,
             });
             await recordOnboardingEventInternal({
@@ -704,11 +724,7 @@ export const profile = async (event) => {
       }
       }
     } catch (onboardingErr) {
-      userObj.onboarding = userObj.onboarding || {
-        showWelcomePopup: false,
-        showWelcomeVideoPopup: false,
-        inAppMessages: [],
-      };
+      userObj.onboarding = userObj.onboarding || { ...EMPTY_ONBOARDING_STATE };
     }
 
     // Auto-downgrade org if trial expired and no active Stripe subscription
@@ -765,6 +781,66 @@ export const recordOnboardingEvent = async (event) => {
     return success({ created: result.created });
   } catch (err) {
     return error(500, err.message || err);
+  }
+};
+
+export const getOnboardingMessages = async (event) => {
+  const loggedUser = event.context.user;
+  if (!loggedUser || !loggedUser.userId || !loggedUser.orgId) {
+    return error(401, "Unauthenticated");
+  }
+
+  try {
+    const user = await User.findByPk(loggedUser.userId, {
+      attributes: { exclude: ["password"] },
+      include: [
+        {
+          model: UserPreference,
+          as: "preferences",
+          where: { organisationId: loggedUser.orgId },
+          required: false,
+        },
+        {
+          model: Role,
+          as: "role",
+        },
+        {
+          model: UserOrganisation,
+          as: "userOrganisations",
+          required: false,
+          include: [
+            {
+              model: Organisation,
+              as: "organisation",
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!user) return error(404, "User not found");
+
+    const userObj = user.toJSON();
+    userObj.currentLoggedInOrgId = loggedUser.orgId;
+    const currentOrganisation = await Organisation.findByPk(loggedUser.orgId);
+    userObj.isOrganisationCreator =
+      currentOrganisation && currentOrganisation.managerId === loggedUser.userId;
+
+    const shouldShowCommercialOnboarding =
+      Boolean(userObj.isOrganisationCreator) &&
+      isOnboardingRecipientRole(userObj.roleId);
+
+    if (!shouldShowCommercialOnboarding) {
+      return success({ ...EMPTY_ONBOARDING_STATE });
+    }
+
+    const onboardingState = await buildCommercialOnboardingState({
+      userObj,
+      loggedUser,
+    });
+    return success(onboardingState.onboarding);
+  } catch (err) {
+    return error(500, err.message || "Failed to fetch onboarding messages");
   }
 };
 

@@ -439,5 +439,13 @@ export const useAuthStore = defineStore("authStore", {
           .catch((err) => reject(err));
       });
     },
+    getOnboardingMessages() {
+      return new Promise((resolve, reject) => {
+        authService
+          .getOnboardingMessages()
+          .then((res) => resolve(res))
+          .catch((err) => reject(err));
+      });
+    },
   },
 });

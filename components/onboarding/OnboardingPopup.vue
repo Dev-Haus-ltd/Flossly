@@ -5,7 +5,7 @@
     :persistent="persistent"
     @update:model-value="updateModel"
   >
-    <div class="onboarding-shell">
+    <div class="onboarding-shell" :style="themeStyle">
       <div v-if="showMarker" class="onboarding-marker">
         <span class="onboarding-marker__line"></span>
         <span class="onboarding-marker__dot"></span>
@@ -33,6 +33,9 @@
             <v-icon icon="mdi-close" />
           </v-btn>
           <div class="onboarding-card__inner">
+            <div v-if="badgeLabel" class="onboarding-badge">
+              {{ badgeLabel }}
+            </div>
             <div v-if="iconSrc || icon" class="onboarding-icon">
               <img v-if="iconSrc" :src="iconSrc" alt="" />
               <v-icon v-else :icon="icon" size="26" />
@@ -86,6 +89,8 @@ const props = defineProps({
   iconSrc: { type: String, default: "" },
   showMarker: { type: Boolean, default: false },
   showClose: { type: Boolean, default: true },
+  tier: { type: Number, default: 3 },
+  badgeLabel: { type: String, default: "" },
 });
 
 const emit = defineEmits(["update:modelValue", "primary", "secondary", "close"]);
@@ -93,6 +98,41 @@ const dialogCard = ref(null);
 const primaryBtn = ref(null);
 
 const ariaLabel = computed(() => props.title || "Onboarding dialog");
+const themeStyle = computed(() => {
+  const themes = {
+    1: {
+      start: "#ff6b6b",
+      end: "#ff9f43",
+      soft: "#fff1eb",
+    },
+    2: {
+      start: "#f9c74f",
+      end: "#43aa8b",
+      soft: "#f4fff3",
+    },
+    3: {
+      start: "#4361ee",
+      end: "#4cc9f0",
+      soft: "#eef4ff",
+    },
+    4: {
+      start: "#7209b7",
+      end: "#b5179e",
+      soft: "#faf0ff",
+    },
+    5: {
+      start: "#adb5bd",
+      end: "#dee2e6",
+      soft: "#f7f8f9",
+    },
+  };
+  const theme = themes[props.tier] || themes[3];
+  return {
+    "--onboarding-accent-start": theme.start,
+    "--onboarding-accent-end": theme.end,
+    "--onboarding-accent-soft": theme.soft,
+  };
+});
 
 const updateModel = (val) => {
   emit("update:modelValue", val);
@@ -160,7 +200,7 @@ watch(
 .onboarding-marker__line {
   width: 4px;
   height: 46px;
-  background: #0b5ff2;
+  background: var(--onboarding-accent-start, #0b5ff2);
   border-radius: 999px;
 }
 
@@ -168,15 +208,19 @@ watch(
   width: 20px;
   height: 20px;
   margin-top: 8px;
-  background: #0b5ff2;
+  background: var(--onboarding-accent-start, #0b5ff2);
   border-radius: 50%;
-  box-shadow: 0 0 0 6px #e8f0ff;
+  box-shadow: 0 0 0 6px var(--onboarding-accent-soft, #e8f0ff);
 }
 
 .onboarding-frame {
   padding: 1px;
   border-radius: 26px;
-  background: linear-gradient(120deg, #ffb27a, #8b7bff, #5dd0ff);
+  background: linear-gradient(
+    120deg,
+    var(--onboarding-accent-start, #ffb27a),
+    var(--onboarding-accent-end, #5dd0ff)
+  );
 }
 
 .onboarding-card {
@@ -191,12 +235,30 @@ watch(
   color: #101828;
 }
 
+.onboarding-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--onboarding-accent-soft, #eef4ff);
+  color: var(--onboarding-accent-start, #0b5ff2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 .onboarding-icon {
   width: 44px;
   height: 44px;
   margin: 0 auto 12px;
   border-radius: 12px;
-  background: #0b5ff2;
+  background: linear-gradient(
+    135deg,
+    var(--onboarding-accent-start, #0b5ff2),
+    var(--onboarding-accent-end, #5dd0ff)
+  );
   color: #ffffff;
   display: flex;
   align-items: center;

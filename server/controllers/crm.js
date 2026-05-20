@@ -655,6 +655,7 @@ export const createLead = async (event) => {
     }
 
     try {
+      await createEventNotification(logged.orgId, logged.userId, 'celebrate_b1_new_lead')
       const leadCount = await CrmLead.count({ where: { organisationId: logged.orgId } })
       if (leadCount === 80) {
         await createEventNotification(logged.orgId, logged.userId, 'upgrade_f1_leads_80pct')
@@ -703,12 +704,19 @@ export const updateLead = async (event) => {
     if (!id) return error(400, 'id required')
     const lead = await CrmLead.findOne({ where: { id, organisationId: Number(logged.orgId) } })
     if (!lead) return error(404, 'Lead not found')
+    const previousLeadStatus = String(lead.leadStatus || '')
     const fields = ['alert', 'name', 'email', 'telephone', 'inquiryDate', 'dob', 'occupation', 'location', 'leadSource', 'leadStatus', 'followUpDate', 'comments', 'softDeleted']
     for (const f of fields) if (payload[f] !== undefined) lead[f] = payload[f]
     if (payload.treatment !== undefined) {
       lead.treatment = payload.treatment?.name || payload.treatment || null
     }
     await lead.save()
+    try {
+      const nextLeadStatus = String(lead.leadStatus || '')
+      if (previousLeadStatus !== 'Converted' && nextLeadStatus === 'Converted') {
+        await createEventNotification(logged.orgId, logged.userId, 'celebrate_b3_consultation')
+      }
+    } catch {}
     // Sync assignees if provided
     if (payload.assigned !== undefined && Array.isArray(payload.assigned)) {
       const desiredUserIds = payload.assigned.filter((u) => u && u.id).map((u) => Number(u.id))

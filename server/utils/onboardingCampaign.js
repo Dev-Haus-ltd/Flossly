@@ -23,9 +23,106 @@ const DEFAULT_IMPACT = {
 
 const formatDate = (date) => formatDateDDMMYYYY(date);
 
+// ─── CONDITION EVALUATOR ────────────────────────────────────────────────────
+// All condition logic lives here — single source of truth on the server side.
+// conditionKey must match a key defined on ONBOARDING_INAPP_MESSAGES entries.
 
+const evaluateCondition = (conditionKey, conditionData, diffDays) => {
+  const {
+    leadsCount = 0,
+    tasksCount = 0,
+    automationsCount = 0,
+    setupStepsCompleted = null,
+  } = conditionData;
 
+  switch (conditionKey) {
+    // Tier 1
+    case "leads_80pct":
+      return leadsCount >= 80 && leadsCount < 100;
+    case "leads_limit":
+      return leadsCount >= 100;
+    case "high_engagement":
+      return leadsCount > 20 && automationsCount > 0 && tasksCount > 5;
+    // Tier 2
+    case "first_lead":
+      return leadsCount >= 1;
+    case "lead_milestone_10":
+      return leadsCount >= 10;
+    case "lead_milestone_25":
+      return leadsCount >= 25;
+    case "lead_milestone_50":
+      return leadsCount >= 50;
+    // Tier 5
+    case "setup_abandoned":
+      return setupStepsCompleted === 0 && diffDays >= 1;
+    default:
+      return false;
+  }
+};
 
+// ─── TRIAL-ONLY GATE ────────────────────────────────────────────────────────
+const TRIAL_ONLY_KEYS = new Set([
+  "onboarding_inapp_day7_trial",
+  "onboarding_inapp_day13_trial",
+]);
+
+const passesTrialGate = (msg, ctx) => {
+  if (!TRIAL_ONLY_KEYS.has(msg.key)) return true;
+  const isTrialPlan = ["Trial", "CRM", "Pro"].includes(String(ctx?.planName || ""));
+  const trialDaysRemaining = Number(ctx?.trialDaysRemaining || 0);
+  return isTrialPlan && Number.isFinite(trialDaysRemaining) && trialDaysRemaining > 0;
+};
+
+// ─── TOKEN RENDERER ─────────────────────────────────────────────────────────
+const renderMessage = (msg, ctx) => ({
+  ...msg,
+  title: renderOnboardingTokens(msg.title, ctx),
+  message: renderOnboardingTokens(msg.message, ctx),
+  primaryLabel: renderOnboardingTokens(msg.primaryLabel, ctx),
+  primaryLink: renderOnboardingTokens(msg.primaryLink, ctx),
+  secondaryLabel: msg.secondaryLabel ? renderOnboardingTokens(msg.secondaryLabel, ctx) : "",
+  secondaryLink: msg.secondaryLink ? renderOnboardingTokens(msg.secondaryLink, ctx) : "",
+});
+
+// ─── MAIN BUILDER ────────────────────────────────────────────────────────────
+export const buildOnboardingInAppMessages = ({
+  startAt,
+  now = new Date(),
+  ctx,
+  seenKeys = new Set(),
+  pendingEventKeys = new Set(),
+  conditionData = {},
+}) => {
+  if (!startAt) return [];
+  const startDate = new Date(startAt);
+  if (Number.isNaN(startDate.getTime())) return [];
+
+  const startDay = new Date(startDate);
+  startDay.setHours(0, 0, 0, 0);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.floor((today - startDay) / (24 * 60 * 60 * 1000));
+  if (!Number.isFinite(diffDays)) return [];
+
+  return ONBOARDING_INAPP_MESSAGES
+    .filter((msg) => !seenKeys.has(msg.key))
+    .filter((msg) => {
+      switch (msg.triggerType) {
+        case "event":
+          return pendingEventKeys.has(msg.key);
+        case "condition":
+          return evaluateCondition(msg.conditionKey, conditionData, diffDays);
+        case "offsetDays":
+        default:
+          return msg.offsetDays === diffDays;
+      }
+    })
+    .filter((msg) => passesTrialGate(msg, ctx))
+    .map((msg) => renderMessage(msg, ctx))
+    .sort((a, b) => (a.tier ?? 99) - (b.tier ?? 99));
+};
+
+// ─── EMAIL BUILDERS ──────────────────────────────────────────────────────────
 export const getOnboardingEmailTemplate = (key) =>
   ONBOARDING_EMAIL_TEMPLATES.find((tpl) => tpl.key === key);
 
@@ -52,53 +149,7 @@ export const sendOnboardingEmail = async ({ key, to, ctx, from, orgId }) => {
   return true;
 };
 
-export const buildOnboardingInAppMessages = ({
-  startAt,
-  now = new Date(),
-  ctx,
-  seenKeys = new Set(),
-  pendingEventKeys = new Set(),
-}) => {
-  if (!startAt) return [];
-  const startDate = new Date(startAt);
-  if (Number.isNaN(startDate.getTime())) return [];
-  const startDay = new Date(startDate);
-  startDay.setHours(0, 0, 0, 0);
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  const diffDays = Math.floor((today - startDay) / (24 * 60 * 60 * 1000));
-  if (!Number.isFinite(diffDays)) return [];
-
-  const isTrialPlan = ['Trial', 'CRM', 'Pro'].includes(String(ctx?.planName || ''));
-  const trialDaysRemaining = Number(ctx?.trialDaysRemaining || 0);
-  const trialOnlyKeys = new Set([
-    "onboarding_inapp_day7_trial",
-    "onboarding_inapp_day13_trial",
-  ]);
-
-  return ONBOARDING_INAPP_MESSAGES
-    .filter((msg) => {
-      if (msg.triggerType === 'event') return pendingEventKeys.has(msg.key);
-      return msg.offsetDays === diffDays;
-    })
-    .filter((msg) => {
-      if (!trialOnlyKeys.has(msg.key)) return true;
-      if (!isTrialPlan) return false;
-      if (!Number.isFinite(trialDaysRemaining) || trialDaysRemaining <= 0) return false;
-      return true;
-    })
-    .filter((msg) => !seenKeys.has(msg.key))
-    .map((msg) => ({
-      ...msg,
-      title: renderOnboardingTokens(msg.title, ctx),
-      message: renderOnboardingTokens(msg.message, ctx),
-      primaryLabel: renderOnboardingTokens(msg.primaryLabel, ctx),
-      primaryLink: renderOnboardingTokens(msg.primaryLink, ctx),
-      secondaryLabel: msg.secondaryLabel ? renderOnboardingTokens(msg.secondaryLabel, ctx) : "",
-      secondaryLink: msg.secondaryLink ? renderOnboardingTokens(msg.secondaryLink, ctx) : "",
-    }));
-};
-
+// ─── CONTEXT BUILDER ─────────────────────────────────────────────────────────
 export const buildOnboardingContext = ({
   user,
   organisation,
@@ -181,7 +232,6 @@ export const buildOnboardingContext = ({
       : 1;
 
   const impactDefaults = DEFAULT_IMPACT;
-
   const impactAdminHours = Math.round(impactDefaults.adminHours * scale);
   const impactHoursSaved = Math.round(impactDefaults.hoursSaved * scale);
   const impactRevenueRecovered = Math.round(impactDefaults.revenueRecovered * scale);
@@ -191,14 +241,14 @@ export const buildOnboardingContext = ({
     (impactDefaults.totalAnnual * scale + impactRevenueRecovered + impactNoShowSavings) / 2
   );
   const impactHoursReturned = Math.round(impactDefaults.hoursReturned * scale);
-  const practiceSnapshot = chairCountRaw || teamCountRaw
-    ? `${chairCountRaw || baseChairs} chairs, ${teamCountRaw || baseTeam} staff`
-    : "your practice";
+  const practiceSnapshot =
+    chairCountRaw || teamCountRaw
+      ? `${chairCountRaw || baseChairs} chairs, ${teamCountRaw || baseTeam} staff`
+      : "your practice";
 
   const planLitePrice = formatNumber(DEFAULT_PRICING.lite);
   const planCrmPrice = formatNumber(DEFAULT_PRICING.crm);
   const planProPrice = formatNumber(DEFAULT_PRICING.pro);
-  // Legacy aliases kept to avoid broken token render in old email bodies
   const planDriftPrice = "";
   const planGlidePrice = "";
   const planSoarPrice = "";
@@ -258,4 +308,3 @@ export const buildOnboardingContext = ({
     exportDataUrl: `${baseUrl}/settings`,
   };
 };
-

@@ -88,9 +88,10 @@
     </OnboardingPopup>
     <OnboardingPopup
       :model-value="showInAppDialog"
-      
       max-width="680"
       :show-marker="true"
+      :tier="inAppTier"
+      :badge-label="inAppBadgeLabel"
       :icon="inAppIcon"
       :title="activeInAppMessage?.title || ''"
       :primary-label="activeInAppMessage?.primaryLabel || 'Continue'"
@@ -223,6 +224,17 @@ const inAppIcon = computed(() => {
     onboarding_inapp_day13_trial: "mdi-alert-circle-outline",
   };
   return map[key] || "mdi-star-four-points-outline";
+});
+const inAppTier = computed(() => Number(activeInAppMessage.value?.tier || 3));
+const inAppBadgeLabel = computed(() => {
+  const labelByTier = {
+    1: "Upgrade prompt",
+    2: "Celebration",
+    3: "Automation nudge",
+    4: "Growth insight",
+    5: "Retention prompt",
+  };
+  return labelByTier[inAppTier.value] || "In-app message";
 });
 const onboardingUiConfig = computed(() => {
   const parseNumber = (val) => {
@@ -403,6 +415,18 @@ const updateLocalOnboarding = (updates) => {
   setUser({ ...current, onboarding });
 };
 
+const refreshOnboardingMessages = async () => {
+  if (!loggedIn.value) return;
+  try {
+    const res = await authStore.getOnboardingMessages();
+    if (res?.code === 0 && res?.data) {
+      updateLocalOnboarding(res.data);
+      syncOnboardingState();
+    }
+  } catch (err) {
+  }
+};
+
 const syncOnboardingState = () => {
   if (!loggedIn.value) {
     showWelcomeDialog.value = false;
@@ -547,6 +571,17 @@ const handleInAppDialogToggle = (val) => {
   if (!val) {
     dismissInAppMessage();
   }
+};
+
+const shouldRefreshOnboardingForRoute = (path) =>
+  typeof path === "string" && (path.startsWith("/crm") || path.startsWith("/diary"));
+
+const onUpgradeRequired = () => {
+  refreshOnboardingMessages();
+};
+
+const onOnboardingRefresh = () => {
+  refreshOnboardingMessages();
 };
 
 const showFloatingButtons = computed(() => {
@@ -770,11 +805,15 @@ onMounted(() => {
   syncOnboardingState();
   syncFloatingPosition();
   window.addEventListener('resize', onFloatingResize);
+  window.addEventListener("upgrade-required", onUpgradeRequired);
+  window.addEventListener("onboarding-refresh", onOnboardingRefresh);
 });
 
 onBeforeUnmount(() => {
   stopFloatingDrag();
   window.removeEventListener('resize', onFloatingResize);
+  window.removeEventListener("upgrade-required", onUpgradeRequired);
+  window.removeEventListener("onboarding-refresh", onOnboardingRefresh);
 });
 
 watch(loggedIn, (newVal) => {
@@ -790,9 +829,12 @@ watch(user, () => {
 
 watch(
   () => route.path,
-  () => {
+  (path) => {
     syncOnboardingState();
     syncFloatingPosition({ persistDefault: false });
+    if (shouldRefreshOnboardingForRoute(path)) {
+      refreshOnboardingMessages();
+    }
   }
 );
 
