@@ -158,6 +158,7 @@ export const useCrmStore = defineStore("crmStore", {
     listDmMessages(params = {}) { return this._wrap(() => crmService.listDmMessages(params)); },
     sendDmMessage(payload) { return this._wrap(() => crmService.sendDmMessage(payload)); },
     markDmRead(payload) { return this._wrap(() => crmService.markDmRead(payload)); },
+    deleteDmConversation(payload) { return this._wrap(() => crmService.deleteDmConversation(payload)); },
     processDmQueue(payload = {}) { return this._wrap(() => crmService.processDmQueue(payload)); },
     getDmConnectionStatus() { return this._wrap(() => crmService.getDmConnectionStatus()); },
     // Fire-and-forget — don't wrap with _wrap so it doesn't block the loading state

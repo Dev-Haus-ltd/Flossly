@@ -5,7 +5,7 @@ import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { isLeadAllowedForOrg } from '../utils/requireUsageAllowed'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
-import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
+import { sendMetaDMNotification } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body"
 import { chat, generateAutoReply } from '../utils/aiWrapper'
 import {
@@ -116,6 +116,38 @@ const isWithinStandardMessagingWindow = (lastInboundAt) => {
   if (!lastInboundAt) return false;
   return Date.now() - lastInboundAt.getTime() <= STANDARD_MESSAGING_WINDOW_MS;
 };
+
+const fallbackDmParticipantName = (platform) => {
+  const normalized = String(platform || '').toLowerCase()
+  if (normalized === 'instagram') return 'Instagram User'
+  if (normalized === 'messenger') return 'Messenger User'
+  return 'Unknown'
+}
+
+const isRawDmIdentifier = (value) => /^\d{10,}$/.test(String(value || '').trim())
+
+const isPlaceholderDmParticipantName = (value, platform = null) => {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized) return true
+  if (normalized === 'unknown') return true
+  if (isRawDmIdentifier(normalized)) return true
+
+  const platformFallback = String(fallbackDmParticipantName(platform) || '').trim().toLowerCase()
+  return !!platformFallback && normalized === platformFallback
+}
+
+const resolveDmParticipantName = ({ platform, preferredName, currentName, threadId }) => {
+  const candidates = [preferredName, currentName]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+
+  const firstHumanName = candidates.find((name) => !isPlaceholderDmParticipantName(name, platform))
+  if (firstHumanName) return firstHumanName
+
+  const thread = String(threadId || '').trim()
+  if (thread && !isRawDmIdentifier(thread)) return thread
+  return fallbackDmParticipantName(platform)
+}
 
 const sendMetaMessage = async ({ accessToken, senderId, recipientId, message, messagingType = 'RESPONSE', tag = null }) => {
   const targetNode = encodeURIComponent(String(senderId || 'me'));
@@ -1000,6 +1032,12 @@ const fetchDmHistoryForOrg = async (
 
           const participantNameFromApi = otherParticipant?.name || otherParticipant?.username || null
           const participantAvatarFromApi = otherParticipant?.profile_pic || null
+          const resolvedParticipantName = resolveDmParticipantName({
+            platform,
+            preferredName: participantNameFromApi,
+            currentName: conversation?.participantName,
+            threadId,
+          })
 
           if (!conversation) {
             conversation = await CrmDmConversation.create({
@@ -1007,13 +1045,13 @@ const fetchDmHistoryForOrg = async (
               platform,
               accountId,
               threadId,
-              participantName: participantNameFromApi || threadId,
+              participantName: resolvedParticipantName,
               participantAvatar: participantAvatarFromApi || null,
               lastMessageAt: convUpdated && !Number.isNaN(convUpdated.getTime()) ? convUpdated : new Date(),
               unreadCount: 0,
               metadata: {
                 inboxConversationId: conv?.id || null,
-                participantName: participantNameFromApi || threadId,
+                participantName: resolvedParticipantName,
                 participantAvatar: participantAvatarFromApi || null,
                 assignedUserId: acc.connectedByUserId || null,
                 sourceNodeId: conversationNodeId,
@@ -1023,10 +1061,9 @@ const fetchDmHistoryForOrg = async (
             debug.conversationsUpserted += 1
             accountDebug.conversationsUpserted += 1
           } else {
-            // Only overwrite name/avatar if the current value is missing or is a raw numeric ID
-            const currentNameIsRaw = /^\d{10,}$/.test(String(conversation.participantName || '').trim())
-            const nextName = (!conversation.participantName || currentNameIsRaw)
-              ? (participantNameFromApi || conversation.participantName || threadId)
+            // Only overwrite name/avatar if the current value is missing or is still a placeholder.
+            const nextName = isPlaceholderDmParticipantName(conversation.participantName, platform)
+              ? resolvedParticipantName
               : conversation.participantName
             const nextAvatar = conversation.participantAvatar || participantAvatarFromApi || null
             conversation.participantName = nextName
@@ -1047,8 +1084,7 @@ const fetchDmHistoryForOrg = async (
 
           // If name or avatar is still missing/raw after the upsert, fire an async profile
           // refresh using the Meta Graph API (doesn't block the sync loop).
-          const nameStillRaw = /^\d{10,}$/.test(String(conversation.participantName || '').trim())
-          const needsProfileFetch = nameStillRaw || !conversation.participantAvatar
+          const needsProfileFetch = isPlaceholderDmParticipantName(conversation.participantName, platform) || !conversation.participantAvatar
           if (needsProfileFetch && pageAccessToken) {
             ;(async () => {
               try {
@@ -1058,7 +1094,12 @@ const fetchDmHistoryForOrg = async (
                   accessToken: pageAccessToken,
                 })
                 if (profile?.name || profile?.avatar) {
-                  conversation.participantName = profile?.name || conversation.participantName
+                  conversation.participantName = resolveDmParticipantName({
+                    platform,
+                    preferredName: profile?.name,
+                    currentName: conversation.participantName,
+                    threadId,
+                  })
                   conversation.participantAvatar = profile?.avatar || conversation.participantAvatar
                   conversation.metadata = {
                     ...(conversation.metadata || {}),
@@ -1096,6 +1137,7 @@ const fetchDmHistoryForOrg = async (
               if (!hasContent) continue
 
               const preview = deriveAttachmentPreview(normalizedAttachments, messageText) || ''
+              const storedMessageText = messageText || (normalizedAttachments.length ? '[Attachment]' : null)
 
               const platformMessageId = String(m?.id || '').trim() || null
               if (platformMessageId) {
@@ -1112,7 +1154,7 @@ const fetchDmHistoryForOrg = async (
                   const hasPlaceholder = !currentMsg || currentMsg === '[Attachment]'
                   const hasNoAttachments = !already.attachments || (Array.isArray(already.attachments) && !already.attachments.length)
                   if (hasPlaceholder || hasNoAttachments) {
-                    if (messageText) already.message = messageText
+                    if (storedMessageText) already.message = storedMessageText
                     if (normalizedAttachments.length) already.attachments = normalizedAttachments
                     already.metadata = { ...(already.metadata || {}), ...(m || {}) }
                     await already.save()
@@ -1141,7 +1183,7 @@ const fetchDmHistoryForOrg = async (
                 platformMessageId,
                 direction: isOutbound ? 'outbound' : 'inbound',
                 senderName: m?.from?.name || m?.from?.username || conversation.participantName || threadId,
-                message: messageText || null,
+                message: storedMessageText,
                 attachments: normalizedAttachments.length ? normalizedAttachments : null,
                 status: isOutbound ? 'sent' : 'received',
                 metadata: m,
@@ -2022,31 +2064,41 @@ export const webhook = async (event) => {
                 senderId,
                 accessToken,
               })
+              const participantName = resolveDmParticipantName({
+                platform,
+                preferredName: profile?.name,
+                currentName: null,
+                threadId: senderId,
+              })
               conversation = await CrmDmConversation.create({
                 organisationId: orgId,
                 platform,
                 accountId: account.accountId,
                 threadId,
-                participantName: profile?.name || senderId,
+                participantName,
                 participantAvatar: profile?.avatar || null,
                 lastMessageAt: timestamp,
                 unreadCount: 0,
                 metadata: {
                   recipientId,
-                  participantName: profile?.name || senderId,
+                  participantName,
                   participantAvatar: profile?.avatar || null,
                   assignedUserId: account.connectedByUserId || null,
                   lastInboundAt: timestamp.toISOString(),
                 },
               })
-            } else if (!conversation.participantName || !conversation.participantAvatar || !conversation?.metadata?.assignedUserId || /^\d{10,}$/.test(String(conversation.participantName || '').trim())) {
+            } else if (!conversation.participantName || !conversation.participantAvatar || !conversation?.metadata?.assignedUserId || isPlaceholderDmParticipantName(conversation.participantName, platform)) {
               const profile = await resolveDmParticipantProfile({
                 platform,
                 senderId,
                 accessToken,
               })
-              const currentNameIsRaw = /^\d{10,}$/.test(String(conversation.participantName || '').trim())
-              const nextName = (!conversation.participantName || currentNameIsRaw) ? (profile?.name || conversation.participantName || senderId) : conversation.participantName
+              const nextName = resolveDmParticipantName({
+                platform,
+                preferredName: profile?.name,
+                currentName: conversation.participantName,
+                threadId: senderId,
+              })
               const nextAvatar = conversation.participantAvatar || profile?.avatar || null
               conversation.participantName = nextName
               conversation.participantAvatar = nextAvatar
@@ -2072,6 +2124,7 @@ export const webhook = async (event) => {
             const messagePreview = deriveAttachmentPreview(normalizedAttachments, messageText) || ''
 
             const platformMessageId = msgEvent?.message?.mid || null
+            const storedMessageText = messageText || (normalizedAttachments.length ? '[Attachment]' : null)
             if (platformMessageId) {
               const existingInbound = await CrmDmMessage.findOne({
                 where: {
@@ -2081,6 +2134,15 @@ export const webhook = async (event) => {
                 },
               })
               if (existingInbound) {
+                const currentMsg = String(existingInbound.message || '').trim()
+                const hasPlaceholder = !currentMsg || currentMsg === '[Attachment]'
+                const hasNoAttachments = !existingInbound.attachments || (Array.isArray(existingInbound.attachments) && !existingInbound.attachments.length)
+                if (hasPlaceholder || hasNoAttachments) {
+                  if (storedMessageText) existingInbound.message = storedMessageText
+                  if (normalizedAttachments.length) existingInbound.attachments = normalizedAttachments
+                  existingInbound.metadata = { ...(existingInbound.metadata || {}), ...(msgEvent || {}) }
+                  await existingInbound.save()
+                }
                 webhookTrace('message:duplicate', JSON.stringify({
                   organisationId: orgId,
                   conversationId: conversation.id,
@@ -2097,7 +2159,7 @@ export const webhook = async (event) => {
               platformMessageId,
               direction: 'inbound',
               senderName: conversation.participantName || senderId,
-              message: messageText || null,
+              message: storedMessageText,
               attachments: normalizedAttachments.length ? normalizedAttachments : null,
               status: 'received',
               metadata: msgEvent,
@@ -2146,22 +2208,14 @@ export const webhook = async (event) => {
               })
               const userIds = orgUsers.map((u) => u.userId).filter(Boolean)
               if (userIds.length) {
-                await sendNotificationToMultipleUsers({
-                  userIds,
+                await Promise.all(userIds.map((userId) => sendMetaDMNotification({
+                  userId,
                   organisationId: orgId,
-                  title: `New ${platform === 'instagram' ? 'Instagram' : 'Messenger'} DM`,
-                  body: messagePreview.length > 80 ? `${messagePreview.slice(0, 80)}...` : messagePreview,
-                  type: 'meta_dm',
-                  referenceType: 'dm_conversation',
-                  referenceId: conversation.id,
-                  data: {
-                    conversationId: String(conversation.id),
-                    platform,
-                    senderId,
-                    url: `/crm/dms?conversationId=${conversation.id}`,
-                  },
-                  priority: 'high',
-                })
+                  conversationId: conversation.id,
+                  platform,
+                  sender: conversation.participantName || senderId,
+                  message: messagePreview,
+                })))
               }
             } catch (notifyErr) {}
           }

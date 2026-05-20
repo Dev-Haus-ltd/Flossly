@@ -1,4 +1,4 @@
-import { listDmConversations, listDmMessages, sendDmMessage, markDmRead, processDmQueue, uploadDmAttachment, refreshDmProfile, refreshAllDmProfiles, getDmConnectionStatus } from "../../controllers/dms";
+import { listDmConversations, listDmMessages, sendDmMessage, markDmRead, processDmQueue, uploadDmAttachment, refreshDmProfile, refreshAllDmProfiles, getDmConnectionStatus, deleteDmConversation } from "../../controllers/dms";
 
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, "name");
@@ -14,6 +14,8 @@ export default defineEventHandler(async (event) => {
       return await sendDmMessage(event);
     case "read":
       return await markDmRead(event);
+    case "deleteConversation":
+      return await deleteDmConversation(event);
     case "processQueue":
       return await processDmQueue(event);
     case "status":

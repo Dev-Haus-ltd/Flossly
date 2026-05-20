@@ -22,11 +22,22 @@ const fallbackDmParticipantName = (platform) => {
   return "Unknown";
 };
 
+const isPlaceholderDmParticipantName = (value, platform = null) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return true;
+  if (isRawDmIdentifier(normalized)) return true;
+  if (normalized === "unknown") return true;
+
+  const platformFallback = String(fallbackDmParticipantName(platform) || "").trim().toLowerCase();
+  if (platformFallback && normalized === platformFallback) return true;
+  return false;
+};
+
 const resolveDmParticipantName = ({ platform, preferredName, currentName, threadId }) => {
   const candidates = [preferredName, currentName]
     .map((v) => String(v || "").trim())
     .filter(Boolean);
-  const firstHuman = candidates.find((name) => !isRawDmIdentifier(name));
+  const firstHuman = candidates.find((name) => !isPlaceholderDmParticipantName(name, platform));
   if (firstHuman) return firstHuman;
 
   const thread = String(threadId || "").trim();
@@ -402,6 +413,7 @@ export const sendDmMessage = async (event) => {
     const outboundText = String(message || "").trim() || null;
     const outboundAttachments = hasAttachments ? attachments : null;
     const outboundPreview = deriveAttachmentPreview(outboundAttachments || [], outboundText) || "";
+    const storedOutboundMessage = outboundText || (outboundAttachments?.length ? "[Attachment]" : null);
 
     const newMessage = await CrmDmMessage.create({
       organisationId: orgId,
@@ -409,7 +421,7 @@ export const sendDmMessage = async (event) => {
       platform: conversation.platform,
       direction: "outbound",
       senderName: "Flossly",
-      message: outboundText,
+      message: storedOutboundMessage,
       attachments: outboundAttachments,
       status: "queued",
     });
@@ -462,6 +474,39 @@ export const markDmRead = async (event) => {
     return success({ updated: true });
   } catch (err) {
     return error(500, err.message || "Failed to mark as read");
+  }
+};
+
+export const deleteDmConversation = async (event) => {
+  try {
+    await ensureDmTables();
+    const { orgId } = event.context.user || {};
+    if (!orgId) return error(401, "Unauthenticated");
+
+    const raw = await readBody(event);
+    const payload = typeof raw === "string" ? parseJsonBody(raw) : raw || {};
+    const { conversationId } = payload;
+    if (!conversationId) return error(400, "conversationId is required");
+
+    const conversation = await CrmDmConversation.findOne({
+      where: { id: Number(conversationId), organisationId: orgId },
+    });
+    if (!conversation) return error(404, "Conversation not found");
+
+    await CrmDmMessage.destroy({
+      where: {
+        organisationId: orgId,
+        conversationId: conversation.id,
+      },
+    });
+    await conversation.destroy();
+
+    return success({
+      deleted: true,
+      conversationId: Number(conversationId),
+    });
+  } catch (err) {
+    return error(500, err.message || "Failed to delete conversation");
   }
 };
 
@@ -602,8 +647,7 @@ export const refreshAllDmProfiles = async (event) => {
     });
 
     const toRefresh = recentConvs.filter((c) => {
-      const nameIsRaw = /^\d{10,}$/.test(String(c.participantName || "").trim());
-      return !c.participantAvatar || !c.participantName || nameIsRaw;
+      return !c.participantAvatar || isPlaceholderDmParticipantName(c.participantName, c.platform);
     });
 
     let updated = 0;
