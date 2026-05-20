@@ -55,6 +55,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  deleteDmConversation(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/deleteConversation", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   processDmQueue(payload = {}) {
     return new Promise((resolve, reject) => {
       Post("/dms/processQueue", payload)

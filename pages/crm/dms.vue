@@ -241,6 +241,16 @@
                     </template>
                   </v-tooltip>
                 </template>
+                <v-btn
+                  v-if="activeConversationId"
+                  icon
+                  variant="text"
+                  size="small"
+                  class="dms-delete-btn"
+                  @click="openDeleteConversationDialog"
+                >
+                  <img :src="deleteIcon" alt="Delete conversation" width="16" height="16" />
+                </v-btn>
               </div>
             </div>
           </div>
@@ -335,17 +345,32 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <ConfirmDialog
+      v-model="deleteConversationDialog"
+      title="Delete conversation?"
+      :message="deleteConversationMessage"
+      confirm-text="Delete conversation"
+      cancel-text="Keep conversation"
+      confirm-color="error"
+      icon="mdi-trash-can-outline"
+      :loading="deletingConversation"
+      @confirm="confirmDeleteConversation"
+      @cancel="deleteConversationDialog = false"
+    />
   </v-sheet>
 </template>
 
 <script setup>
 import ChatThread from "@/components/Chat/Thread.vue";
 import ChatInputBar from "@/components/Chat/InputBar.vue";
+import ConfirmDialog from "@/components/Common/ConfirmDialog.vue";
 import { groupChatItems, formatChatTimestamp, buildDayKey, buildDayLabel } from "@/lib/chatThread";
 import { resolveDmStatusIcon, resolveDmStatusColor } from "@/lib/chatShared";
 import { useCrmStore } from "@/stores/crm";
 import { useMainStore } from "@/stores/index";
 import { useRoute } from "vue-router";
+import deleteIcon from "@/assets/crm/delete.svg";
 import searchicon from "@/assets/icons/listView/serach-icon.svg";
 import filtericon from "@/assets/icons/listView/filter-icon.svg";
 
@@ -389,6 +414,8 @@ const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank y
 const autoReplyConfigDialog = ref(false);
 const autoReplyConfigLoading = ref(false);
 const conversationAutoReplyEnabled = ref(true);
+const deleteConversationDialog = ref(false);
+const deletingConversation = ref(false);
 let searchTimer = null;
 let metaEventSource = null;
 
@@ -449,6 +476,11 @@ const filteredConversations = computed(() => {
 
 const activeConversation = computed(() => {
   return conversations.value.find((c) => c.id === activeConversationId.value) || null;
+});
+
+const deleteConversationMessage = computed(() => {
+  const title = activeConversation.value?.title || "this conversation";
+  return `This will permanently remove ${title} and all messages from your CRM inbox. This action cannot be undone.`;
 });
 
 const messageItems = computed(() => {
@@ -671,6 +703,35 @@ const writeConversationCache = (conversationId) => {
   });
 };
 
+const removeConversationLocally = (conversationId) => {
+  const numericId = Number(conversationId);
+  conversations.value = conversations.value.filter((row) => Number(row?.id) !== numericId);
+  messageCache.value.delete(numericId);
+
+  if (activeConversationId.value !== numericId) return;
+
+  const nextConversationId = conversations.value[0]?.id || null;
+  if (nextConversationId) {
+    selectConversation(nextConversationId, { forceRefresh: true });
+    return;
+  }
+  clearActiveConversation();
+};
+
+const refreshPlaceholderConversations = async () => {
+  const placeholderRows = conversations.value.filter((conv) =>
+    isPlaceholderParticipantName(conv?.title, conv?.platform)
+  );
+  if (!placeholderRows.length) return;
+
+  try {
+    const res = await crmStore.refreshAllDmProfiles();
+    if (res?.code === 0 && Number(res.data?.updated || 0) > 0) {
+      await loadConversations(true);
+    }
+  } catch {}
+};
+
 const selectConversation = (id, options = {}) => {
   const forceRefresh = !!options.forceRefresh;
   if (!forceRefresh && activeConversationId.value === id) return;
@@ -681,7 +742,7 @@ const selectConversation = (id, options = {}) => {
   loadMessages(true, { forceRefresh });
 
   // Silently refresh profile if name is a raw ID or avatar is missing
-  const needsRefresh = conv && (!conv.avatarUrl || isRawId(conv.title) || conv.title === "Instagram User" || conv.title === "Messenger User");
+  const needsRefresh = conv && (!conv.avatarUrl || isPlaceholderParticipantName(conv.title, conv.platform));
   if (needsRefresh) {
     crmStore.refreshDmProfile({ conversationId: id }).then((res) => {
       if (res?.code === 0 && res.data?.updated) {
@@ -710,6 +771,31 @@ const clearActiveConversation = () => {
   draftMessage.value = "";
   messageCursor.value = null;
   messageHasMore.value = true;
+};
+
+const openDeleteConversationDialog = () => {
+  if (!activeConversationId.value) return;
+  deleteConversationDialog.value = true;
+};
+
+const confirmDeleteConversation = async () => {
+  if (!activeConversationId.value || deletingConversation.value) return;
+  deletingConversation.value = true;
+  try {
+    const conversationId = activeConversationId.value;
+    const res = await crmStore.deleteDmConversation({ conversationId });
+    if (res?.code === 0) {
+      deleteConversationDialog.value = false;
+      removeConversationLocally(conversationId);
+      mainStore?.setSnackbar?.({ title: "Conversation deleted", type: "success" });
+      return;
+    }
+    mainStore?.setSnackbar?.({ title: res?.message || res?.error || "Failed to delete conversation", type: "error" });
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.data?.message || e?.message || "Failed to delete conversation", type: "error" });
+  } finally {
+    deletingConversation.value = false;
+  }
 };
 
 const openConnectionsSetup = () => {
@@ -836,12 +922,20 @@ const fallbackParticipantName = (platform) => {
   return "Unknown";
 };
 
+const isPlaceholderParticipantName = (name, platform) => {
+  const normalizedName = String(name || "").trim().toLowerCase();
+  if (!normalizedName || normalizedName === "unknown" || isRawId(normalizedName)) return true;
+
+  const fallback = String(fallbackParticipantName(platform) || "").trim().toLowerCase();
+  return !!fallback && normalizedName === fallback;
+};
+
 const resolveConversationTitle = ({ platform, participantName, metadataName, threadId }) => {
   const candidates = [participantName, metadataName]
     .map((v) => String(v || "").trim())
     .filter(Boolean);
 
-  const firstHumanName = candidates.find((name) => !isRawId(name));
+  const firstHumanName = candidates.find((name) => !isPlaceholderParticipantName(name, platform));
   if (firstHumanName) return firstHumanName;
 
   const thread = String(threadId || "").trim();
@@ -965,6 +1059,7 @@ onMounted(async () => {
   }
 
   await loadConversations(true);
+  refreshPlaceholderConversations();
   await loadDmConnectionStatus();
   await loadAutoReplySettings();
 
@@ -1228,6 +1323,15 @@ onUnmounted(() => {
 
 .dms-thread-title {
   font-weight: 600;
+}
+
+.dms-delete-btn {
+  opacity: 0.72;
+}
+
+.dms-delete-btn:hover {
+  opacity: 1;
+  background: rgba(220, 38, 38, 0.08);
 }
 
 .dms-thread-body {
