@@ -47,6 +47,7 @@ import {
   serializeClinicalTemplate,
 } from "../utils/clinicalNoteTemplates";
 import { gatherTreatmentPlanResearch } from "../utils/treatmentPlanResearch";
+import { createEventNotification } from "../utils/notificationService.js";
 
 const _researchCache = new Map();
 const RESEARCH_CACHE_TTL = 30 * 60 * 1000;
@@ -567,7 +568,7 @@ export const getPatientStats = async (event) => {
 
 export const createPatient = async (event) => {
   try {
-    const { orgId } = event.context.user;
+    const { orgId, userId } = event.context.user;
     const body = await readBody(event);
     const payload = typeof body === "string" ? parseJsonBody(body) : body;
     const required = ["firstName", "lastName"];
@@ -618,6 +619,12 @@ export const createPatient = async (event) => {
       recallInterval: payload.recallInterval || null,
     };
     const created = await DiaryPatient.create(data);
+    try {
+      const acquisitionSource = String(payload?.acquisitionSource || "").toLowerCase();
+      if (acquisitionSource.includes("crm lead") && orgId && userId) {
+        await createEventNotification(orgId, userId, "celebrate_b4_patient");
+      }
+    } catch {}
     return success(created);
   } catch (e) {
     const msg =

@@ -29,7 +29,8 @@ import {
   sendMagicLink,
   verifyMagicLink,
   getUsageSummary,
-  updateSetupStep
+  updateSetupStep,
+  getOnboardingMessages,
 } from "../../controllers/auth";
 import bcrypt from "bcrypt";
 export default defineEventHandler(async (event) => {
@@ -99,6 +100,8 @@ export default defineEventHandler(async (event) => {
       return await getUsageSummary(event);
     case "updateSetupStep":
       return await updateSetupStep(event);
+    case "onboardingMessages":
+      return await getOnboardingMessages(event);
     default:
       return { code: 0, error: "Not found" };
   }

@@ -349,4 +349,11 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getOnboardingMessages() {
+    return new Promise((resolve, reject) => {
+      Get("/auth/onboardingMessages")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
 };

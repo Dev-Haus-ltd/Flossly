@@ -111,6 +111,14 @@ export const useCrmStore = defineStore("crmStore", {
         }
       }
     },
+    _notifyOnboardingRefresh(reason, detail = {}) {
+      if (typeof window === "undefined") return;
+      window.dispatchEvent(
+        new CustomEvent("onboarding-refresh", {
+          detail: { reason, ...detail, refreshedAt: Date.now() },
+        })
+      );
+    },
     _isCurrentAnalyticsOrg(orgId) {
       if (!orgId) return true;
       const { user } = useUser();
@@ -216,10 +224,26 @@ export const useCrmStore = defineStore("crmStore", {
 
     // Leads
     listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },
-    createLead(payload) { return this._wrap(() => crmService.createLead(payload)); },
-    updateLead(payload) { return this._wrap(() => crmService.updateLead(payload)); },
+    async createLead(payload) {
+      const res = await this._wrap(() => crmService.createLead(payload));
+      if (res?.code === 0) this._notifyOnboardingRefresh("lead-created");
+      return res;
+    },
+    async updateLead(payload) {
+      const res = await this._wrap(() => crmService.updateLead(payload));
+      if (res?.code === 0 && payload?.leadStatus) {
+        this._notifyOnboardingRefresh("lead-status-updated", {
+          leadStatus: payload.leadStatus,
+        });
+      }
+      return res;
+    },
     deleteLeads(ids) { return this._wrap(() => crmService.deleteLeads(ids)); },
-    bulkUploadLeads(payload) { return this._wrap(() => crmService.bulkUploadLeads(payload)); },
+    async bulkUploadLeads(payload) {
+      const res = await this._wrap(() => crmService.bulkUploadLeads(payload));
+      if (res?.code === 0) this._notifyOnboardingRefresh("lead-bulk-uploaded");
+      return res;
+    },
 
     // Options
     listOptions(category) { return this._wrap(() => crmService.listOptions(category)); },

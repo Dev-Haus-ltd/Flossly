@@ -667,7 +667,7 @@ export const startOnboardingScheduler = () => {
       const [users, organisations, preferences] = await Promise.all([
         User.findAll({
           where: { id: userIds },
-          attributes: ["id", "fullName", "email", "status", "roleId"],
+          attributes: ["id", "fullName", "email", "status", "roleId", "lastLoginDate"],
         }),
         Organisation.findAll({ where: { id: orgIds } }),
         UserPreference.findAll({ where: { userId: userIds, organisationId: orgIds } }),
@@ -706,10 +706,7 @@ export const startOnboardingScheduler = () => {
         const diffDays = getDiffDaysFromStart(evt.createdAt, today);
         if (!Number.isFinite(diffDays) || diffDays < 0) continue;
 
-        let metrics = null;
-        if (diffDays === 7 || diffDays === 13) {
-          metrics = await getOnboardingMetrics(evt.organisationId);
-        }
+        const metrics = await getOnboardingMetrics(evt.organisationId);
 
         const ctx = buildOnboardingContext({
           user,
@@ -721,6 +718,7 @@ export const startOnboardingScheduler = () => {
         });
 
         for (const tpl of ONBOARDING_EMAIL_TEMPLATES) {
+          if (tpl.triggerType === "no_login") continue;
           if (tpl.offsetDays !== diffDays) continue;
           const sentKey = `${evt.userId}:${evt.organisationId}:${tpl.key}`;
           if (sentKeys.has(sentKey)) continue;
@@ -741,6 +739,38 @@ export const startOnboardingScheduler = () => {
             sentKeys.add(sentKey);
           } catch (err) {
             console.error("[Onboarding] email send failed", err?.message);
+          }
+        }
+
+        const lastLoginDate = user?.lastLoginDate ? new Date(user.lastLoginDate) : null;
+        if (!lastLoginDate || Number.isNaN(lastLoginDate.getTime())) continue;
+        const lastLoginDay = new Date(lastLoginDate);
+        lastLoginDay.setHours(0, 0, 0, 0);
+        const noLoginDays = Math.floor((today - lastLoginDay) / (24 * 60 * 60 * 1000));
+        if (!Number.isFinite(noLoginDays) || noLoginDays < 0) continue;
+
+        for (const tpl of ONBOARDING_EMAIL_TEMPLATES) {
+          if (tpl.triggerType !== "no_login") continue;
+          if (Number(tpl.noLoginDays || 0) !== noLoginDays) continue;
+          const sentKey = `${evt.userId}:${evt.organisationId}:${tpl.key}`;
+          if (sentKeys.has(sentKey)) continue;
+
+          try {
+            await sendOnboardingEmail({
+              key: tpl.key,
+              to: user.email,
+              ctx,
+              orgId: evt.organisationId,
+            });
+            await recordOnboardingEvent({
+              userId: evt.userId,
+              organisationId: evt.organisationId,
+              key: tpl.key,
+              payload: { sentAt: new Date().toISOString() },
+            });
+            sentKeys.add(sentKey);
+          } catch (err) {
+            console.error("[Onboarding] no-login email send failed", err?.message);
           }
         }
       }

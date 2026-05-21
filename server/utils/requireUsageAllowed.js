@@ -2,6 +2,7 @@ import { createError } from 'h3'
 import { getEntitlements } from '../config/entitlements'
 import { CrmLead, UserDocument, UserOrganisation, Organisation, User, FormConfig } from '../models'
 import sequelize from './db'
+import { createEventNotification } from './notificationService.js'
 
 const RESOURCE_LABELS = {
   leads:     'lead',
@@ -33,7 +34,7 @@ const supportsFormSoftDelete = async () => {
  * @returns {{ current: number, max: number, warnAt: number }}
  */
 export const requireUsageAllowed = async (event, resource) => {
-  const { orgId } = event.context.user ?? {}
+  const { orgId, userId } = event.context.user ?? {}
   const org = await Organisation.findByPk(orgId, { attributes: ['licenseType'] })
   const ent = getEntitlements(org?.licenseType ?? 'Lite')
   const max = ent.limits[resource]
@@ -43,6 +44,9 @@ export const requireUsageAllowed = async (event, resource) => {
   const current = await getCurrentUsage(Number(orgId), resource)
 
   if (current >= max) {
+    if (resource === 'leads' && orgId && userId) {
+      await createEventNotification(orgId, userId, 'upgrade_f3_lead_blocked')
+    }
     throw createError({
       statusCode: 403,
       data: {
