@@ -55,6 +55,14 @@ const toAbsoluteUrl = (value) => {
   return `${String(base).replace(/\/+$/, "")}/${raw.replace(/^\/+/, "")}`;
 };
 
+const resolveMetaAttachmentType = (mimeType) => {
+  const normalized = String(mimeType || "").toLowerCase();
+  if (normalized.startsWith("image/")) return "image";
+  if (normalized.startsWith("audio/")) return "audio";
+  if (normalized.startsWith("video/")) return "video";
+  return "file";
+};
+
 const sendMetaMessage = async ({ accessToken, senderId, recipientId, message, messagingType = "RESPONSE", tag = null }) => {
   const targetNode = encodeURIComponent(String(senderId || "me"));
   const url = `https://graph.facebook.com/${META_VERSION}/${targetNode}/messages`;
@@ -737,7 +745,7 @@ export const uploadDmAttachment = async (event) => {
       baseDir: "chat-attachments",
     });
 
-    const attachmentType = mimeType.startsWith("image/") ? "image" : "file";
+    const attachmentType = resolveMetaAttachmentType(mimeType);
     return success({
       url: s3Path,
       name: originalName,

@@ -48,6 +48,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  uploadDmAttachment(formData) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/dms/uploadAttachment", formData)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   markDmRead(payload) {
     return new Promise((resolve, reject) => {
       Post("/dms/read", payload)
