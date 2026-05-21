@@ -157,6 +157,7 @@ export const useCrmStore = defineStore("crmStore", {
     listDmConversations(params = {}) { return this._wrap(() => crmService.listDmConversations(params)); },
     listDmMessages(params = {}) { return this._wrap(() => crmService.listDmMessages(params)); },
     sendDmMessage(payload) { return this._wrap(() => crmService.sendDmMessage(payload)); },
+    uploadDmAttachment(formData) { return this._wrap(() => crmService.uploadDmAttachment(formData)); },
     markDmRead(payload) { return this._wrap(() => crmService.markDmRead(payload)); },
     deleteDmConversation(payload) { return this._wrap(() => crmService.deleteDmConversation(payload)); },
     processDmQueue(payload = {}) { return this._wrap(() => crmService.processDmQueue(payload)); },
