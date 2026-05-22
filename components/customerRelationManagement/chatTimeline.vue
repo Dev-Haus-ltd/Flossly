@@ -38,7 +38,7 @@
         </div>
       </v-card-text>
       <v-divider />
-      <div v-if="pendingFiles.length" class="chat-pending-files">
+      <div v-if="showComposer && pendingFiles.length" class="chat-pending-files">
         <div
           v-for="(file, idx) in pendingFiles"
           :key="`${file.name}-${idx}`"
@@ -67,6 +67,7 @@
         </div>
       </div>
       <ChatInputBar
+        v-if="showComposer"
         v-model="draftMessage"
         :can-send="canSend"
         :loading="sending"
@@ -74,6 +75,9 @@
         @files-selected="onFilesSelected"
         @send="sendMessage"
       />
+      <div v-else class="chat-window-closed-message">
+        24-hour messaging window has closed. Meta only allows replies within 24 hours of the customer's last message.
+      </div>
     </template>
   </v-card>
 </template>
@@ -113,16 +117,37 @@ const resolvedOrg = ref({ name: "", logo: "" });
 const resolvedLead = ref({ name: "", avatar: "" });
 const scrollEl = ref(null);
 const localLeadAutoReplyEnabled = ref(true);
+const nowMs = ref(Date.now());
 
 let whapiEventSource = null;
 let sseActive = false;
 let sseRetryDelay = 2000;
+let replyWindowTimer = null;
+const WHATSAPP_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const canSend = computed(() => {
   const hasText = String(draftMessage.value || "").trim().length > 0;
   const hasFiles = pendingFiles.value.length > 0;
-  return !!props.leadId && (hasText || hasFiles) && !sending.value;
+  return !!props.leadId && showComposer.value && (hasText || hasFiles) && !sending.value;
 });
+
+const lastInboundMessageAt = computed(() => {
+  if (!Array.isArray(logs.value)) return null;
+  const latestInbound = logs.value.find(
+    (row) => String(row?.direction || "").toLowerCase() === "inbound"
+  );
+  if (!latestInbound?.createdAt) return null;
+  const ts = new Date(latestInbound.createdAt).getTime();
+  return Number.isFinite(ts) ? ts : null;
+});
+
+const messagingWindowOpen = computed(() => {
+  if (!props.connected) return false;
+  if (!lastInboundMessageAt.value) return false;
+  return nowMs.value - lastInboundMessageAt.value <= WHATSAPP_REPLY_WINDOW_MS;
+});
+
+const showComposer = computed(() => props.connected && messagingWindowOpen.value);
 
 const chatItems = computed(() => {
   if (!Array.isArray(logs.value)) return [];
@@ -267,6 +292,13 @@ const removePendingFile = (idx) => {
   pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
 };
 
+watch(showComposer, (isOpen) => {
+  if (isOpen) return;
+  draftMessage.value = "";
+  pendingFiles.value = [];
+  revokeObjectUrls();
+});
+
 const resolveContext = () => {
   const stored = typeof localStorage !== "undefined" ? localStorage.getItem("user") : null;
   if (stored) {
@@ -342,6 +374,10 @@ watch(
 onBeforeUnmount(() => {
   stopWhapiStream();
   revokeObjectUrls();
+  if (replyWindowTimer) {
+    clearInterval(replyWindowTimer);
+    replyWindowTimer = null;
+  }
 });
 
 const toggleLeadAutoReply = async (newValue) => {
@@ -357,6 +393,9 @@ watch(() => props.leadAutoReplyEnabled, (val) => {
 
 onMounted(() => {
   localLeadAutoReplyEnabled.value = props.leadAutoReplyEnabled;
+  replyWindowTimer = setInterval(() => {
+    nowMs.value = Date.now();
+  }, 60_000);
 });
 </script>
 
@@ -466,4 +505,13 @@ onMounted(() => {
 }
 
 .chat-pending-doc-remove:hover { color: #ef4444; }
+
+.chat-window-closed-message {
+  padding: 16px 20px;
+  background: #fff4e5;
+  color: #8a4b00;
+  font-size: 13px;
+  line-height: 1.5;
+  border-top: 1px solid rgba(138, 75, 0, 0.14);
+}
 </style>
