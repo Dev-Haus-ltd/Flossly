@@ -18,7 +18,7 @@ export const CLIENT_ONBOARDING_KEYS = new Set([
   ...ONBOARDING_INAPP_MESSAGES.map((m) => m.key),
 ]);
 
-const ONBOARDING_PRIVILEGED_ROLE_IDS = [1, 8];
+export const ONBOARDING_PRIVILEGED_ROLE_IDS = [1, 8];
 
 export const isOnboardingRecipientRole = (roleId) =>
   ONBOARDING_PRIVILEGED_ROLE_IDS.includes(Number(roleId));
@@ -124,4 +124,3 @@ export const getDiffDaysFromStart = (startAt, now = new Date()) => {
   return Math.floor((today - startDay) / (24 * 60 * 60 * 1000));
 };
 
-export { CLIENT_ONBOARDING_KEYS as default, ONBOARDING_PRIVILEGED_ROLE_IDS };
