@@ -145,91 +145,15 @@
             @onPageChange="handlePageChange"
             @onPageSizeChange="handlePageSizeChange"
           />
-          <v-card
+          <CommonSelectionActionBar
             v-if="selectedRowItems.length"
-            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
-            :style="{
-              padding: xs ? '0px 20px' : '0px 50px',
-              gap: xs ? '10px' : '40px',
-            }"
-            :elevation="5"
-            flat
-          >
-            <div class="selected-count d-flex align-center">
-              <span class="selected-text">
-                {{ selectedRowItems.length }}
-              </span>
-              <p class="ml-3 mt-1">Items Selected</p>
-            </div>
-
-            <div class="actions-container d-flex align-center" :style="{ gap: xs ? '4px' : '8px' }">
-              <!-- Quick Status Actions -->
-              <div
-                v-for="action in quickStatusActions"
-                :key="action.key"
-                class="action-item d-flex flex-column align-center"
-                :class="{
-                  disabled: !selectedRowItems.length || !findStatusByKey(action.key),
-                }"
-                @click="handleQuickStatus(action.key)"
-              >
-                <v-icon :color="action.color" size="20">
-                  {{ action.icon }}
-                </v-icon>
-                <span class="action-label" :style="{ color: action.color }">
-                  {{ action.label }}
-                </span>
-              </div>
-
-            <div
-              v-if="!hasArchivedTasks"
-              class="action-item d-flex flex-column align-center"
-              @click="handleArchive"
-            >
-              <v-icon size="24">mdi-archive-outline</v-icon>
-              <span class="action-label">Archive</span>
-            </div>
-
-            <div
-              v-if="hasArchivedTasks"
-              class="action-item d-flex flex-column align-center"
-              @click="handleUnarchive"
-            >
-              <v-icon size="24">mdi-archive-arrow-up-outline</v-icon>
-              <span class="action-label">Unarchive</span>
-            </div>
-
-
-            <div
-              class="action-item d-flex flex-column align-center"
-              @click="handleExportCSV"
-            >
-              <v-icon size="24">mdi-file-export-outline</v-icon>
-              <span class="action-label">Exporttell</span>
-            </div>
-
-            <div
-                v-if="canDeleteSelectedTasks"
-                class="action-item d-flex flex-column align-center"
-                @click="handleDelete"
-              >
-                <img src="@/assets/tasks/delete.svg" alt="Delete" width="20" height="20" style="opacity: 0.7;" />
-                <span class="action-label">Delete</span>
-              </div>
-
-            <!-- Divider before close -->
-            <v-divider vertical class="ml-4" />
-
-              <!-- Close Button -->
-              <div
-                class="action-item d-flex flex-column align-center"
-                @click="hideTray()"
-              >
-                <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
-                <span class="action-label">Close</span>
-              </div>
-            </div>
-          </v-card>
+            :count="selectedRowItems.length"
+            :actions="selectionTrayActions"
+            :mobile-primary-keys="selectionTrayPrimaryKeys"
+            fixed
+            @action="onSelectionTrayAction"
+            @close="hideTray"
+          />
           <RecommendPracticeDialog v-model="recommendDialog" />
           <CommonConfirmDialog
             v-model="showDeleteConfirm"
@@ -255,8 +179,8 @@
 </template>
 
 <script setup>
-import { useDisplay } from "vuetify";
 import { nextTick } from "vue";
+import deleteIcon from "@/assets/tasks/delete.svg";
 import {
   applyCategoryOrder as applyCategoryOrderUtil,
   autoUnhideCategoryIds,
@@ -280,7 +204,6 @@ const props = defineProps({
 });
 
 const bus = useBus();
-const { xs } = useDisplay();
 
 // Stores
 const taskStore = useTaskStore();
@@ -654,6 +577,46 @@ const quickStatusActions = computed(() => [
   { key: "progress", label: "In Progress", icon: "mdi-timer-sand", color: "#f6a609" },
   { key: "upcoming", label: "Upcoming", icon: "mdi-calendar-clock", color: "#5d87ff" },
 ]);
+const selectionTrayPrimaryKeys = ["todo", "progress"];
+const selectionTrayActions = computed(() => [
+  ...quickStatusActions.value.map((action) => ({
+    key: action.key,
+    label: action.label,
+    mobileLabel: action.key === "progress" ? "Progress" : action.label,
+    mdiIcon: action.icon,
+    color: action.color,
+    disabled: !findStatusByKey(action.key),
+    desktopIconSize: 20,
+    mobileIconSize: 18,
+  })),
+  hasArchivedTasks.value
+    ? {
+        key: "unarchive",
+        label: "Unarchive",
+        mobileLabel: "Restore",
+        mdiIcon: "mdi-archive-arrow-up-outline",
+        desktopIconSize: 24,
+      }
+    : {
+        key: "archive",
+        label: "Archive",
+        mdiIcon: "mdi-archive-outline",
+        desktopIconSize: 24,
+      },
+  {
+    key: "export",
+    label: "Export",
+    mdiIcon: "mdi-file-export-outline",
+    desktopIconSize: 24,
+  },
+  canDeleteSelectedTasks.value
+    ? {
+        key: "delete",
+        label: "Delete",
+        icon: deleteIcon,
+      }
+    : null,
+].filter(Boolean));
 
 const getTabStyle = (cat) => {
   const bgColor = cat?.color;
@@ -1211,6 +1174,29 @@ const handleExportCSV = () => {
     type: "success",
   });
 }
+
+const onSelectionTrayAction = (key) => {
+  if (quickStatusActions.value.some((action) => action.key === key)) {
+    handleQuickStatus(key);
+    return;
+  }
+  if (key === "archive") {
+    handleArchive();
+    return;
+  }
+  if (key === "unarchive") {
+    handleUnarchive();
+    return;
+  }
+  if (key === "export") {
+    handleExportCSV();
+    return;
+  }
+  if (key === "delete") {
+    handleDelete();
+  }
+};
+
 const cancelDelete = () => {
   showDeleteConfirm.value = false;
 };
@@ -1404,32 +1390,6 @@ const handleComplete = async () => {
   min-width: 38px;
   border-radius: 10px;
   flex-shrink: 0;
-}
-.action-bar {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: white;
-  z-index: 1000;
-}
-
-.selected-text {
-  font-weight: 600;
-  font-size: 14px;
-  padding: 5px 13px;
-  border-radius: 50%;
-  color: #fff;
-  background: #0061fb;
-}
-
-.action-item {
-  cursor: pointer;
-}
-
-.action-label {
-  font-size: 13px;
-  margin-top: 4px;
 }
 .cust-border {
   border-bottom: 1px solid #dbdbdb;

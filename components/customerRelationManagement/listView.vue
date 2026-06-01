@@ -360,42 +360,15 @@
               </template>
             </template>
           </v-data-table-server>
-          <v-card
+          <CommonSelectionActionBar
             v-if="selectedLeads.length"
-            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
-            style="padding: 0px 50px; gap: 40px;"
-            :elevation="5"
-            flat
-          >
-            <div class="selected-count d-flex align-center">
-              <span class="selected-text">
-                {{ selectedLeads.length }}
-              </span>
-              <p class="ml-3 mt-1">Items Selected</p>
-            </div>
-
-    <div class="actions-container d-flex align-center" style="gap: 8px;">
-      <div
-        v-for="(action, i) in actions"
-        :key="i"
-        class="action-item d-flex flex-column align-center"
-        :class="{ 'action-item--locked': isActionLocked(action.key) }"
-        @click="onActionClick(action.key)"
-      >
-        <img v-if="action.icon" :src="action.icon" :alt="action.label" class="action-icon" />
-        <v-icon v-else-if="action.mdiIcon" size="22" color="#6d6d6d">{{ action.mdiIcon }}</v-icon>
-        <span class="action-label">{{ action.label }}</span>
-      </div>
-
-      <v-divider vertical class="mx-2" style="height: 40px;" />
-
-      <div class="action-item d-flex flex-column align-center" @click="closeTray">
-        <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
-        <span class="action-label">Close</span>
-      </div>
-    </div>
-
-          </v-card>
+            :count="selectedLeads.length"
+            :actions="crmTrayActions"
+            :mobile-primary-keys="crmMobilePrimaryKeys"
+            fixed
+            @action="onActionClick"
+            @close="closeTray"
+          />
         </v-expansion-panel-text>
       </v-expansion-panel>
 
@@ -730,38 +703,15 @@
               </template>
             </template>
           </v-data-table-server>
-          <v-card
+          <CommonSelectionActionBar
             v-if="selectedConvertedLeads.length"
-            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
-            style="padding: 0px 50px; gap: 40px;"
-            :elevation="5"
-            flat
-          >
-            <div class="selected-count d-flex align-center">
-              <span class="selected-text">
-                {{ selectedConvertedLeads.length }}
-              </span>
-              <p class="ml-3 mt-1">Items Selected</p>
-            </div>
-            <div class="actions-container d-flex align-center" style="gap: 8px;">
-              <div
-                v-for="(action, i) in actions"
-                :key="i"
-                class="action-item d-flex flex-column align-center"
-                :class="{ 'action-item--locked': isActionLocked(action.key) }"
-                @click="onConvertedActionClick(action.key)"
-              >
-                <img v-if="action.icon" :src="action.icon" :alt="action.label" class="action-icon" />
-                <v-icon v-else-if="action.mdiIcon" size="22" color="#6d6d6d">{{ action.mdiIcon }}</v-icon>
-                <span class="action-label">{{ action.label }}</span>
-              </div>
-              <v-divider vertical class="mx-2" style="height: 40px;" />
-              <div class="action-item d-flex flex-column align-center" @click="selectedConvertedLeads = []">
-                <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
-                <span class="action-label">Close</span>
-              </div>
-            </div>
-          </v-card>
+            :count="selectedConvertedLeads.length"
+            :actions="crmTrayActions"
+            :mobile-primary-keys="crmMobilePrimaryKeys"
+            fixed
+            @action="onConvertedActionClick"
+            @close="selectedConvertedLeads = []"
+          />
         </v-expansion-panel-text>
       </v-expansion-panel>
 
@@ -924,46 +874,16 @@
               </template>
             </template>
           </v-data-table-server>
-          <v-card
+          <CommonSelectionActionBar
             v-if="selectedArchivedLeads.length"
-            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
-            style="padding: 0px 50px; gap: 40px;"
-            :elevation="5"
-            flat
-          >
-            <div class="selected-count d-flex align-center">
-              <span class="selected-text">
-                {{ selectedArchivedLeads.length }}
-              </span>
-              <p class="ml-3 mt-1">Archived Selected</p>
-            </div>
-
-            <div class="actions-container d-flex align-center" style="gap: 8px;">
-              <div
-                class="action-item d-flex flex-column align-center"
-                @click="confirmRestore = true"
-              >
-                <v-icon size="22" color="#6d6d6d">mdi-restore</v-icon>
-                <span class="action-label">Restore</span>
-              </div>
-
-              <div
-                v-if="canDelete"
-                class="action-item d-flex flex-column align-center"
-                @click="confirmArchivedDelete = true"
-              >
-                <img :src="deleteIcon" alt="Delete" class="action-icon" />
-                <span class="action-label">Delete</span>
-              </div>
-
-              <v-divider vertical class="mx-2" style="height: 40px;" />
-
-              <div class="action-item d-flex flex-column align-center" @click="closeTray">
-                <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
-                <span class="action-label">Close</span>
-              </div>
-            </div>
-          </v-card>
+            :count="selectedArchivedLeads.length"
+            count-label-desktop="Archived Selected"
+            :actions="archivedTrayActions"
+            :mobile-primary-keys="archivedMobilePrimaryKeys"
+            fixed
+            @action="onArchivedActionClick"
+            @close="closeTray"
+          />
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
@@ -1341,7 +1261,7 @@ import shareLocationIcon from '@/assets/crm/shareLocation.svg'
 import whatsappIcon from '@/assets/crm/whatsapp-logo.svg'
 import convertIcon from '@/assets/crm/convert.svg'
 import archiveIcon from '@/assets/crm/archive.svg'
-import deleteIcon from '@/assets/crm/delete.svg'
+import deleteIcon from '@/assets/tasks/delete.svg'
 import exportIcon from '@/assets/crm/export.svg'
 const crmStore = useCrmStore();
 const diaryStore = useDiaryStore();
@@ -1634,6 +1554,34 @@ const ALL_ACTIONS = [
 const actions = computed(() =>
   canDelete.value ? ALL_ACTIONS : ALL_ACTIONS.filter(a => a.key !== 'delete')
 );
+const crmMobilePrimaryKeys = ['mail', 'whatsapp'];
+const crmTrayActions = computed(() =>
+  actions.value.map((action) => ({
+    ...action,
+    disabled: isActionLocked(action.key),
+    mobileLabel:
+      action.key === 'mail'
+        ? 'Mail'
+        : action.key === 'whatsapp'
+          ? 'Chat'
+          : action.label,
+  }))
+);
+const archivedMobilePrimaryKeys = ['restore'];
+const archivedTrayActions = computed(() => [
+  {
+    key: 'restore',
+    label: 'Restore',
+    mobileLabel: 'Restore',
+    mdiIcon: 'mdi-restore',
+  },
+  {
+    key: 'delete',
+    label: 'Delete',
+    icon: deleteIcon,
+    hidden: !canDelete.value,
+  },
+]);
 const showBulkAutomationsDialog = ref(false);
 const bulkAutomationsTab = ref('automation');
 const selectedLeadIds = computed(() =>
@@ -2291,6 +2239,11 @@ const onConvertedActionClick = (key) => {
   if (!selectedConvertedLeads.value.length) return;
   selectedLeads.value = [...selectedConvertedLeads.value];
   onActionClick(key);
+};
+
+const onArchivedActionClick = (key) => {
+  if (key === 'restore') confirmRestore.value = true;
+  else if (key === 'delete' && canDelete.value) confirmArchivedDelete.value = true;
 };
 
 const formatDate = (d) => {
@@ -3108,82 +3061,6 @@ defineExpose({
   border: solid rgb(var(--v-theme-on-primary));
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
-}
-
-
-.selected-text {
-  
-  font-weight: 600;
-  font-size: 14px;
-  padding: 5px 13px;
-  border-radius: 50%;
-  color: rgb(var(--v-theme-on-primary));
-  background: rgb(var(--v-theme-primary));
-}
-.action-bar {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: white;
-  z-index: 1000;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}
-
-.actions-container {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  justify-content: center;
-}
-
-.action-item {
-  flex: 0 0 auto;
-  cursor: pointer;
-  border-radius: 8px;
-  padding: 6px 12px;
-  transition: background-color 0.15s ease, transform 0.1s ease;
-  white-space: nowrap;
-  text-align: center;
-  min-width: 60px;
-}
-
-.action-item:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-  transform: translateY(-1px);
-}
-
-.action-item--locked {
-  opacity: 0.38;
-  cursor: not-allowed;
-  pointer-events: auto;
-}
-
-.action-item--locked:hover {
-  background-color: transparent;
-  transform: none;
-}
-
-.action-item--locked .action-icon {
-  filter: grayscale(1) opacity(0.5);
-}
-
-.action-item--locked .action-label {
-  color: #aaaaaa;
-}
-
-.action-label {
-  font-size: 12px;
-  margin-top: 4px;
-  font-weight: 400;
-  color: #6d6d6d;
-  line-height: 1.2;
-}
-
-.action-icon {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
 }
 
 /* Inline editing styles */

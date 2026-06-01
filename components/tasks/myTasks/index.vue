@@ -169,95 +169,15 @@
             @cancel="cancelDelete"
           />
         </v-tabs-window-item>
-         <v-card
-    v-if="selectedRowItems.length"
-    class="action-bar py-4 d-flex justify-center align-center rounded-lg"
-    :style="{
-      padding: xs ? '0px 20px' : '0px 50px',
-      gap: xs ? '10px' : '40px',
-    }"
-    :elevation="5"
-    flat
-  >
-    <!-- Selected Count -->
-    <div class="selected-count d-flex align-center">
-      <span class="selected-text">
-        {{ selectedRowItems.length }}
-      </span>
-      <p class="ml-3 mt-1">Items Selected</p>
-    </div>
-
-    <!-- Actions Container -->
-    <div class="actions-container d-flex align-center" :style="{ gap: xs ? '4px' : '8px' }">
-      <!-- Quick Status Actions -->
-      <div
-        v-for="action in quickStatusActions"
-        :key="action.key"
-        class="action-item d-flex flex-column align-center"
-        :class="{
-          disabled: !selectedRowItems.length || !findStatusByKey(action.key),
-        }"
-        @click="handleQuickStatus(action.key)"
-      >
-        <v-icon :color="action.color" size="20">
-          {{ action.icon }}
-        </v-icon>
-        <span class="action-label" :style="{ color: action.color }">
-          {{ action.label }}
-        </span>
-      </div>
-
-          <div
-            v-if="!hasArchivedTasks"
-            class="action-item d-flex flex-column align-center"
-            @click="handleArchive"
-          >
-            <v-icon size="24">mdi-archive-outline</v-icon>
-            <span class="action-label">Archive</span>
-          </div>
-
-          <div
-            v-if="hasArchivedTasks"
-            class="action-item d-flex flex-column align-center"
-            @click="handleUnarchive"
-          >
-            <v-icon size="24">mdi-archive-arrow-up-outline</v-icon>
-            <span class="action-label">Unarchive</span>
-          </div>
-
-
-          <div
-            class="action-item d-flex flex-column align-center"
-            @click="handleExportCSV"
-          >
-            <v-icon size="24">mdi-file-export-outline</v-icon>
-            <span class="action-label">Export</span>
-          </div>
-
-          <div
-        v-if="canDeleteSelectedTasks"
-        class="action-item d-flex flex-column align-center"
-        @click="handleDelete"
-      >
-        <img src="@/assets/tasks/delete.svg" alt="Delete" width="20" height="20" style="opacity: 0.7;" />
-        <span class="action-label">Delete</span>
-      </div>
-
-          <v-divider vertical class="ml-4" />
-
-      <!-- Divider -->
-      <v-divider vertical class="mx-2" style="height: 40px" />
-
-      <!-- Close Button -->
-      <div
-        class="action-item d-flex flex-column align-center"
-        @click="hideTray()"
-      >
-        <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
-        <span class="action-label">Close</span>
-      </div>
-    </div>
-  </v-card>
+        <CommonSelectionActionBar
+          v-if="selectedRowItems.length"
+          :count="selectedRowItems.length"
+          :actions="selectionTrayActions"
+          :mobile-primary-keys="selectionTrayPrimaryKeys"
+          fixed
+          @action="onSelectionTrayAction"
+          @close="hideTray"
+        />
       </v-tabs-window>
       <ClientOnly>
         <CommonAddCategorySideBar
@@ -275,8 +195,8 @@
 
 <script setup>
 import { TasksBulkChecklistUploadDialog } from '#components'
-import { useDisplay } from "vuetify";
 import { nextTick } from "vue";
+import deleteIcon from "@/assets/tasks/delete.svg";
 import {
   applyCategoryOrder as applyCategoryOrderUtil,
   autoUnhideCategoryIds,
@@ -292,7 +212,6 @@ import {
 import draggable from "vuedraggable";
 const bus = useBus();
 // Stores
-const { xs } = useDisplay();
 const taskStore = useTaskStore();
 const mainStore = useMainStore();
 const orgStore = useOrgStore();
@@ -716,6 +635,46 @@ const quickStatusActions = computed(() => [
   { key: "completed", label: "Completed", icon: "mdi-checkbox-marked-circle-outline", color: "#36a863" },
   { key: "overdue", label: "Overdue Task", icon: "mdi-calendar-remove", color: "#d442a6" },
 ]);
+const selectionTrayPrimaryKeys = ["todo", "progress"];
+const selectionTrayActions = computed(() => [
+  ...quickStatusActions.value.map((action) => ({
+    key: action.key,
+    label: action.label,
+    mobileLabel: action.key === "progress" ? "Progress" : action.label,
+    mdiIcon: action.icon,
+    color: action.color,
+    disabled: !findStatusByKey(action.key),
+    desktopIconSize: 20,
+    mobileIconSize: 18,
+  })),
+  hasArchivedTasks.value
+    ? {
+        key: "unarchive",
+        label: "Unarchive",
+        mobileLabel: "Restore",
+        mdiIcon: "mdi-archive-arrow-up-outline",
+        desktopIconSize: 24,
+      }
+    : {
+        key: "archive",
+        label: "Archive",
+        mdiIcon: "mdi-archive-outline",
+        desktopIconSize: 24,
+      },
+  {
+    key: "export",
+    label: "Export",
+    mdiIcon: "mdi-file-export-outline",
+    desktopIconSize: 24,
+  },
+  canDeleteSelectedTasks.value
+    ? {
+        key: "delete",
+        label: "Delete",
+        icon: deleteIcon,
+      }
+    : null,
+].filter(Boolean));
 
 const getTabStyle = (cat) => {
   const bgColor = cat?.color;
@@ -1163,6 +1122,28 @@ const handleExportCSV = () => {
   });
 };
 
+const onSelectionTrayAction = (key) => {
+  if (quickStatusActions.value.some((action) => action.key === key)) {
+    handleQuickStatus(key);
+    return;
+  }
+  if (key === "archive") {
+    handleArchive();
+    return;
+  }
+  if (key === "unarchive") {
+    handleUnarchive();
+    return;
+  }
+  if (key === "export") {
+    handleExportCSV();
+    return;
+  }
+  if (key === "delete") {
+    handleDelete();
+  }
+};
+
 const handleStatusUpdate = async (statusId) => {
   if (!statusId) return;
   if (!selectedRowItems.value.length) {
@@ -1242,85 +1223,6 @@ const handleQuickStatus = (statusKey) => {
 </script>
 
 <style scoped>
-.action-bar {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: white;
-  z-index: 1000;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}
-
-
-
-.selected-text {
-  font-weight: 600;
-  font-size: 14px;
-  padding: 5px 13px;
-  border-radius: 50%;
-  color: #fff;
-  background: #0061fb;
-  line-height: 1;
-}
-
-.actions-container {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  justify-content: center;
-}
-
-.action-item {
-  flex: 0 0 auto;
-  cursor: pointer;
-  border-radius: 8px;
-  padding: 6px 12px;
-  transition: background-color 0.15s ease, transform 0.1s ease;
-  white-space: nowrap;
-  text-align: center;
-  min-width: 60px;
-}
-
-.action-item:hover:not(.disabled) {
-  background-color: rgba(0, 0, 0, 0.04);
-  transform: translateY(-1px);
-}
-
-.action-item.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.action-label {
-  font-size: 12px;
-  margin-top: 4px;
-  font-weight: 400;
-  color: #6d6d6d;
-  line-height: 1.2;
-}
-
-/* Responsive adjustments */
-@media (max-width: 600px) {
-  .action-bar {
-    padding: 0px 15px !important;
-    gap: 15px !important;
-  }
-
-  .action-item {
-    padding: 4px 8px;
-    min-width: 50px;
-  }
-
-  .action-label {
-    font-size: 11px;
-  }
-
-  .selected-text {
-    font-size: 12px;
-    padding: 4px 10px;
-  }
-}
 .page-title {
   font-weight: 400;
   font-size: 28px;
