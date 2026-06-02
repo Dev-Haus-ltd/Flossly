@@ -134,7 +134,7 @@ const currentComponentProps = computed(() => ({
 // Form refs & models
 const stepComponent = ref();
 const stepModels = ref([
-  { name: "", logo: null, contact: "", address: "", postalCode: "" },
+  { name: "", logo: null, contact: "", replyToEmail: "", address: "", postalCode: "" },
   { users: [{ roleId: null, email: "" }] },
 ]);
 
@@ -155,6 +155,7 @@ onMounted(() => {
   if (isNewPractice.value) {
     stepModels.value[0].name = "";
     stepModels.value[0].contact = "";
+    stepModels.value[0].replyToEmail = "";
     stepModels.value[0].address = "";
     stepModels.value[0].postalCode = "";
     stepModels.value[0].logo = null;
@@ -165,6 +166,7 @@ onMounted(() => {
     );
     stepModels.value[0].name = currentOrg?.organisation?.name || "";
     stepModels.value[0].contact = currentOrg?.organisation?.contact || "";
+    stepModels.value[0].replyToEmail = currentOrg?.organisation?.replyToEmail || "";
     stepModels.value[0].address = currentOrg?.organisation?.address || "";
     stepModels.value[0].postalCode = currentOrg?.organisation?.postalCode || "";
     stepModels.value[0].logo = currentOrg?.organisation?.logo || null;
@@ -173,6 +175,7 @@ onMounted(() => {
     initialClinicSnapshot.value = {
       name: stepModels.value[0].name,
       contact: stepModels.value[0].contact,
+      replyToEmail: stepModels.value[0].replyToEmail,
       address: stepModels.value[0].address,
       postalCode: stepModels.value[0].postalCode,
       logo: stepModels.value[0].logo, // string URL
@@ -186,6 +189,7 @@ const isNextDisabled = computed(() => {
     return (
       !clinic.name?.trim() ||
       !clinic.contact?.trim() ||
+      !clinic.replyToEmail?.trim() ||
       !clinic.address?.trim()
     );
   }
@@ -201,6 +205,7 @@ const isClinicDirty = () => {
 
   if (current.name !== initial.name) return true;
   if (current.contact !== initial.contact) return true;
+  if (current.replyToEmail !== initial.replyToEmail) return true;
   if (current.address !== initial.address) return true;
   if (current.postalCode !== initial.postalCode) return true;
 
@@ -237,6 +242,7 @@ const nextStep = async () => {
     const formData = new FormData();
     formData.append("name", data.name);
     formData.append("contact", data.contact);
+    formData.append("replyToEmail", data.replyToEmail);
     // formData.append("type", data.type);
     formData.append("address", data.address);
     formData.append("postalCode", data.postalCode || "");
@@ -353,6 +359,7 @@ const buildOrgFormData = () => {
   const formData = new FormData();
   formData.append("name", data.name);
   formData.append("contact", data.contact);
+  formData.append("replyToEmail", data.replyToEmail);
   // formData.append("type", data.type);
   formData.append("address", data.address);
   formData.append("postalCode", data.postalCode || "");

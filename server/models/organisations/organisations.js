@@ -45,6 +45,10 @@ export const Organisation = sequelize.define(
       type: DataTypes.STRING(50),
       allowNull: true,
     },
+    replyToEmail: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
     type: {
       type: DataTypes.ENUM(
         "Dental",

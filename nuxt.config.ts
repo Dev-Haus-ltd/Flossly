@@ -106,6 +106,13 @@ export default defineNuxtConfig({
     MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
     // Google Cloud Speech-to-Text credentials
     GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    MAIL_HOST: process.env.NUXT_MAIL_HOST || process.env.MAIL_HOST || "smtp.gmail.com",
+    MAIL_PORT: process.env.NUXT_MAIL_PORT || process.env.MAIL_PORT || 587,
+    MAIL_SECURE: process.env.NUXT_MAIL_SECURE || process.env.MAIL_SECURE || false,
+    MAIL_USER: process.env.NUXT_MAIL_USER || process.env.MAIL_USER,
+    MAIL_PASS: process.env.NUXT_MAIL_PASS || process.env.MAIL_PASS,
+    MAIL_FROM_EMAIL: process.env.NUXT_MAIL_FROM_EMAIL || process.env.MAIL_FROM_EMAIL,
+    MAIL_FROM_NAME: process.env.NUXT_MAIL_FROM_NAME || process.env.MAIL_FROM_NAME || "Flossly",
     // AI / LLM Configuration
     AI_LLM_PROVIDER: process.env.NUXT_AI_LLM_PROVIDER || process.env.AI_LLM_PROVIDER || "openai",
     OPENAI_API_KEY: process.env.NUXT_OPENAI_API_KEY || process.env.OPENAI_API_KEY,

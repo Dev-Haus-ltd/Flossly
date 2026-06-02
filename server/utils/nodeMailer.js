@@ -4,18 +4,67 @@ import { OrganisationSmtp, Organisation, User, UserOrganisation } from "../model
 const transporterCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
 
-const defaultTransporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: "helloflossly@gmail.com",
-    pass: "qlas kuac dshz bszg",
-  },
-});
+let defaultTransporterCache = { cacheKey: null, transporter: null };
+
+function parseBoolean(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "off"].includes(normalized)) return false;
+  }
+  return fallback;
+}
+
+function getDefaultMailConfig() {
+  const config = useRuntimeConfig?.() || {};
+
+  return {
+    host: config.MAIL_HOST || "smtp.gmail.com",
+    port: Number(config.MAIL_PORT || 587),
+    secure: parseBoolean(config.MAIL_SECURE, false),
+    user: config.MAIL_USER || "",
+    pass: config.MAIL_PASS || "",
+    fromEmail: config.MAIL_FROM_EMAIL || config.MAIL_USER || "helloflossly@gmail.com",
+    fromName: config.MAIL_FROM_NAME || "Flossly",
+  };
+}
+
+function getDefaultTransporter() {
+  const mailConfig = getDefaultMailConfig();
+  const cacheKey = JSON.stringify({
+    host: mailConfig.host,
+    port: mailConfig.port,
+    secure: mailConfig.secure,
+    user: mailConfig.user,
+    pass: mailConfig.pass,
+  });
+
+  if (defaultTransporterCache.cacheKey === cacheKey && defaultTransporterCache.transporter) {
+    return defaultTransporterCache.transporter;
+  }
+
+  const transportOptions = {
+    host: mailConfig.host,
+    port: mailConfig.port,
+    secure: mailConfig.secure,
+  };
+
+  if (mailConfig.user && mailConfig.pass) {
+    transportOptions.auth = {
+      user: mailConfig.user,
+      pass: mailConfig.pass,
+    };
+  }
+
+  const transporter = nodemailer.createTransport(transportOptions);
+  defaultTransporterCache = { cacheKey, transporter };
+
+  return transporter;
+}
 
 async function getOrgTransporter(orgId) {
-  if (!orgId) return defaultTransporter;
+  if (!orgId) return getDefaultTransporter();
 
   const cached = transporterCache.get(orgId);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -27,7 +76,7 @@ async function getOrgTransporter(orgId) {
   });
 
   if (!smtpConfig) {
-    return defaultTransporter;
+    return getDefaultTransporter();
   }
 
   try {
@@ -53,7 +102,7 @@ async function getOrgTransporter(orgId) {
     return transporter;
   } catch (err) {
     console.error(`Org ${orgId} SMTP verification failed, using default:`, err.message);
-    return defaultTransporter;
+    return getDefaultTransporter();
   }
 }
 
@@ -64,7 +113,8 @@ function getFromAddress(orgId) {
     const email = cached.fromEmail;
     return name ? `${name} <${email}>` : email;
   }
-  return "Flossly <helloflossly@gmail.com>";
+  const { fromEmail, fromName } = getDefaultMailConfig();
+  return fromName ? `${fromName} <${fromEmail}>` : fromEmail;
 }
 
 function isCustomSmtp(orgId) {
@@ -72,12 +122,18 @@ function isCustomSmtp(orgId) {
   return !!(cached && Date.now() - cached.timestamp < CACHE_TTL);
 }
 
-export async function getOrgEmailIdentity(orgId) {
-  if (isCustomSmtp(orgId)) {
-    return { from: getFromAddress(orgId), replyTo: undefined };
+async function getReplyToAddress(orgId) {
+  const { fromEmail } = getDefaultMailConfig();
+
+  if (!orgId) {
+    return fromEmail;
   }
 
-  const org = await Organisation.findByPk(orgId, { attributes: ['id', 'name'] });
+  const org = await Organisation.findByPk(orgId, { attributes: ['id', 'replyToEmail'] });
+  if (org?.replyToEmail) {
+    return org.replyToEmail;
+  }
+
   const owner = await User.findOne({
     include: [{ model: UserOrganisation, as: 'userOrganisations',
       where: { organisationId: orgId, status: 'Active' } }],
@@ -85,11 +141,29 @@ export async function getOrgEmailIdentity(orgId) {
     attributes: ['email'],
   });
 
+  return owner?.email || fromEmail;
+}
+
+export async function getOrgEmailIdentity(orgId) {
+  const replyTo = await getReplyToAddress(orgId);
+
+  if (isCustomSmtp(orgId)) {
+    return { from: getFromAddress(orgId), replyTo };
+  }
+
+  const org = await Organisation.findByPk(orgId, { attributes: ['id', 'name'] });
+
   const practiceName = org?.name || 'Your Practice';
+  const { fromEmail } = getDefaultMailConfig();
   return {
-    from: `"${practiceName}" <helloflossly@gmail.com>`,
-    replyTo: owner?.email || undefined,
+    from: `"${practiceName}" <${fromEmail}>`,
+    replyTo,
   };
 }
+
+const defaultTransporter = {
+  sendMail: (...args) => getDefaultTransporter().sendMail(...args),
+  verify: (...args) => getDefaultTransporter().verify(...args),
+};
 
 export { getOrgTransporter, getFromAddress, isCustomSmtp, defaultTransporter };
