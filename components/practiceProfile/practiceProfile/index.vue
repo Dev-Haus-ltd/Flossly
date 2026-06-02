@@ -63,6 +63,19 @@
               </p>
             </div>
 
+            <div class="mb-4" style="width: 60%">
+              <label class="info-label">Email</label>
+              <v-text-field
+                v-model="organisation.replyToEmail"
+                type="email"
+                density="compact"
+                variant="outlined"
+                hide-details
+                placeholder="Add email"
+                @update:model-value="markDirty('replyToEmail')"
+              />
+            </div>
+
             <!-- Telephone -->
             <div class="mb-4">
               <label class="info-label">Telephone</label>
@@ -490,6 +503,7 @@ const organisation = reactive({
   substituteLead: props.practiceDetails.substituteLead || '',
   address: props.practiceDetails.address || '',
   contact: props.practiceDetails.contact || '',
+  replyToEmail: props.practiceDetails.replyToEmail || '',
   teamCount: props.practiceDetails.teamCount || null,
   surgeryCount: props.practiceDetails.surgeryCount || null,
   type: props.practiceDetails.type || '',
@@ -532,6 +546,7 @@ const initializeOriginalData = () => {
     substituteLead: organisation.substituteLead || '',
     address: organisation.address || '',
     contact: organisation.contact || '',
+    replyToEmail: organisation.replyToEmail || '',
     teamCount: organisation.teamCount !== null ? Number(organisation.teamCount) : null,
     surgeryCount: organisation.surgeryCount !== null ? Number(organisation.surgeryCount) : null,
     type: organisation.type || '',

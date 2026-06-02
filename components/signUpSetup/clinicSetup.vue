@@ -12,6 +12,17 @@
     />
     <label class="lbl">Logo Upload </label>
     <imgUpload v-model="clinic.logo" class="my-2"/>
+    <label class="lbl required">Email</label>
+    <v-text-field
+      v-model="clinic.replyToEmail"
+      :rules="[required, emailRule]"
+      type="email"
+      variant="solo"
+      single-line
+      density="comfortable"
+      class="input-bordered mt-2"
+      flat
+    />
     <label class="lbl required">Contact</label>
     <CommonPhoneNumberField
       v-model="clinic.contact"
@@ -53,6 +64,11 @@ const phoneObject = ref(null)
 const contactError = ref("")
 
 const required = (v) => !!v || "Required.";
+const emailRule = (v) => {
+  const value = normalizeText(v)
+  if (!value) return "Required."
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) || "Enter a valid email"
+}
 
 const normalizeText = (value) => String(value || "").trim()
 
