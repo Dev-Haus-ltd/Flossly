@@ -23,7 +23,6 @@
               class="lead-form-card__logo"
             />
             <div>
-              <p class="lead-form-card__eyebrow">Lead Form</p>
               <h1>{{ formMeta.formName || "Enquiry Form" }}</h1>
               <p>{{ formMeta.practiceName || "Flossly" }}</p>
             </div>
@@ -289,7 +288,7 @@ onMounted(loadForm);
 .state-card,
 .lead-form-card {
   border-radius: 28px;
-  background: #fff;
+  background: transparent;
   box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
 }
 
