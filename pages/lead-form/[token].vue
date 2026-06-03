@@ -79,6 +79,7 @@
                 :placeholder="field.placeholder || ''"
                 variant="outlined"
                 density="comfortable"
+                class="lead-form-control"
                 hide-details
                 :error-messages="getFieldErrors(field)"
               />
@@ -92,6 +93,7 @@
                 :placeholder="field.placeholder || 'Select...'"
                 variant="outlined"
                 density="comfortable"
+                class="lead-form-control"
                 hide-details
                 :error-messages="getFieldErrors(field)"
               />
@@ -104,6 +106,7 @@
                 density="comfortable"
                 rows="4"
                 auto-grow
+                class="lead-form-control"
                 hide-details
                 :error-messages="getFieldErrors(field)"
               />
@@ -277,7 +280,7 @@ onMounted(loadForm);
 .lead-form-page {
   min-height: 100vh;
   padding: 24px;
-  background: linear-gradient(135deg, #eef4ff 0%, #f8fbff 48%, #edf2ff 100%);
+  background: #ffffff;
 }
 
 .lead-form-shell {
@@ -392,6 +395,11 @@ onMounted(loadForm);
 
 .lead-form-label__required {
   color: #ef4444;
+}
+
+.lead-form-control :deep(.v-field) {
+  border-radius: 8px !important;
+  background-color: #ffffff !important;
 }
 
 .lead-form-consent {

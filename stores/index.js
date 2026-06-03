@@ -223,7 +223,7 @@ export const useMainStore = defineStore("mainStore", {
               title: "Leads",
               value: "crmLeads",
               imgPath: crmIcon,
-              to: "/crm/leads",
+              to: { path: "/crm/leads", query: {} },
               featureKey: "crm_leads",
             },
             {
@@ -401,7 +401,7 @@ export const useMainStore = defineStore("mainStore", {
               title: "Leads",
               value: "crmLeads",
               imgPath: crmIcon,
-              to: "/crm/leads",
+              to: { path: "/crm/leads", query: {} },
               featureKey: "crm_leads",
             },
             {

@@ -63,6 +63,75 @@ const resolveMetaAttachmentType = (mimeType) => {
   return "file";
 };
 
+const resolveMetaSendContext = async ({ organisationId, conversation, account }) => {
+  const platform = String(conversation?.platform || account?.platform || "").toLowerCase();
+  const accountMetadata = account?.metadata || {};
+  const conversationMetadata = conversation?.metadata || {};
+
+  let senderId = String(conversation?.accountId || account?.accountId || "me");
+  let accessToken = account?.accessTokenEnc ? decrypt(account.accessTokenEnc) : null;
+  let pageId = "";
+
+  if (platform === "instagram") {
+    pageId = String(
+      accountMetadata?.pageId ||
+      conversationMetadata?.pageId ||
+      ""
+    ).trim();
+  } else if (platform === "messenger") {
+    pageId = String(
+      conversation?.accountId ||
+      accountMetadata?.pageId ||
+      account?.accountId ||
+      ""
+    ).trim();
+  }
+
+  if (!pageId && platform !== "instagram") {
+    pageId = String(account?.accountId || "").trim();
+  }
+
+  if (!pageId) {
+    try {
+      const activePages = await MetaPage.findAll({
+        where: {
+          organisationId,
+          status: "Active",
+        },
+        order: [["updatedAt", "DESC"]],
+        limit: 2,
+      });
+      if (activePages.length === 1) {
+        pageId = String(activePages[0]?.pageId || "").trim();
+      }
+    } catch {}
+  }
+
+  if (pageId) {
+    try {
+      const metaPage = await MetaPage.findOne({
+        where: {
+          organisationId,
+          pageId,
+          status: "Active",
+        },
+      });
+      if (metaPage?.accessTokenEnc) {
+        accessToken = decrypt(metaPage.accessTokenEnc) || accessToken;
+      }
+      if (metaPage?.pageId) {
+        senderId = String(metaPage.pageId);
+      }
+    } catch {}
+  }
+
+  return {
+    accessToken,
+    senderId,
+    pageId: pageId || null,
+  };
+};
+
 const sendMetaMessage = async ({ accessToken, senderId, recipientId, message, messagingType = "RESPONSE", tag = null }) => {
   const targetNode = encodeURIComponent(String(senderId || "me"));
   const url = `https://graph.facebook.com/${META_VERSION}/${targetNode}/messages`;
@@ -173,18 +242,13 @@ export const processQueuedMessages = async ({ organisationId, limit = 20, messag
     }
 
     try {
-      let accessToken = decrypt(account.accessTokenEnc);
-      let senderId = String(conversation.accountId || account.accountId || "me");
-      // Instagram send requires Page Access Token + Page ID as sender node
-      if (conversation.platform === 'instagram') {
-        try {
-          const metaPage = await MetaPage.findOne({
-            where: { organisationId, status: 'Active' },
-            order: [['updatedAt', 'DESC']],
-          });
-          if (metaPage?.accessTokenEnc) accessToken = decrypt(metaPage.accessTokenEnc);
-          if (metaPage?.pageId) senderId = String(metaPage.pageId);
-        } catch {}
+      const { accessToken, senderId } = await resolveMetaSendContext({
+        organisationId,
+        conversation,
+        account,
+      });
+      if (!accessToken) {
+        throw new Error("Account token missing");
       }
       const recipientId = String(conversation.threadId);
       const lastInboundAt = await getLatestInboundMessageAt({

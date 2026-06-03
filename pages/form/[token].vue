@@ -733,7 +733,7 @@ onMounted(() => {
 @import url("https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Dancing+Script:wght@400;500;600;700&family=Great+Vibes&family=Kaushan+Script&family=Pacifico&family=Satisfy&display=swap");
 .consent-form-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f0f4f8 0%, #e8edf3 100%);
+  background: #ffffff;
   padding: 24px;
 }
 
