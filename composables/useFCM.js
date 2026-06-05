@@ -133,6 +133,12 @@ export const useFCM = () => {
       notificationPermission.value = Notification.permission;
       isPermissionGranted.value = Notification.permission === 'granted';
     }
+    console.log('[FCM][client] Support check', {
+      supported: isSupported.value,
+      permission: typeof Notification !== 'undefined' ? Notification.permission : 'unavailable',
+      hasServiceWorker: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
+      hasPushManager: typeof window !== 'undefined' && 'PushManager' in window,
+    });
     
     return isSupported.value;
   };
@@ -163,6 +169,10 @@ export const useFCM = () => {
       const permission = await Notification.requestPermission();
       notificationPermission.value = permission;
       isPermissionGranted.value = permission === 'granted';
+      console.log('[FCM][client] Permission requested', {
+        permission,
+        granted: isPermissionGranted.value,
+      });
       
       if (permission === 'granted') {
         await getFCMToken();
@@ -232,6 +242,9 @@ export const useFCM = () => {
 
       if (currentToken) {
         fcmToken.value = currentToken;
+        console.log('[FCM][client] Token acquired', {
+          tokenPreview: `${currentToken.substring(0, 20)}...`,
+        });
         
         // Always store token in localStorage as backup for network failures
         if (process.client) {
@@ -342,6 +355,15 @@ export const useFCM = () => {
       // Extract title and body from data payload (data-only messages)
       const title = payload.data?.title || payload.notification?.title || 'New Notification';
       const body = payload.data?.body || payload.notification?.body || '';
+      console.log('[FCM][client] Foreground message received', {
+        title,
+        body,
+        hidden: document.hidden,
+        permission: notificationPermission.value,
+        hasNotificationPayload: !!payload.notification,
+        hasDataPayload: !!payload.data,
+        data: payload.data || {},
+      });
       
       lastNotification.value = {
         title,
@@ -350,9 +372,18 @@ export const useFCM = () => {
         timestamp: new Date()
       };
 
-      // Show browser notification
-      if (isPermissionGranted.value && document.hidden) {
+      // Restore native browser notifications for foreground messages as well,
+      // so users still get the bottom-right popup while actively using the app.
+      if (isPermissionGranted.value) {
+        console.log('[FCM][client] Attempting native browser notification', {
+          permission: notificationPermission.value,
+          hidden: document.hidden,
+        });
         showNotification(payload);
+      } else {
+        console.warn('[FCM][client] Native browser notification skipped because permission is not granted', {
+          permission: notificationPermission.value,
+        });
       }
 
       // Emit event for UI updates
@@ -388,12 +419,19 @@ export const useFCM = () => {
       tag: payload.data?.type || 'general',
       requireInteraction: payload.data?.priority === 'high' || payload.data?.priority === 'urgent',
     };
+    console.log('[FCM][client] showNotification called', {
+      title: notificationTitle,
+      options: notificationOptions,
+      hasController: !!navigator.serviceWorker?.controller,
+    });
 
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       navigator.serviceWorker.ready.then((registration) => {
+        console.log('[FCM][client] Using service worker registration.showNotification');
         registration.showNotification(notificationTitle, notificationOptions);
       });
     } else {
+      console.log('[FCM][client] Using window.Notification fallback');
       new Notification(notificationTitle, notificationOptions);
     }
   };
