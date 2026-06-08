@@ -8,7 +8,7 @@ import { CrmAutomationTemplate, CrmLead, Organisation, CrmLeadAssignee, User, Us
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from "./whatsapp.js";
 import { resolveWhapiConfig } from "./whatsappProvider.js";
 import { sendCrmAutomationSentNotification, sendCrmAutomationFailedNotification } from "./fcmNotification.js";
-import { resolveHtmlImages } from "./emailNotifications.js";
+import { resolveHtmlImages, resolveMailAttachments } from "./emailNotifications.js";
 
 const crmTriggersByKey = new Map(
   crmAutomationDefaults
@@ -141,7 +141,7 @@ export const buildCrmWhatsAppTemplatePayload = (lead, tpl) => {
   };
 };
 
-export const sendCrmAutomationEmail = async (lead, subject, html, automationName = null) => {
+export const sendCrmAutomationEmail = async (lead, subject, html, automationName = null, attachments = []) => {
   if (lead.autoReplyEnabled !== true) return;
   if (lead.autoReplyDisabledUntil && new Date() < new Date(lead.autoReplyDisabledUntil)) return;
   if (lead.autoReplyDisabledUntil && new Date() >= new Date(lead.autoReplyDisabledUntil)) {
@@ -154,6 +154,8 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
     html
   );
   const { html: wrappedWithCids, attachments: inlineImages } = await resolveHtmlImages(wrapped)
+  const resolvedAttachments = await resolveMailAttachments(attachments)
+  const allAttachments = [...resolvedAttachments, ...inlineImages]
   const orgId = Number(lead?.organisationId);
   const orgTransporter = await getOrgTransporter(orgId);
   const identity = await getOrgEmailIdentity(orgId);
@@ -164,7 +166,7 @@ export const sendCrmAutomationEmail = async (lead, subject, html, automationName
     ...(identity.replyTo ? { replyTo: identity.replyTo } : {}),
     subject,
     html: wrappedWithCids,
-    ...(inlineImages.length ? { attachments: inlineImages } : {}),
+    ...(allAttachments.length ? { attachments: allAttachments } : {}),
   });
 
   // Send push notification to lead assignees on success
@@ -545,7 +547,7 @@ export const dispatchSendNowAutomationWithOptions = async (orgId, tpl, options =
             continue;
           }
           const { subject, html } = buildCrmEmail(lead, tpl, org);
-          await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
+          await sendCrmAutomationEmail(lead, subject, html, tpl?.name, tpl?.attachments || []);
           await markCrmSent(lead, raw, sentKey, tpl);
           if (wasAlreadySent && forceResend) summary.resent += 1;
           else summary.sent += 1;
@@ -642,7 +644,7 @@ export const sendImmediateCrmAutomationsForLead = async (lead, options = {}) => 
     } else {
       if (!lead?.email) continue;
       const { subject, html } = buildCrmEmail(lead, tpl, org);
-      await sendCrmAutomationEmail(lead, subject, html, tpl?.name);
+      await sendCrmAutomationEmail(lead, subject, html, tpl?.name, tpl?.attachments || []);
       await markCrmSent(lead, lead.rawData || {}, sentKey, tpl);
     }
   }

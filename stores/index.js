@@ -49,7 +49,7 @@ const getDiaryRouteByLicense = (licenseType) =>
   [LICENSE_TYPES.PRO, LICENSE_TYPES.SYSTEM, LICENSE_TYPES.SOAR].includes(
     licenseType,
   )
-    ? "/diary"
+    ? "/diary/calendar"
     : "/diary/calendar";
 
 const LOCK_VISIBLE_FEATURES = new Set([
@@ -273,26 +273,19 @@ export const useMainStore = defineStore("mainStore", {
           featureKey: "diary",
           children: [
             {
-              title: "Calendar",
-              value: "diaryCalendar",
-              imgPath: tasksIcon,
-              to: "/diary/calendar",
-              featureKey: "diary",
-            },
-            {
               title: "Patients",
               value: "diaryPatients",
               imgPath: tasksIcon,
               to: "/diary/patients",
               featureKey: "patientBooking",
             },
-            {
-              title: "Finance",
-              value: "diaryfinance",
-              imgPath: tasksIcon,
-              to: "/diary/finance",
-              featureKey: "patientBooking",
-            },
+            // {
+            //   title: "Finance",
+            //   value: "diaryfinance",
+            //   imgPath: tasksIcon,
+            //   to: "/diary/finance",
+            //   featureKey: "patientBooking",
+            // },
           ],
         },
         // {

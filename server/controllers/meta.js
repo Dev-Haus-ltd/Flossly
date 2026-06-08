@@ -5,7 +5,7 @@ import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { isLeadAllowedForOrg } from '../utils/requireUsageAllowed'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
-import { sendMetaDMNotification } from '../utils/fcmNotification'
+import { sendMetaDMNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body"
 import { chat, generateAutoReply } from '../utils/aiWrapper'
 import {
@@ -147,6 +147,148 @@ const resolveDmParticipantName = ({ platform, preferredName, currentName, thread
   const thread = String(threadId || '').trim()
   if (thread && !isRawDmIdentifier(thread)) return thread
   return fallbackDmParticipantName(platform)
+}
+
+const getDmLeadSource = (platform) => {
+  const normalized = String(platform || '').trim().toLowerCase()
+  if (normalized === 'instagram') return 'Instagram DM'
+  if (normalized === 'messenger') return 'Facebook DM'
+  return 'Meta DM'
+}
+
+const getLeadNameFromConversation = (conversation, fallbackThreadId = '') => {
+  const participantName = String(conversation?.participantName || '').trim()
+  if (participantName && !isPlaceholderDmParticipantName(participantName, conversation?.platform)) {
+    return participantName
+  }
+  const threadId = String(fallbackThreadId || conversation?.threadId || '').trim()
+  return threadId || null
+}
+
+const ensureLeadForDmConversation = async ({
+  organisationId,
+  conversation,
+  platform,
+  threadId,
+  pageId = null,
+  timestamp = new Date(),
+  messageText = '',
+  platformMessageId = null,
+}) => {
+  if (!organisationId || !conversation?.id) return null
+
+  const existingLeadId = Number(conversation?.metadata?.leadId || 0)
+  if (existingLeadId) {
+    const existingLead = await CrmLead.findOne({
+      where: { id: existingLeadId, organisationId: Number(organisationId), softDeleted: false },
+    })
+    if (existingLead) return existingLead
+  }
+
+  const existingLead = await CrmLead.findOne({
+    where: {
+      organisationId: Number(organisationId),
+      softDeleted: false,
+      rawData: {
+        [Op.contains]: {
+          metaDm: {
+            conversationId: Number(conversation.id),
+            platform: String(platform || ''),
+            threadId: String(threadId || ''),
+          },
+        },
+      },
+    },
+    order: [['createdAt', 'DESC']],
+  })
+
+  if (existingLead) {
+    conversation.metadata = {
+      ...(conversation.metadata || {}),
+      leadId: existingLead.id,
+      leadSource: existingLead.leadSource || getDmLeadSource(platform),
+    }
+    await conversation.save()
+    return existingLead
+  }
+
+  const leadAllowed = await isLeadAllowedForOrg(Number(organisationId))
+  if (!leadAllowed) {
+    console.warn('[META WEBHOOK] Lead limit reached, skipping DM lead creation', {
+      organisationId,
+      conversationId: conversation.id,
+      platform,
+      threadId,
+    })
+    return null
+  }
+
+  const leadSource = getDmLeadSource(platform)
+  const messagePreview = String(messageText || '').trim()
+  const created = await CrmLead.create({
+    organisationId: Number(organisationId),
+    pageId: pageId ? String(pageId) : null,
+    name: getLeadNameFromConversation(conversation, threadId),
+    inquiryDate: timestamp || new Date(),
+    leadSource,
+    leadStatus: 'New',
+    comments: messagePreview || null,
+    rawData: {
+      metaDm: {
+        conversationId: Number(conversation.id),
+        platform: String(platform || ''),
+        threadId: String(threadId || ''),
+        accountId: String(conversation.accountId || ''),
+        pageId: pageId ? String(pageId) : '',
+        platformMessageId: platformMessageId ? String(platformMessageId) : '',
+        createdFrom: 'dm_webhook',
+      },
+    },
+  })
+
+  conversation.metadata = {
+    ...(conversation.metadata || {}),
+    leadId: created.id,
+    leadSource,
+  }
+  await conversation.save()
+
+  try {
+    const orgUsers = await UserOrganisation.findAll({
+      where: { organisationId: Number(organisationId), status: 'Active' },
+      attributes: ['userId'],
+    })
+    const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
+    if (userIds.length) {
+      await sendNotificationToMultipleUsers({
+        userIds,
+        organisationId: Number(organisationId),
+        title: 'New DM Lead',
+        body: created.name || messagePreview || 'A new lead was created from a direct message',
+        type: 'lead_created',
+        referenceType: 'lead',
+        referenceId: created.id,
+        data: {
+          leadId: String(created.id),
+          leadName: created.name || '',
+          leadSource,
+          conversationId: String(conversation.id),
+          platform: String(platform || ''),
+          url: `/crm/leads?leadId=${created.id}`,
+        },
+        priority: 'high',
+      })
+    }
+  } catch (notifyErr) {
+    console.warn('[META WEBHOOK] DM lead notification failed', {
+      organisationId,
+      conversationId: conversation.id,
+      error: notifyErr?.message || notifyErr,
+    })
+  }
+
+  broadcastMetaEvent('lead', { orgId: organisationId, leadId: created.id, conversationId: conversation.id })
+  return created
 }
 
 const sendMetaMessage = async ({ accessToken, senderId, recipientId, message, messagingType = 'RESPONSE', tag = null }) => {
@@ -2176,6 +2318,17 @@ export const webhook = async (event) => {
               lastInboundAt: timestamp.toISOString(),
             }
             await conversation.save()
+
+            await ensureLeadForDmConversation({
+              organisationId: orgId,
+              conversation,
+              platform,
+              threadId,
+              pageId,
+              timestamp,
+              messageText: messageText || messagePreview,
+              platformMessageId,
+            })
 
             if (messageText && accessToken) {
               sendAutoReply({

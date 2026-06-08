@@ -239,7 +239,6 @@ import { useMainStore } from '@/stores';
 import { useUser } from '@/composables/useUser';
 import instagramIcon from '@/assets/crm/instagram.svg';
 import facebookIcon from '@/assets/crm/facebook.svg';
-import reference1 from '@/assets/crm/placeholder/reference-1.png';
 import searchicon from '@/assets/icons/listView/serach-icon.svg';
 
 const crmStore = useCrmStore();
@@ -251,6 +250,8 @@ const activeFilters = ref({ platform: null, status: null });
 const currentOrgId = computed(() => Number(user.value?.currentLoggedInOrgId || 0) || null);
 const metaConnection = ref({ count: 0, pages: [] });
 const INSIGHTS_SYNC_DAYS = 30;
+const AUTO_SYNC_COOLDOWN_MS = 15 * 60 * 1000;
+const AUTO_SYNC_STALE_MS = 4 * 60 * 60 * 1000;
 
 
 const toYmd = (value) => {
@@ -324,6 +325,64 @@ const onDrill = (card) => {
   }
 };
 
+const getAutoSyncStorageKey = (orgId) => `crm-meta-analytics:auto-sync:${orgId}`;
+
+const readLastAutoSyncAt = (orgId) => {
+  if (!orgId || typeof window === 'undefined') return 0;
+  const raw = window.sessionStorage.getItem(getAutoSyncStorageKey(orgId));
+  const parsed = Number(raw || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const writeLastAutoSyncAt = (orgId) => {
+  if (!orgId || typeof window === 'undefined') return;
+  window.sessionStorage.setItem(getAutoSyncStorageKey(orgId), String(Date.now()));
+};
+
+const parseTimestamp = (value) => {
+  if (!value) return 0;
+  const dt = value instanceof Date ? value : new Date(value);
+  const ts = dt.getTime();
+  return Number.isFinite(ts) ? ts : 0;
+};
+
+const getLatestRowsTimestamp = (rows = [], keys = ['updatedAt', 'createdAt']) =>
+  rows.reduce((latest, row) => {
+    for (const key of keys) {
+      const nextTs = parseTimestamp(row?.[key]);
+      if (nextTs > latest) return nextTs;
+    }
+    return latest;
+  }, 0);
+
+const shouldAutoSyncAnalytics = ({ orgId, activePageCount = 0, campaignCount = 0, insightCount = 0 }) => {
+  if (!orgId || activePageCount <= 0 || isSyncing.value) return false;
+
+  const lastAutoSyncAt = readLastAutoSyncAt(orgId);
+  if (lastAutoSyncAt && Date.now() - lastAutoSyncAt < AUTO_SYNC_COOLDOWN_MS) {
+    return false;
+  }
+
+  if (campaignCount === 0) return true;
+  if (insightCount === 0) return true;
+
+  const latestStructureAt = getLatestRowsTimestamp([
+    ...crmStore.metaCampaigns,
+    ...crmStore.metaAdSets,
+    ...crmStore.metaAds,
+  ]);
+  const latestInsightsAt = getLatestRowsTimestamp(crmStore.metaInsights, ['updatedAt', 'date', 'createdAt']);
+
+  if (!latestStructureAt || Date.now() - latestStructureAt >= AUTO_SYNC_STALE_MS) {
+    return true;
+  }
+  if (!latestInsightsAt || Date.now() - latestInsightsAt >= AUTO_SYNC_STALE_MS) {
+    return true;
+  }
+
+  return false;
+};
+
 let analyticsLoadPromise = null;
 let analyticsLoadOrgId = null;
 
@@ -370,6 +429,19 @@ const hydrateMetaAnalytics = async ({ syncIfInsightsMissing = false, force = fal
       ) {
         await crmStore.fetchMetaInsights({ days: INSIGHTS_SYNC_DAYS }, orgId);
       }
+
+      if (
+        currentOrgId.value === orgId &&
+        shouldAutoSyncAnalytics({
+          orgId,
+          activePageCount: Number(connectionRes?.data?.count || 0),
+          campaignCount,
+          insightCount,
+        })
+      ) {
+        writeLastAutoSyncAt(orgId);
+        await resync({ silentSuccess: true, silentEmptyState: true });
+      }
     } catch (err) {
       mainStore.setSnackbar({
         type: 'error',
@@ -405,7 +477,7 @@ watch(
   { immediate: true }
 );
 
-const resync = async () => {
+async function resync({ silentSuccess = false, silentEmptyState = false } = {}) {
   const orgId = currentOrgId.value;
   if (!orgId) return;
   if (isSyncing.value) return;
@@ -436,35 +508,41 @@ const resync = async () => {
       }
 
       if (!campaignCount && !insightCount) {
-        mainStore.setSnackbar({
-          type: 'info',
-          color: 'warning',
-          title: 'Meta sync completed with no analytics data',
-          subtitle: `No campaigns or insights were returned for the last ${INSIGHTS_SYNC_DAYS} days.`,
-        });
+        if (!silentEmptyState) {
+          mainStore.setSnackbar({
+            type: 'info',
+            color: 'warning',
+            title: 'Meta sync completed with no analytics data',
+            subtitle: `No campaigns or insights were returned for the last ${INSIGHTS_SYNC_DAYS} days.`,
+          });
+        }
         return;
       }
 
       if (campaignCount > 0 && insightCount === 0) {
-        mainStore.setSnackbar({
-          type: 'info',
-          color: 'warning',
-          title: 'Meta campaigns synced, but no insights were returned',
-          subtitle: 'Check the selected date range, account activity, or Meta attribution data.',
-        });
+        if (!silentEmptyState) {
+          mainStore.setSnackbar({
+            type: 'info',
+            color: 'warning',
+            title: 'Meta campaigns synced, but no insights were returned',
+            subtitle: 'Check the selected date range, account activity, or Meta attribution data.',
+          });
+        }
         return;
       }
 
       const newCampaigns = campaignCount - prevCampaignCount;
 
-      mainStore.setSnackbar({
-        type: 'success',
-        color: 'success',
-        title: newCampaigns > 0 ? 'Meta analytics synced - new campaigns found' : 'Meta analytics synced',
-        subtitle: newCampaigns > 0
-          ? `+${newCampaigns} new campaign${newCampaigns === 1 ? '' : 's'} (${campaignCount} total). Insights updated for the last ${INSIGHTS_SYNC_DAYS} days.`
-          : `${campaignCount} campaign${campaignCount === 1 ? '' : 's'} - insights updated for the last ${INSIGHTS_SYNC_DAYS} days.`,
-      });
+      if (!silentSuccess) {
+        mainStore.setSnackbar({
+          type: 'success',
+          color: 'success',
+          title: newCampaigns > 0 ? 'Meta analytics synced - new campaigns found' : 'Meta analytics synced',
+          subtitle: newCampaigns > 0
+            ? `+${newCampaigns} new campaign${newCampaigns === 1 ? '' : 's'} (${campaignCount} total). Insights updated for the last ${INSIGHTS_SYNC_DAYS} days.`
+            : `${campaignCount} campaign${campaignCount === 1 ? '' : 's'} - insights updated for the last ${INSIGHTS_SYNC_DAYS} days.`,
+        });
+      }
     })();
     await analyticsLoadPromise;
   } catch (error) {
@@ -481,7 +559,7 @@ const resync = async () => {
     }
     isSyncing.value = false;
   }
-};
+}
 
 // Derive currency symbol from the first synced ad account.
 // Falls back to £ since all current orgs are UK-based.
@@ -825,6 +903,12 @@ const currentStats = computed(() => {
   return analyticsStats.value;
 });
 
+const pickPreviewAd = (ads = []) =>
+  ads.find((ad) => String(ad?.imageUrl || '').trim()) ||
+  ads.find((ad) => ad?.videoId) ||
+  ads[0] ||
+  null;
+
 const campaigns = computed(() =>
   addPerformanceRanks(sortCardsByPerformance(crmStore.metaCampaigns.map((campaign) => {
     const campaignInsights = insightsInRange.value.filter(
@@ -834,7 +918,7 @@ const campaigns = computed(() =>
     const campaignAdSetIds = crmStore.metaAdSets
       .filter((adSet) => adSet.campaignId === campaign.campaignId)
       .map((adSet) => adSet.adSetId);
-    const ad = crmStore.metaAds.find((item) => campaignAdSetIds.includes(item.adSetId));
+    const ad = pickPreviewAd(crmStore.metaAds.filter((item) => campaignAdSetIds.includes(item.adSetId)));
     const platform = ad?.platform || 'Facebook';
     if (selectedPlatform.value && platform !== selectedPlatform.value) return null;
 
@@ -861,7 +945,7 @@ const campaigns = computed(() =>
       }),
       rawDate: campaign.createdAt,
       description: ad?.body || 'No ad text description available.',
-      previewImage: ad?.imageUrl || reference1,
+      previewImage: ad?.imageUrl || '',
       hasVideo: !!ad?.videoId,
       videoId: ad?.videoId || null,
       status: campaign.status || null,
@@ -892,7 +976,7 @@ const adSetCards = computed(() => {
     const totalLinkClicks = insights.reduce((acc, i) => acc + Number(i.linkClicks || 0), 0);
     const totalReach = lifetimeReachForSingleEntity(insights);
     const spendMajor = totalSpend / 100;
-    const firstAd = crmStore.metaAds.find((a) => a.adSetId === adSet.adSetId);
+    const firstAd = pickPreviewAd(crmStore.metaAds.filter((a) => a.adSetId === adSet.adSetId));
     const adSetPlatform = firstAd?.platform || drill.campaign.platform;
     if (selectedPlatform.value && adSetPlatform !== selectedPlatform.value) return null;
     const adSetLeads = insights.reduce((acc, i) => acc + Number(i.leads || 0), 0);
@@ -908,7 +992,7 @@ const adSetCards = computed(() => {
         day: 'numeric', month: 'long', year: 'numeric',
       }),
       description: `Ad set within "${drill.campaign.title}"`,
-      previewImage: firstAd?.imageUrl || reference1,
+      previewImage: firstAd?.imageUrl || '',
       hasVideo: !!firstAd?.videoId,
       videoId: firstAd?.videoId || null,
       status: adSet.status || null,
@@ -951,7 +1035,7 @@ const adCards = computed(() => {
       title: ad.name || 'Untitled Ad',
       date: drill.adSet?.date || '',
       description: ad.body || `Ad in "${drill.adSet?.title}"`,
-      previewImage: ad.imageUrl || reference1,
+      previewImage: ad.imageUrl || '',
       hasVideo: !!ad.videoId,
       videoId: ad.videoId || null,
       status: ad.status || null,

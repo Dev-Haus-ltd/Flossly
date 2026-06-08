@@ -26,6 +26,22 @@
             <div class="text-caption text-medium-emphasis">Subject</div>
             <div class="text-body-1 font-weight-medium">{{ subject }}</div>
           </div>
+          <div v-if="normalizedAttachments.length" class="email-preview-meta">
+            <div class="text-caption text-medium-emphasis">Attachments</div>
+            <div class="preview-attachments">
+              <a
+                v-for="(attachment, index) in normalizedAttachments"
+                :key="`${attachment.link}-${index}`"
+                :href="attachment.link"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="preview-attachment"
+              >
+                <v-icon size="14">mdi-paperclip</v-icon>
+                <span>{{ attachment.name }}</span>
+              </a>
+            </div>
+          </div>
           <iframe
             title="Email preview"
             :srcdoc="emailHtml"
@@ -65,6 +81,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  attachments: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -73,6 +93,15 @@ const model = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val),
 })
+
+const normalizedAttachments = computed(() =>
+  (Array.isArray(props.attachments) ? props.attachments : [])
+    .map((item) => ({
+      link: item?.link || item?.url || item?.path || '',
+      name: item?.name || item?.filename || item?.title || 'Attachment',
+    }))
+    .filter((item) => item.link)
+)
 </script>
 
 <style scoped>
@@ -118,6 +147,26 @@ const model = computed({
   border-radius: 10px;
   padding: 10px 12px;
   border: 1px solid rgba(var(--v-theme-outline), 0.16);
+}
+
+.preview-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.preview-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #1d4ed8;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .email-preview-iframe {

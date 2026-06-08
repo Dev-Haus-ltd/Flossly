@@ -612,6 +612,7 @@
       :title="previewData?.name"
       :subject="previewData?.subject || ''"
       :email-html="previewData?.html || ''"
+      :attachments="previewData?.attachments || []"
       :is-whats-app="previewData?.type === 'WhatsApp'"
       :whatsapp-text="previewData?.message || ''"
     />

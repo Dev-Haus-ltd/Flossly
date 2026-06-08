@@ -148,7 +148,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import crmService from '@/services/crmService';
-import previewFallback from '@/assets/crm/placeholder/reference-1.png';
+import previewFallback from '@/assets/crm/placeholder/media-fallback.svg';
 
 const props = defineProps({
   platform: {
@@ -257,7 +257,9 @@ const viewLeadsHref = computed(() => {
 });
 
 const imageLoadFailed = ref(false);
+const recoveredPreviewImage = ref('');
 const resolvedPreviewImage = computed(() => {
+  if (recoveredPreviewImage.value) return recoveredPreviewImage.value;
   if (imageLoadFailed.value) return previewFallback;
   const raw = String(props.previewImage || '').trim();
   return raw || previewFallback;
@@ -265,6 +267,7 @@ const resolvedPreviewImage = computed(() => {
 
 watch(() => props.previewImage, () => {
   imageLoadFailed.value = false;
+  recoveredPreviewImage.value = '';
 });
 
 const videoSrc = ref(null);
@@ -272,7 +275,18 @@ const videoPermalink = ref(null);
 const videoLoading = ref(false);
 const videoError = ref(null);
 
-const handleImageError = () => {
+const handleImageError = async () => {
+  if (props.hasVideo && props.videoId && !recoveredPreviewImage.value) {
+    try {
+      const res = await crmService.getMetaVideoSource(props.videoId);
+      const thumbnail = String(res?.data?.thumbnail || '').trim();
+      if (thumbnail) {
+        recoveredPreviewImage.value = thumbnail;
+        imageLoadFailed.value = false;
+        return;
+      }
+    } catch {}
+  }
   imageLoadFailed.value = true;
 };
 
@@ -308,6 +322,7 @@ watch(() => props.videoId, () => {
   videoSrc.value = null;
   videoPermalink.value = null;
   videoError.value = null;
+  recoveredPreviewImage.value = '';
 });
 </script>
 

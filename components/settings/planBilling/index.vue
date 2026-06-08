@@ -53,7 +53,7 @@ const currentBadgeLabel = computed(() =>
   isTrialAccess.value ? "Current trial" : "Current plan",
 );
 
-const plans = computed(() => [
+const allPlans = computed(() => [
   {
     tier: "Lite",
     title: "FlosslyLite",
@@ -73,7 +73,7 @@ const plans = computed(() => [
     tier: "CRM",
     title: "FlosslyCRM",
     subtitle: "For everyday productivity",
-    price: "£199 / month",
+    price: "£169 / month",
     description: "Ideal for marketing teams and clinics that need a powerful CRM with appointment booking.",
     logo: mainLogo,
     features: [
@@ -100,6 +100,8 @@ const plans = computed(() => [
     ],
   },
 ]);
+
+const plans = computed(() => allPlans.value.filter((plan) => plan.tier !== "Pro"));
 
 const hasStripeSubscription = computed(
   () => !isSystemOrg.value && resolvedTier.value !== "Lite" && !isTrialAccess.value,
