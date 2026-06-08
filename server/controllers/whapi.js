@@ -735,7 +735,10 @@ export const connect = async (event) => {
   await requireFeature(event, 'whatsapp')
   const { orgId, userId } = event.context.user || {};
   if (!orgId || !userId) return error(401, "Unauthenticated");
-  if (!(await isPaidWhapiAllowed(userId, orgId))) {
+  const org = await Organisation.findByPk(orgId, {
+    attributes: ['licenseType', 'licenseBillingCycle', 'licenseRenewalDate'],
+  });
+  if (!canUsePaidWhatsApp(org)) {
     throw createError({
       statusCode: 403,
       data: {

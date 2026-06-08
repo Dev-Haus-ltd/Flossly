@@ -132,6 +132,7 @@
       :title="previewTitle"
       :subject="previewSubject"
       :email-html="emailPreviewHtml"
+      :attachments="previewAttachments"
       :is-whats-app="previewIsWhatsApp"
       :whatsapp-text="previewWhatsAppText"
     />
@@ -481,7 +482,11 @@
                 placeholder="Subject line for this email"
               />
               <div class="text-caption font-weight-medium text-uppercase text-grey-darken-1 mb-2" style="letter-spacing:.06em">Body</div>
-              <CrmEmailTemplateEditor v-model="active.template" />
+              <CrmEmailTemplateEditor
+                v-model="active.template"
+                v-model:attachments="active.attachments"
+                :allow-attachments="String(active?.type || 'Email').toLowerCase() !== 'whatsapp'"
+              />
             </template>
             <div v-else ref="editorEl" class="editor"></div>
           </div>
@@ -1117,6 +1122,7 @@ const buildPayload = (row) => {
     sending: row.sending,
     enabled: !!row.enabled,
     template: row.template,
+    attachments: Array.isArray(row.attachments) ? row.attachments : [],
     whatsappTemplateName: row.whatsappTemplateName,
     whatsappTemplateLanguage: row.whatsappTemplateLanguage,
   }
@@ -1138,6 +1144,7 @@ const buildLeadScopedPayload = (row, leadId, overrides = {}) => {
     sending: merged.sending,
     enabled: !!merged.enabled,
     template: merged.template,
+    attachments: Array.isArray(merged.attachments) ? merged.attachments : [],
     whatsappTemplateName: merged.whatsappTemplateName,
     whatsappTemplateLanguage: merged.whatsappTemplateLanguage,
     leadId: Number(leadId),
@@ -1605,6 +1612,10 @@ const previewWhatsAppText = computed(() => {
   return htmlToPlainText(text)
 })
 
+const previewAttachments = computed(() =>
+  Array.isArray(previewItem.value?.attachments) ? previewItem.value.attachments : []
+)
+
 const EMAIL_TEMPLATE = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -1743,6 +1754,7 @@ const onToggleEnabled = async (row, val) => {
     sending: row.sending || def.sending || '',
     enabled: row.enabled,
     template: (row.template && row.template.trim()) ? row.template : (def.template || ''),
+    attachments: Array.isArray(row.attachments) ? row.attachments : [],
     trigger: row.trigger || def.trigger || undefined,
   })
   try {
@@ -1783,6 +1795,7 @@ const sendImmediateLeadMail = async (row) => {
     subject,
     html,
     key: `automation_${row?.key || 'send_now'}`,
+    attachments: Array.isArray(row?.attachments) ? row.attachments : [],
   })
 }
 

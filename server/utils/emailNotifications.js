@@ -115,7 +115,7 @@ const inferEmailAttachmentContentType = (filename = '') => {
   return 'application/octet-stream';
 };
 
-const resolveMailAttachments = async (attachments) => {
+export const resolveMailAttachments = async (attachments) => {
   if (!Array.isArray(attachments)) return [];
 
   const resolved = [];

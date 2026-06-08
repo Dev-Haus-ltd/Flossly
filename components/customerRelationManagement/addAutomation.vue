@@ -230,7 +230,12 @@
 
             <v-col cols="12">
               <label class="mb-1 fld-lbl">{{ form.type === 'WhatsApp' ? 'WhatsApp Message' : 'Email Content' }}</label>
-              <CrmEmailTemplateEditor v-if="form.type !== 'WhatsApp'" v-model="form.template" />
+              <CrmEmailTemplateEditor
+                v-if="form.type !== 'WhatsApp'"
+                v-model="form.template"
+                v-model:attachments="form.attachments"
+                :allow-attachments="form.type === 'Email'"
+              />
               <div v-else ref="editorEl" class="editor"></div>
             </v-col>
           </v-row>
@@ -358,6 +363,7 @@ const form = ref({
   name: '',
   subject: '',
   template: '',
+  attachments: [],
   triggerType: null,
   triggerDays: 0,
   triggerOffsetDays: 0,
@@ -380,6 +386,7 @@ const resetForm = () => {
     name: '',
     subject: '',
     template: '',
+    attachments: [],
     triggerType: null,
     triggerDays: 0,
     triggerOffsetDays: 0,
@@ -540,6 +547,7 @@ const onSubmit = async () => {
       sending: trigger ? formatCrmTriggerPreview(trigger) : '',
       enabled: false,
       template: form.value.template,
+      attachments: form.value.type === 'Email' ? form.value.attachments : [],
       ...(trigger ? { trigger } : {}),
     }
     const res = await crmStore.saveAutomation(payload)

@@ -95,6 +95,16 @@ export const sendNotificationToUser = async ({
   icon = '/pwa-192x192.png'
 }) => {
   try {
+    console.log('[FCM][server] sendNotificationToUser:start', {
+      userId,
+      organisationId,
+      type,
+      referenceType,
+      referenceId,
+      priority,
+      title,
+    });
+
     // Initialize Firebase Admin if not already done
     if (!firebaseApp) {
       initializeFirebaseAdmin();
@@ -145,6 +155,19 @@ export const sendNotificationToUser = async ({
         userId: userId,
         isActive: true,
       },
+    });
+
+    console.log('[FCM][server] active tokens fetched', {
+      userId,
+      tokenCount: fcmTokens.length,
+      tokens: fcmTokens.map((row) => ({
+        id: row.id,
+        browser: row.browser,
+        deviceType: row.deviceType,
+        isActive: row.isActive,
+        lastUsedAt: row.lastUsedAt,
+        tokenPreview: `${String(row.token || '').slice(0, 16)}...`,
+      })),
     });
 
     if (!fcmTokens || fcmTokens.length === 0) {
@@ -233,31 +256,64 @@ export const sendNotificationToUser = async ({
       
       console.log(`✅ [FCM] Push sent! Success: ${response.successCount}, Failed: ${response.failureCount}`);
 
+      console.log('[FCM][server] multicast response summary', {
+        userId,
+        notificationId: notification.id,
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+      });
+
       // Process responses
       response.responses.forEach((resp, idx) => {
         if (resp.success) {
           results.success++;
-          // Update last_used_at for successful token
-          FcmToken.update(
-            { lastUsedAt: new Date() },
-            { where: { token: tokens[idx] } }
-          );
+          console.log('[FCM][server] token send success', {
+            userId,
+            tokenPreview: `${String(tokens[idx] || '').slice(0, 16)}...`,
+            messageId: resp.messageId || null,
+          });
         } else {
           results.failed++;
           console.error(`Failed to send to token ${tokens[idx]}:`, resp.error);
+          console.error('[FCM][server] token send failure', {
+            userId,
+            tokenPreview: `${String(tokens[idx] || '').slice(0, 16)}...`,
+            code: resp.error?.code || null,
+            message: resp.error?.message || null,
+          });
           
           // Handle invalid tokens
           if (resp.error?.code === 'messaging/invalid-registration-token' ||
               resp.error?.code === 'messaging/registration-token-not-registered') {
             results.invalidTokens.push(tokens[idx]);
-            // Mark token as inactive
-            FcmToken.update(
-              { isActive: false },
-              { where: { token: tokens[idx] } }
-            );
           }
         }
       });
+
+      const successfulTokens = tokens.filter((_, idx) => response.responses[idx]?.success);
+      if (successfulTokens.length) {
+        await FcmToken.update(
+          { lastUsedAt: new Date(), isActive: true },
+          { where: { token: { [Op.in]: successfulTokens } } }
+        );
+        console.log('[FCM][server] updated successful tokens', {
+          userId,
+          count: successfulTokens.length,
+        });
+      }
+
+      if (results.invalidTokens.length) {
+        await FcmToken.destroy({
+          where: {
+            token: { [Op.in]: results.invalidTokens },
+          },
+        });
+        console.warn('[FCM][server] removed invalid tokens', {
+          userId,
+          count: results.invalidTokens.length,
+          tokens: results.invalidTokens.map((token) => `${String(token || '').slice(0, 16)}...`),
+        });
+      }
 
       // Update notification record
       await notification.update({

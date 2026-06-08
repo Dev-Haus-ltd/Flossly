@@ -90,6 +90,31 @@ const sanitizeFilename = (filename = 'file') =>
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '')
 
+const EMAIL_ATTACHMENT_MIME_BY_EXT = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+}
+
+const inferAttachmentContentType = (filename = '') => {
+  const ext = String(filename || '').split('.').pop().toLowerCase()
+  return EMAIL_ATTACHMENT_MIME_BY_EXT[ext] || 'application/octet-stream'
+}
+
+const isAllowedEmailAttachment = ({ filename = '', contentType = '' } = {}) => {
+  const safeName = String(filename || '').toLowerCase()
+  const safeType = String(contentType || '').toLowerCase()
+  if (safeName.endsWith('.pdf') || safeType.includes('pdf')) return true
+  if (safeName.endsWith('.doc') || safeType === 'application/msword') return true
+  if (safeName.endsWith('.docx') || safeType.includes('wordprocessingml')) return true
+  if (safeName.endsWith('.png') || safeType === 'image/png') return true
+  if (safeName.endsWith('.jpg') || safeName.endsWith('.jpeg') || safeType === 'image/jpeg') return true
+  return false
+}
+
 const getLeadRawData = (lead) =>
   lead?.rawData && typeof lead.rawData === 'object' && !Array.isArray(lead.rawData)
     ? lead.rawData
@@ -259,7 +284,21 @@ const validateAutomationPayload = (payload) => {
   if (!key) throw new Error('key required')
   const type = normalizeAutomationType(payload.type)
   const trigger = normalizeAutomationTrigger(payload.trigger)
-  return { ...payload, key, type, trigger }
+  const attachments =
+    payload.attachments === undefined
+      ? undefined
+      : (Array.isArray(payload.attachments)
+          ? payload.attachments
+              .map((item) => ({
+                link: item?.link || item?.url || item?.path || null,
+                name: item?.name || item?.filename || item?.title || 'Attachment',
+                contentType: item?.contentType || item?.mimeType || inferAttachmentContentType(item?.name || item?.filename || item?.title || ''),
+                type: item?.type || null,
+                size: item?.size || null,
+              }))
+              .filter((item) => item.link)
+          : [])
+  return { ...payload, key, type, trigger, ...(attachments !== undefined ? { attachments } : {}) }
 }
 
 const seedAutomationGroups = async (orgId) => {
@@ -1119,7 +1158,7 @@ export const listOptions = async (event) => {
     const rows = await CrmOption.findAll({ where: { organisationId: Number(orgId), category, active: true }, order: [['ordering', 'ASC'], ['name', 'ASC']] })
     if (!rows.length && ['lead_source', 'treatment', 'lead_status'].includes(category)) {
       const defaults = {
-        lead_source: ['Google Ads', 'Website', 'Referral', 'Walk In', 'Meta Advert', 'Call'],
+        lead_source: ['Google Ads', 'Website', 'Referral', 'Walk In', 'Meta Advert', 'Call', 'Facebook DM', 'Instagram DM', 'Meta DM'],
         treatment: ['Teeth Whitening', 'Teeth Straightening', 'Composite Bonding', 'Veneer'],
         lead_status: [
           { name: 'New', color: '#1BA34C' },
@@ -1422,29 +1461,27 @@ export const uploadLeadAttachment = async (event) => {
       : null
     if (!filePart) return error(400, 'file required')
 
-    const originalName = String(filePart.filename || 'attachment.pdf')
+    const originalName = String(filePart.filename || 'attachment')
     const ext = originalName.includes('.') ? originalName.split('.').pop() : ''
-    const safeName = sanitizeFilename(originalName) || `attachment.${ext || 'pdf'}`
+    const safeName = sanitizeFilename(originalName) || `attachment.${ext || 'bin'}`
     const contentType = String(filePart.type || '').toLowerCase()
-    const isPdfByType = contentType.includes('pdf')
-    const isPdfByName = safeName.toLowerCase().endsWith('.pdf')
-    if (!isPdfByType && !isPdfByName) {
-      return error(400, 'Only PDF files are allowed')
+    if (!isAllowedEmailAttachment({ filename: safeName, contentType })) {
+      return error(400, 'Only PDF, DOC, DOCX, PNG, JPG, and JPEG files are allowed')
     }
 
     const stampedName = `${Date.now()}-${safeName}`
-    const baseDir = 'documents/crm/price-lists'
+    const baseDir = 'documents/crm/email-attachments'
     const link = await uploadBufferFile({
       data: filePart.data,
       filename: stampedName,
-      contentType: filePart.type || 'application/pdf',
+      contentType: filePart.type || inferAttachmentContentType(safeName),
       baseDir,
     })
 
     return success({
       link,
       name: originalName,
-      contentType: filePart.type || 'application/pdf',
+      contentType: filePart.type || inferAttachmentContentType(safeName),
       size: Number(filePart.data?.length || 0),
       uploadedAt: new Date().toISOString(),
     })
@@ -1773,6 +1810,7 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     leadId,
     groupKey,
     trigger,
+    attachments,
     whatsappTemplateName,
     whatsappTemplateLanguage,
   } = clean
@@ -1802,6 +1840,9 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
       sending: sending || '',
       enabled: !!enabled,
       template: template || '',
+      attachments: attachments !== undefined
+        ? attachments
+        : (Array.isArray(existingOverride?.attachments) ? existingOverride.attachments : []),
       whatsappTemplateName: whatsappTemplateName || '',
       whatsappTemplateLanguage: whatsappTemplateLanguage || '',
       trigger: trigger !== undefined ? (trigger ?? null) : (existingOverride?.trigger ?? null),
@@ -1860,6 +1901,7 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     if (type !== undefined) exists.type = type
     if (template !== undefined) exists.template = template
     if (subject !== undefined) exists.subject = subject
+    if (attachments !== undefined) exists.attachments = attachments
     if (whatsappTemplateName !== undefined) exists.whatsappTemplateName = whatsappTemplateName || null
     if (whatsappTemplateLanguage !== undefined) exists.whatsappTemplateLanguage = whatsappTemplateLanguage || null
     if (trigger !== undefined) exists.trigger = trigger
@@ -1876,6 +1918,7 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     sending: sending || '',
     enabled: !!enabled,
     template: template || null,
+    attachments: attachments !== undefined ? attachments : [],
     whatsappTemplateName: whatsappTemplateName || null,
     whatsappTemplateLanguage: whatsappTemplateLanguage || null,
     trigger: trigger ?? null,
@@ -2152,8 +2195,8 @@ export const sendLeadMail = async (event) => {
       ? attachments
           .map((item) => ({
             link: item?.link || item?.url || item?.path || null,
-            name: item?.name || item?.filename || 'Attachment.pdf',
-            contentType: item?.contentType || 'application/pdf',
+            name: item?.name || item?.filename || 'Attachment',
+            contentType: item?.contentType || item?.mimeType || inferAttachmentContentType(item?.name || item?.filename || ''),
           }))
           .filter((item) => item.link)
       : []
@@ -2486,7 +2529,13 @@ export const getLeadAutomationPreview = async (event) => {
       return success({ type: 'WhatsApp', name: tpl.name || key, message })
     }
     const { subject, html } = buildCrmEmail(lead, tpl, org)
-    return success({ type: 'Email', name: tpl.name || key, subject, html })
+    return success({
+      type: 'Email',
+      name: tpl.name || key,
+      subject,
+      html,
+      attachments: Array.isArray(tpl?.attachments) ? tpl.attachments : [],
+    })
   } catch (e) {
     return error(500, e.message)
   }

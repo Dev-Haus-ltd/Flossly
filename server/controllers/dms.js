@@ -394,9 +394,15 @@ export const listDmConversations = async (event) => {
       offset: Number.isFinite(offset) ? offset : 0,
     });
 
+    const data = rows.rows.map((row) => {
+      row.setDataValue("leadId", Number(row?.metadata?.leadId || 0) || null);
+      row.setDataValue("leadSource", row?.metadata?.leadSource || null);
+      return row;
+    });
+
     return success({
       total: rows.count,
-      data: rows.rows,
+      data,
       limit: Number.isFinite(limit) ? limit : 20,
       offset: Number.isFinite(offset) ? offset : 0,
     });
