@@ -1,4 +1,4 @@
-import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, updateOption, deleteOption, getAlertOptions, saveAlertOptions, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, saveAutomationBatch, resetAutomationOverride, deleteAutomation, sendLeadMail, sendLeadWhatsApp, bulkUploadLeads, bulkUploadAutomations, listAutomationGroups, saveAutomationGroup, deleteAutomationGroup, getWhatsAppUsage, listLeadWhatsAppLogs, uploadWhatsAppAttachment, uploadLeadAttachment, uploadLeadWhatsAppMedia, getLeadPriceAttachmentRecent, getAutomationSendNowStatus, getLeadAutomationLog, getLeadAutomationPreview, updateLeadAutoReply } from '~/server/controllers/crm'
+import { createLead, deleteLeads, listLeads, updateLead, getLeadTreatment, saveLeadTreatment, deleteLeadTreatment, listLeadNotes, addLeadNote, deleteLeadNote, listOptions, addOption, updateOption, deleteOption, getAlertOptions, saveAlertOptions, getLeadCommunication, saveLeadCommunication, listAutomation, saveAutomation, saveAutomationBatch, resetAutomationOverride, deleteAutomation, sendLeadMail, sendLeadWhatsApp, bulkUploadLeads, bulkUploadAutomations, listAutomationGroups, saveAutomationGroup, deleteAutomationGroup, getWhatsAppUsage, listLeadWhatsAppLogs, uploadWhatsAppAttachment, uploadLeadAttachment, uploadLeadWhatsAppMedia, getLeadPriceAttachmentRecent, getAutomationSendNowStatus, getLeadAutomationLog, getLeadAutomationPreview, updateLeadAutoReply, listCrmCustomColumns, createCrmCustomColumn, updateCrmCustomColumn, deleteCrmCustomColumn } from '~/server/controllers/crm'
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'name')
@@ -83,6 +83,14 @@ export default defineEventHandler(async (event) => {
       return await getLeadAutomationPreview(event)
     case 'updateAutoReply':
       return await updateLeadAutoReply(event)
+    case 'customColumnsList':
+      return await listCrmCustomColumns(event)
+    case 'customColumnsCreate':
+      return await createCrmCustomColumn(event)
+    case 'customColumnsUpdate':
+      return await updateCrmCustomColumn(event)
+    case 'customColumnsDelete':
+      return await deleteCrmCustomColumn(event)
     default:
       return { code: 1, message: 'Not found' }
   }

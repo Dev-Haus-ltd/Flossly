@@ -122,6 +122,8 @@ import { CrmAutomationGroupTemplate } from "./crm/automationGroupTemplates";
 import { CrmAutomationDictionaryGroup } from "./crm/crmAutomationDictionaryGroups";
 import { CrmAutomationDictionaryTemplate } from "./crm/crmAutomationDictionaryTemplates";
 import { FormConfig } from "./crm/formConfig";
+import { CrmCustomColumnDefinition } from "./crm/crmCustomColumnDefinition";
+import { LeadCustomField } from "./crm/leadCustomField";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 import { OrganisationReferral } from "./organisationReferrals";
@@ -442,6 +444,17 @@ Organisation.hasMany(MetaPage, { foreignKey: 'organisationId', as: 'metaPages', 
 CrmLead.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 Organisation.hasMany(CrmLead, { foreignKey: 'organisationId', as: 'crmLeads', onDelete: 'CASCADE', hooks: true });
 
+// CRM Custom Columns
+Organisation.hasMany(CrmCustomColumnDefinition, { foreignKey: 'organisationId', as: 'crmCustomColumns', onDelete: 'CASCADE', hooks: true });
+CrmCustomColumnDefinition.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+CrmCustomColumnDefinition.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'SET NULL' });
+User.hasMany(CrmCustomColumnDefinition, { foreignKey: 'createdBy', as: 'crmCustomColumns', onDelete: 'SET NULL' });
+
+CrmLead.hasMany(LeadCustomField, { foreignKey: 'leadId', as: 'customFields', onDelete: 'CASCADE', hooks: true });
+LeadCustomField.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'CASCADE', hooks: true });
+CrmCustomColumnDefinition.hasMany(LeadCustomField, { foreignKey: 'columnDefinitionId', as: 'fieldValues', onDelete: 'CASCADE', hooks: true });
+LeadCustomField.belongsTo(CrmCustomColumnDefinition, { foreignKey: 'columnDefinitionId', as: 'columnDefinition', onDelete: 'CASCADE', hooks: true });
+
 MetaUserToken.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 MetaUserToken.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
 Organisation.hasMany(MetaUserToken, { foreignKey: 'organisationId', as: 'metaUserTokens', onDelete: 'CASCADE', hooks: true });
@@ -755,6 +768,8 @@ export {
   CrmAutomationDictionaryGroup,
   CrmAutomationDictionaryTemplate,
   FormConfig,
+  CrmCustomColumnDefinition,
+  LeadCustomField,
   CrmWhatsAppMessageLog,
   CrmDmConversation,
   CrmDmMessage,

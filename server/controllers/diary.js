@@ -2317,7 +2317,7 @@ export const listDentistsForDate = async (event) => {
         },
       ],
     });
-    const dentistRoleIds = new Set([1, 2, 5]);
+    const dentistRoleIds = new Set([1, 2, 5, 8]); // 8 = Principal Dentist / Practice Owner
     const out = users
       .filter((u) => {
         const roleId = Number(u.roleId);

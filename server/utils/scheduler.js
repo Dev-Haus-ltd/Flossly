@@ -105,6 +105,16 @@ export const startTaskScheduler = () => {
 export const startDmQueueScheduler = async () => {
   const pattern = process.env.DM_QUEUE_SCHEDULE || "*/1 * * * *";
   cron.schedule(pattern, async () => {
+    // Reset conversations whose auto-reply disable window has expired
+    try {
+      await CrmDmConversation.update(
+        { autoReplyEnabled: true, autoReplyDisabledUntil: null },
+        { where: { autoReplyDisabledUntil: { [Op.lt]: new Date() } } }
+      );
+    } catch (err) {
+      console.error("[DM Queue] auto-reply expiry error:", err?.message || err);
+    }
+
     try {
       const orgIds = await CrmDmConversation.findAll({
         attributes: ["organisationId"],

@@ -1,6 +1,6 @@
 import { Op } from 'sequelize'
 import { parsePhoneNumber } from 'awesome-phonenumber'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, CrmAutomationDictionaryGroup, CrmAutomationDictionaryTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, CrmAutomationDictionaryGroup, CrmAutomationDictionaryTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation, CrmCustomColumnDefinition, LeadCustomField } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { formatCrmTriggerPreview } from '~/lib/misc'
@@ -524,6 +524,12 @@ export const listLeads = async (event) => {
           as: 'assignees',
           include: [{ model: User, as: 'user', attributes: ['id', 'fullName', 'email'] }],
         },
+        {
+          model: LeadCustomField,
+          as: 'customFields',
+          attributes: ['columnDefinitionId', 'value'],
+          required: false,
+        },
       ],
       order: [[orderKey, sortDir]],
     }
@@ -756,6 +762,25 @@ export const updateLead = async (event) => {
         await createEventNotification(logged.orgId, logged.userId, 'celebrate_b3_consultation')
       }
     } catch {}
+    // Save custom fields if provided
+    if (Array.isArray(payload.customFields)) {
+      for (const cf of payload.customFields) {
+        const { columnDefinitionId, value } = cf || {}
+        if (!columnDefinitionId) continue
+        const colDef = await CrmCustomColumnDefinition.findOne({
+          where: { id: Number(columnDefinitionId), organisationId: Number(logged.orgId), isActive: true },
+        })
+        if (!colDef) continue
+        const [field, created] = await LeadCustomField.findOrCreate({
+          where: { leadId: lead.id, columnDefinitionId: Number(columnDefinitionId) },
+          defaults: { leadId: lead.id, columnDefinitionId: Number(columnDefinitionId), value: value || '' },
+        })
+        if (!created) {
+          field.value = value || ''
+          await field.save()
+        }
+      }
+    }
     // Sync assignees if provided
     if (payload.assigned !== undefined && Array.isArray(payload.assigned)) {
       const desiredUserIds = payload.assigned.filter((u) => u && u.id).map((u) => Number(u.id))
@@ -2561,6 +2586,88 @@ export const updateLeadAutoReply = async (event) => {
     await lead.save()
 
     return success({ id: lead.id, autoReplyEnabled: lead.autoReplyEnabled })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const listCrmCustomColumns = async (event) => {
+  try {
+    const logged = event.context.user
+    const columns = await CrmCustomColumnDefinition.findAll({
+      where: { organisationId: Number(logged.orgId), isActive: true },
+      order: [['sortOrder', 'ASC']],
+    })
+    return success(columns)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const createCrmCustomColumn = async (event) => {
+  try {
+    const logged = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { displayName, dataType, dropdownOptions } = payload || {}
+    if (!displayName || !dataType) return error(400, 'displayName and dataType are required')
+    const validTypes = ['text', 'number', 'date', 'boolean', 'dropdown']
+    if (!validTypes.includes(dataType)) return error(400, 'Invalid dataType')
+    const columnName = `crm_col_${Date.now()}`
+    const maxSort = await CrmCustomColumnDefinition.max('sortOrder', {
+      where: { organisationId: Number(logged.orgId), isActive: true },
+    })
+    const sortOrder = (Number(maxSort) || 0) + 1
+    const col = await CrmCustomColumnDefinition.create({
+      organisationId: Number(logged.orgId),
+      columnName,
+      displayName: String(displayName).trim(),
+      dataType,
+      sortOrder,
+      isActive: true,
+      dropdownOptions: dropdownOptions || null,
+      createdBy: logged.userId,
+    })
+    return success(col)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const updateCrmCustomColumn = async (event) => {
+  try {
+    const logged = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { columnId, displayName } = payload || {}
+    if (!columnId) return error(400, 'columnId is required')
+    if (!displayName?.trim()) return error(400, 'displayName is required')
+    const col = await CrmCustomColumnDefinition.findOne({
+      where: { id: Number(columnId), organisationId: Number(logged.orgId), isActive: true },
+    })
+    if (!col) return error(404, 'Column not found')
+    col.displayName = String(displayName).trim()
+    await col.save()
+    return success(col)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const deleteCrmCustomColumn = async (event) => {
+  try {
+    const logged = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { columnId } = payload || {}
+    if (!columnId) return error(400, 'columnId is required')
+    const col = await CrmCustomColumnDefinition.findOne({
+      where: { id: Number(columnId), organisationId: Number(logged.orgId) },
+    })
+    if (!col) return error(404, 'Column not found')
+    col.isActive = false
+    await col.save()
+    return success('Column deleted')
   } catch (e) {
     return error(500, e.message)
   }

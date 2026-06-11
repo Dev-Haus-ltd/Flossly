@@ -993,7 +993,6 @@ const sendMessage = async () => {
       pendingFiles.value = [];
       revokeObjectUrls();
       await loadMessages(true, { forceRefresh: true });
-      await crmStore.processDmQueue({ limit: 20 });
       return;
     }
     const msg = res?.error || res?.message || "Failed to send message";
@@ -1150,15 +1149,18 @@ onMounted(async () => {
     await navigateTo({ query: { ...(convoId ? { conversationId: convoId } : {}) } }, { replace: true });
   }
 
-  await loadConversations(true);
-  refreshPlaceholderConversations();
-  await loadDmConnectionStatus();
-  await loadAutoReplySettings();
+  // All three are independent — run in parallel to cut initial load time
+  await Promise.all([
+    loadConversations(true),
+    loadDmConnectionStatus(),
+    loadAutoReplySettings(),
+  ]);
 
   if (convoId) {
     selectConversation(convoId);
   }
 
+  refreshPlaceholderConversations();
   startMetaStream();
 });
 
@@ -1168,13 +1170,27 @@ const startMetaStream = () => {
   metaEventSource.addEventListener('dm', async (e) => {
     try {
       const data = JSON.parse(e.data);
-      if (data.conversationId && data.conversationId === activeConversationId.value) {
+      const changedId = Number(data.conversationId || 0) || null;
+
+      // Reload messages if the active conversation received a new message
+      if (changedId && changedId === activeConversationId.value) {
         await loadMessages(true, { forceRefresh: true });
       }
-      if (data.orgId) {
-        await loadConversations(true);
+
+      const existingIdx = changedId
+        ? conversations.value.findIndex((c) => c.id === changedId)
+        : -1;
+
+      if (existingIdx !== -1) {
+        // Known conversation: bump to top and increment unread count if it isn't open
+        const updated = { ...conversations.value[existingIdx] };
+        if (changedId !== activeConversationId.value) {
+          updated.unreadCount = (updated.unreadCount || 0) + 1;
+        }
+        conversations.value = [updated, ...conversations.value.filter((_, i) => i !== existingIdx)];
       } else {
-        await loadConversations(false);
+        // Unknown conversation (new DM from someone new): full reload to pick it up
+        await loadConversations(true);
       }
     } catch {}
   });

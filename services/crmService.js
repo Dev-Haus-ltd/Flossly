@@ -657,4 +657,32 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  listCrmCustomColumns() {
+    return new Promise((resolve, reject) => {
+      Get("/lead/customColumnsList")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  createCrmCustomColumn(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/customColumnsCreate", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateCrmCustomColumn(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/customColumnsUpdate", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteCrmCustomColumn(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/customColumnsDelete", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
 };

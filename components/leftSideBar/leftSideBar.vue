@@ -10,9 +10,9 @@
     <LeftSideBarPracticeMenu :currentOrg="currentOrg" :rail="rail" />
     <v-card
       class="d-flex flex-column py-1"
-      style="height: 87vh; overflow: auto;"
+      style="height: 87vh; overflow: hidden;"
     >
-      <v-list density="compact" nav :class="[rail ? 'pr-0 rail-closed' : '']">
+      <v-list density="compact" nav :class="[rail ? 'pr-0 rail-closed' : '']" style="flex: 1 1 0; min-height: 0; overflow-y: auto;">
         <template v-for="item in menuItems" :key="item.value">
           <!-- Leaf item -->
           <v-tooltip
@@ -151,8 +151,6 @@
           </div>
         </template>
       </v-list>
-
-      <v-spacer />
 
       <!-- Plan tier indicator -->
       <div id="tour-plan-chip" :class="rail ? 'px-0 pb-2 d-flex justify-center' : 'px-3 pb-2'">

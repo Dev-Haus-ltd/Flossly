@@ -376,19 +376,9 @@ export const listDmConversations = async (event) => {
       }
     }
 
-    const now = new Date();
-    await CrmDmConversation.update(
-      { autoReplyEnabled: true, autoReplyDisabledUntil: null },
-      {
-        where: {
-          organisationId: orgId,
-          autoReplyDisabledUntil: { [Op.lt]: now },
-        },
-      }
-    );
-
     const rows = await CrmDmConversation.findAndCountAll({
       where,
+      attributes: ["id", "platform", "accountId", "threadId", "participantName", "participantAvatar", "lastMessageAt", "unreadCount", "autoReplyEnabled", "autoReplyDisabledUntil", "metadata", "updatedAt"],
       order: [["lastMessageAt", "DESC"], ["updatedAt", "DESC"]],
       limit: Number.isFinite(limit) ? limit : 20,
       offset: Number.isFinite(offset) ? offset : 0,
@@ -438,25 +428,26 @@ export const listDmMessages = async (event) => {
       where.createdAt = { [Op.lt]: new Date(before) };
     }
 
+    // Fetch DESC to get the N most recent messages before the cursor (pagination),
+    // then reverse for chronological display. DB does the heavy sort; JS just flips 30 items.
     const rows = await CrmDmMessage.findAll({
       where,
       order: [["createdAt", "DESC"], ["id", "DESC"]],
       limit: Number.isFinite(limit) ? limit : 30,
     });
 
+    // rows[last] is the oldest — that's the cursor for loading more older messages
+    const nextCursor = rows.length ? rows[rows.length - 1].createdAt : null;
+
     const sorted = rows.slice().sort((a, b) => {
       const aTs = new Date(a.createdAt).getTime();
       const bTs = new Date(b.createdAt).getTime();
       if (aTs !== bTs) return aTs - bTs;
-
-      // Keep inbound before outbound when timestamps are identical.
       const aInbound = String(a.direction || "").toLowerCase() === "inbound";
       const bInbound = String(b.direction || "").toLowerCase() === "inbound";
       if (aInbound !== bInbound) return aInbound ? -1 : 1;
-
       return Number(a.id || 0) - Number(b.id || 0);
     });
-    const nextCursor = rows.length ? rows[rows.length - 1].createdAt : null;
 
     return success({
       data: sorted,
@@ -645,11 +636,24 @@ export const refreshDmProfile = async (event) => {
     }
     if (!account?.accessTokenEnc) return success({ updated: false, reason: "account_token_missing" });
 
-    const accessToken = decrypt(account.accessTokenEnc);
+    // For Messenger, use the page access token from MetaPage (more reliable for profile API)
+    const messengerPageId = conversation.platform === 'messenger' ? String(conversation.accountId || '') || null : null;
+    let accessToken = decrypt(account.accessTokenEnc);
+    if (messengerPageId) {
+      try {
+        const metaPage = await MetaPage.findOne({
+          where: { organisationId: orgId, pageId: messengerPageId, status: "Active" },
+          attributes: ["accessTokenEnc"],
+        });
+        if (metaPage?.accessTokenEnc) accessToken = decrypt(metaPage.accessTokenEnc) || accessToken;
+      } catch {}
+    }
+
     const profile = await resolveDmParticipantProfile({
       platform: conversation.platform,
       senderId: conversation.threadId,
       accessToken,
+      pageId: messengerPageId,
     });
     if (!profile) return success({ updated: false });
 
@@ -728,6 +732,25 @@ export const refreshAllDmProfiles = async (event) => {
       return !c.participantAvatar || isPlaceholderDmParticipantName(c.participantName, c.platform);
     });
 
+    // Cache page tokens by accountId to avoid one MetaPage lookup per conversation
+    const pageTokenCache = new Map();
+    const getPageToken = async (platform, accountId, baseToken) => {
+      if (platform !== 'messenger') return baseToken;
+      const cacheKey = String(accountId || '');
+      if (pageTokenCache.has(cacheKey)) return pageTokenCache.get(cacheKey);
+      try {
+        const metaPage = await MetaPage.findOne({
+          where: { organisationId: orgId, pageId: cacheKey, status: "Active" },
+          attributes: ["accessTokenEnc"],
+        });
+        const token = (metaPage?.accessTokenEnc ? decrypt(metaPage.accessTokenEnc) : null) || baseToken;
+        pageTokenCache.set(cacheKey, token);
+        return token;
+      } catch {
+        return baseToken;
+      }
+    };
+
     let updated = 0;
     for (const conversation of toRefresh) {
       // Small delay to avoid hammering the Meta API
@@ -754,11 +777,14 @@ export const refreshAllDmProfiles = async (event) => {
       }
       if (!account?.accessTokenEnc) continue;
 
-      const accessToken = decrypt(account.accessTokenEnc);
+      const messengerPageId = conversation.platform === 'messenger' ? String(conversation.accountId || '') || null : null;
+      const baseToken = decrypt(account.accessTokenEnc);
+      const accessToken = await getPageToken(conversation.platform, messengerPageId, baseToken);
       const profile = await resolveDmParticipantProfile({
         platform: conversation.platform,
         senderId: conversation.threadId,
         accessToken,
+        pageId: messengerPageId,
       });
       if (!profile) continue;
 

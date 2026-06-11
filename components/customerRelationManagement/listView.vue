@@ -7,7 +7,7 @@
       multiple
       class="table-panels"
     >
-      <v-expansion-panel rounded="lg" class="border-sm pb-1">
+      <v-expansion-panel v-if="!clientsMode" rounded="lg" class="border-sm pb-1">
         <v-expansion-panel-title>
           <div class="d-flex align-center justify-space-between w-100">
             <div class="d-flex align-center">
@@ -373,8 +373,8 @@
       </v-expansion-panel>
 
       <!-- Converted Leads Panel -->
-      <v-expansion-panel rounded="lg" class="border-sm pb-1">
-        <v-expansion-panel-title>
+      <v-expansion-panel rounded="lg" :class="clientsMode ? '' : 'border-sm pb-1'">
+        <v-expansion-panel-title v-if="!clientsMode">
           <div class="d-flex align-center justify-space-between w-100">
             <div class="d-flex align-center">
               <v-chip color="primary" label>
@@ -453,7 +453,31 @@
                     }"
                   >
                     <div v-if="i !== 0" class="d-flex align-center th-content" style="cursor: grab;">
-                      <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                      <input
+                        v-if="column.isCustom && editingHeaderKey === column.key"
+                        :value="column.title"
+                        @input="(e) => { column.title = e.target.value }"
+                        @blur="saveHeaderRename(column)"
+                        @keyup.enter="(e) => e.target.blur()"
+                        @keyup.esc="cancelHeaderRename(column)"
+                        @click.stop
+                        class="inline-edit-input px-1 w-100"
+                        style="font-size:14px"
+                        autofocus
+                      />
+                      <p
+                        v-else
+                        class="px-1 w-100 mb-0"
+                        :style="column.isCustom ? 'cursor:text' : ''"
+                        @click.stop="column.isCustom ? startHeaderRename(column) : null"
+                      >{{ column.title }}</p>
+                      <v-icon
+                        v-if="column.isCustom"
+                        size="13"
+                        color="error"
+                        style="cursor:pointer; flex-shrink:0;"
+                        @click.stop="emit('request-delete-column', column)"
+                      >mdi-close</v-icon>
                       <v-icon
                         v-if="column.key !== 'name'"
                         size="14"
@@ -698,6 +722,25 @@
                   />
                 </div>
               </template>
+              <template v-else-if="col.isCustom">
+                <div class="pa-1">
+                  <input
+                    v-if="editingCell.id === item.id && editingCell.field === col.key"
+                    :value="getCustomValue(item, col.columnDefinitionId)"
+                    @input="(e) => setCustomValue(item, col.columnDefinitionId, e.target.value)"
+                    @blur="saveCustomField(item, col)"
+                    @keyup.enter="saveCustomField(item, col)"
+                    @keyup.esc="cancelEdit"
+                    class="inline-edit-input"
+                    autofocus
+                  />
+                  <p
+                    v-else
+                    class="ml-2 mb-0 editable-field"
+                    @click="startEdit(item, col.key)"
+                  >{{ getCustomValue(item, col.columnDefinitionId) || 'Click to edit' }}</p>
+                </div>
+              </template>
               <template v-else>
                 <p class="ml-2 mb-0">{{ item[col.key] }}</p>
               </template>
@@ -717,6 +760,7 @@
 
       <!-- Archived Leads Panel -->
       <v-expansion-panel
+        v-if="!clientsMode"
         rounded="lg"
         class="border-sm pb-1"
       >
@@ -934,7 +978,7 @@
 
           <!-- Body -->
           <div class="px-5 pt-3 pb-4">
-            <CrmEmailTemplateEditor v-model="compose.html" />
+            <CrmEmailTemplateEditor v-model="compose.html" v-model:attachments="compose.attachments" :allow-attachments="true" />
           </div>
         </div>
 
@@ -1280,6 +1324,7 @@ const emit = defineEmits([
   'update:itemsPerPage',
   'alert-options-saved',
   'options-refreshed',
+  'request-delete-column',
 ]);
 const props = defineProps({
   leads: { type: Array, default: () => [] },
@@ -1301,6 +1346,8 @@ const props = defineProps({
   users: { type: Array, required: true },
   alertOptions: { type: Array, default: () => [] },
   whatsappConnected: { type: Boolean, default: false },
+  clientsMode: { type: Boolean, default: false },
+  customColumnDefinitions: { type: Array, default: () => [] },
 });
 const openedPanels = ref([0]);
 
@@ -1314,7 +1361,8 @@ const filteredAvailableHeaders = computed(() => {
 
 const saveColumnPreferences = () => {
   try {
-    localStorage.setItem('crmLeadTableColumns', JSON.stringify(selectedHeaders.value))
+    const key = props.clientsMode ? 'clientsTableColumns' : 'crmLeadTableColumns'
+    localStorage.setItem(key, JSON.stringify(selectedHeaders.value))
   } catch {}
 }
 
@@ -1347,7 +1395,7 @@ const getColColor = (name) => {
 
 onMounted(() => {
   try {
-    const stored = localStorage.getItem('crmLeadTableColumns')
+    const stored = localStorage.getItem(props.clientsMode ? 'clientsTableColumns' : 'crmLeadTableColumns')
     if (stored) {
       const parsed = JSON.parse(stored)
       if (Array.isArray(parsed) && parsed.length) {
@@ -2457,6 +2505,59 @@ const updateValueRow = async (row, key) => {
   } catch (e) {}
 };
 
+const editingHeaderKey = ref(null)
+const headerOriginalTitle = ref('')
+
+const startHeaderRename = (column) => {
+  editingHeaderKey.value = column.key
+  headerOriginalTitle.value = column.title
+}
+
+const cancelHeaderRename = (column) => {
+  column.title = headerOriginalTitle.value
+  editingHeaderKey.value = null
+}
+
+const saveHeaderRename = async (column) => {
+  const newTitle = column.title?.trim()
+  editingHeaderKey.value = null
+  if (!newTitle || newTitle === headerOriginalTitle.value) {
+    column.title = headerOriginalTitle.value
+    return
+  }
+  try {
+    const res = await crmStore.updateCrmCustomColumn({ columnId: column.columnDefinitionId, displayName: newTitle })
+    if (res?.code !== 0) {
+      column.title = headerOriginalTitle.value
+      mainStore.setSnackbar({ title: res?.message || 'Failed to rename column', type: 'error' })
+    } else {
+      saveColumnPreferences()
+    }
+  } catch {
+    column.title = headerOriginalTitle.value
+  }
+}
+
+const getCustomValue = (item, columnDefinitionId) => {
+  const cf = (item.customFields || []).find(f => f.columnDefinitionId === columnDefinitionId)
+  return cf?.value || ''
+}
+
+const setCustomValue = (item, columnDefinitionId, value) => {
+  if (!item.customFields) item.customFields = []
+  const cf = item.customFields.find(f => f.columnDefinitionId === columnDefinitionId)
+  if (cf) cf.value = value
+  else item.customFields.push({ columnDefinitionId, value })
+}
+
+const saveCustomField = async (item, col) => {
+  const value = getCustomValue(item, col.columnDefinitionId)
+  cancelEdit()
+  try {
+    await crmStore.updateLead({ id: item.id, customFields: [{ columnDefinitionId: col.columnDefinitionId, value }] })
+  } catch (e) {}
+}
+
 const openLeadDialog = (lead) => {
   selectedLead.value = lead;
   showLeadDetailDialog.value = true;
@@ -2495,7 +2596,7 @@ const composeLoading = ref(false)
 let EditorCtor = null
 let Header = null
 let List = null
-const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
+const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '', attachments: [] })
 const showSendPriceCompose = ref(false)
 const sendPriceLoading = ref(false)
 const sendPriceUploadLoading = ref(false)
@@ -2572,6 +2673,7 @@ async function openCompose(actionKey) {
   })
   compose.subject = renderTemplateWithContext(def.subject, ctx, lead)
   compose.html = renderTemplateWithContext(def.html, ctx, lead)
+  compose.attachments = []
   showCompose.value = true
 }
 
@@ -2718,6 +2820,7 @@ async function sendCompose() {
       subject: resolvedSubject,
       html: resolvedHtml,
       key: `manual_${compose.key}`,
+      attachments: Array.isArray(compose.attachments) ? compose.attachments : [],
     })
     if (res && res.code === 0) {
       if (mainStore && mainStore.setSnackbar) mainStore.setSnackbar({ title: `Mail sent to ${res.data?.sent || compose.recipients.length} recipient(s)`, type: 'success' })

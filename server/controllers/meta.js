@@ -465,7 +465,7 @@ export const executeBookAppointment = async ({ orgId, input, conversation }) => 
         { model: UserOrganisation, as: 'userOrganisations', attributes: [], where: { organisationId: Number(orgId) } },
       ],
     });
-    const dentistRoleIds = new Set([1, 2, 5]);
+    const dentistRoleIds = new Set([1, 2, 5, 8]); // 8 = Principal Dentist / Practice Owner
     const dentists = users
       .filter((u) => {
         const roleId = Number(u.roleId);
@@ -1367,6 +1367,7 @@ const fetchDmHistoryForOrg = async (
                   platform,
                   senderId: threadId,
                   accessToken: pageAccessToken,
+                  pageId: platform === 'messenger' ? conversationNodeId : null,
                 })
                 if (profile?.name || profile?.avatar) {
                   conversation.participantName = resolveDmParticipantName({
@@ -2329,6 +2330,20 @@ export const webhook = async (event) => {
             const timestamp = msgEvent?.timestamp ? new Date(msgEvent.timestamp) : new Date()
             const accessToken = account?.accessTokenEnc ? decrypt(account.accessTokenEnc) : null
 
+            // For Messenger, the page ID is recipientId. Look up the page access token
+            // (MetaPage stores it) — needed for the conversations participants profile API.
+            let profileToken = accessToken
+            const messengerPageId = platform === 'messenger' ? recipientId : null
+            if (messengerPageId) {
+              try {
+                const metaPage = await MetaPage.findOne({
+                  where: { organisationId: orgId, pageId: messengerPageId, status: 'Active' },
+                  attributes: ['accessTokenEnc'],
+                })
+                if (metaPage?.accessTokenEnc) profileToken = decrypt(metaPage.accessTokenEnc) || accessToken
+              } catch {}
+            }
+
             let conversation = await CrmDmConversation.findOne({
               where: { organisationId: orgId, platform, threadId },
             })
@@ -2337,7 +2352,8 @@ export const webhook = async (event) => {
               const profile = await resolveDmParticipantProfile({
                 platform,
                 senderId,
-                accessToken,
+                accessToken: profileToken,
+                pageId: messengerPageId,
               })
               const participantName = resolveDmParticipantName({
                 platform,
@@ -2366,7 +2382,8 @@ export const webhook = async (event) => {
               const profile = await resolveDmParticipantProfile({
                 platform,
                 senderId,
-                accessToken,
+                accessToken: profileToken,
+                pageId: messengerPageId,
               })
               const nextName = resolveDmParticipantName({
                 platform,

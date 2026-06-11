@@ -415,5 +415,11 @@ export const useCrmStore = defineStore("crmStore", {
     getAvailableFields() { return this._wrap(() => webFormService.getAvailableFields()); },
     getAutoReplySettings() { return this._wrap(() => crmService.getAutoReplySettings()); },
     updateAutoReplySettings(payload) { return this._wrap(() => crmService.updateAutoReplySettings(payload)); },
+
+    // CRM Custom Columns
+    listCrmCustomColumns() { return this._wrap(() => crmService.listCrmCustomColumns()); },
+    createCrmCustomColumn(payload) { return this._wrap(() => crmService.createCrmCustomColumn(payload)); },
+    updateCrmCustomColumn(payload) { return this._wrap(() => crmService.updateCrmCustomColumn(payload)); },
+    deleteCrmCustomColumn(payload) { return this._wrap(() => crmService.deleteCrmCustomColumn(payload)); },
   },
 });
