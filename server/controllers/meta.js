@@ -419,7 +419,7 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
       return;
     }
 
-    await sendMetaMessage({
+    const sendResp = await sendMetaMessage({
       accessToken: resolvedAccessToken,
       senderId: resolvedSenderId,
       recipientId: String(conversation.threadId),
@@ -431,7 +431,7 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
       organisationId: orgId,
       conversationId: conversation.id,
       platform: conversation.platform,
-      platformMessageId: null,
+      platformMessageId: sendResp?.message_id || null,
       direction: 'outbound',
       senderName: 'Flossly',
       message: replyText,

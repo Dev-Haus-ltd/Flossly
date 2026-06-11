@@ -548,7 +548,6 @@ export const markDmRead = async (event) => {
 
 export const deleteDmConversation = async (event) => {
   try {
-    await ensureDmTables();
     const { orgId } = event.context.user || {};
     if (!orgId) return error(401, "Unauthenticated");
 
@@ -557,23 +556,18 @@ export const deleteDmConversation = async (event) => {
     const { conversationId } = payload;
     if (!conversationId) return error(400, "conversationId is required");
 
-    const conversation = await CrmDmConversation.findOne({
-      where: { id: Number(conversationId), organisationId: orgId },
-    });
-    if (!conversation) return error(404, "Conversation not found");
+    const numericId = Number(conversationId);
 
     await CrmDmMessage.destroy({
-      where: {
-        organisationId: orgId,
-        conversationId: conversation.id,
-      },
+      where: { organisationId: orgId, conversationId: numericId },
     });
-    await conversation.destroy();
+    const deleted = await CrmDmConversation.destroy({
+      where: { id: numericId, organisationId: orgId },
+    });
 
-    return success({
-      deleted: true,
-      conversationId: Number(conversationId),
-    });
+    if (!deleted) return error(404, "Conversation not found");
+
+    return success({ deleted: true, conversationId: numericId });
   } catch (err) {
     return error(500, err.message || "Failed to delete conversation");
   }

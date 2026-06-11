@@ -854,22 +854,17 @@ const openDeleteConversationDialog = () => {
 const confirmDeleteConversation = async () => {
   if (!activeConversationId.value || deletingConversation.value) return;
   const conversationId = activeConversationId.value;
-
-  // Optimistic: close the dialog and remove from list immediately so the UI
-  // doesn't block. The API call runs in the background; on failure we reload.
-  deleteConversationDialog.value = false;
-  removeConversationLocally(conversationId);
-
   deletingConversation.value = true;
   try {
     const res = await crmStore.deleteDmConversation({ conversationId });
-    if (res?.code !== 0) {
+    if (res?.code === 0) {
+      deleteConversationDialog.value = false;
+      removeConversationLocally(conversationId);
+    } else {
       mainStore?.setSnackbar?.({ title: res?.message || res?.error || "Failed to delete conversation", type: "error" });
-      await loadConversations(true);
     }
   } catch (e) {
     mainStore?.setSnackbar?.({ title: e?.data?.message || e?.message || "Failed to delete conversation", type: "error" });
-    await loadConversations(true);
   } finally {
     deletingConversation.value = false;
   }
