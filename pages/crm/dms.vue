@@ -718,10 +718,6 @@ const toggleAutoReply = async (newValue) => {
     const res = await crmStore.updateAutoReplySettings({ autoReplyEnabled: newValue });
     if (res?.code === 0) {
       autoReplyEnabled.value = !!res.data?.autoReplyEnabled;
-      mainStore?.setSnackbar?.({ 
-        title: newValue ? "Auto-reply enabled" : "Auto-reply disabled", 
-        type: "success" 
-      });
     } else {
       autoReplyEnabled.value = !newValue;
       mainStore?.setSnackbar?.({ title: res?.message || "Failed to update auto-reply settings", type: "error" });
@@ -748,7 +744,6 @@ const saveAutoReplyConfig = async () => {
     });
     if (res?.code === 0) {
       autoReplyConfig.value = res.data?.autoReplyConfig || autoReplyConfig.value;
-      mainStore?.setSnackbar?.({ title: "Auto-reply config saved", type: "success" });
       autoReplyConfigDialog.value = false;
     } else {
       mainStore?.setSnackbar?.({ title: res?.message || "Failed to save config", type: "error" });
@@ -858,19 +853,23 @@ const openDeleteConversationDialog = () => {
 
 const confirmDeleteConversation = async () => {
   if (!activeConversationId.value || deletingConversation.value) return;
+  const conversationId = activeConversationId.value;
+
+  // Optimistic: close the dialog and remove from list immediately so the UI
+  // doesn't block. The API call runs in the background; on failure we reload.
+  deleteConversationDialog.value = false;
+  removeConversationLocally(conversationId);
+
   deletingConversation.value = true;
   try {
-    const conversationId = activeConversationId.value;
     const res = await crmStore.deleteDmConversation({ conversationId });
-    if (res?.code === 0) {
-      deleteConversationDialog.value = false;
-      removeConversationLocally(conversationId);
-      mainStore?.setSnackbar?.({ title: "Conversation deleted", type: "success" });
-      return;
+    if (res?.code !== 0) {
+      mainStore?.setSnackbar?.({ title: res?.message || res?.error || "Failed to delete conversation", type: "error" });
+      await loadConversations(true);
     }
-    mainStore?.setSnackbar?.({ title: res?.message || res?.error || "Failed to delete conversation", type: "error" });
   } catch (e) {
     mainStore?.setSnackbar?.({ title: e?.data?.message || e?.message || "Failed to delete conversation", type: "error" });
+    await loadConversations(true);
   } finally {
     deletingConversation.value = false;
   }
@@ -959,7 +958,7 @@ const loadMessages = async (reset = false, options = {}) => {
       if (!newMessages.length) messageHasMore.value = false;
       if (newMessages.length < 30) messageHasMore.value = false;
       writeConversationCache(activeConversationId.value);
-      await crmStore.markDmRead({ conversationId: activeConversationId.value });
+      crmStore.markDmRead({ conversationId: activeConversationId.value }).catch(() => {});
     }
   } finally {
     loadingMessages.value = false;

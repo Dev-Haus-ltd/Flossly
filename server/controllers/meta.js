@@ -459,13 +459,12 @@ export const executeBookAppointment = async ({ orgId, input, conversation }) => 
   try {
     const users = await User.findAll({
       attributes: ['id', 'fullName', 'email', 'photo', 'roleId'],
-      where: { status: 'Active' },
       include: [
         { model: Role, as: 'role', attributes: ['title'] },
-        { model: UserOrganisation, as: 'userOrganisations', attributes: [], where: { organisationId: Number(orgId) } },
+        { model: UserOrganisation, as: 'userOrganisations', attributes: [], where: { organisationId: Number(orgId), status: 'Active' } },
       ],
     });
-    const dentistRoleIds = new Set([1, 2, 5, 8]); // 8 = Principal Dentist / Practice Owner
+    const dentistRoleIds = new Set([1, 2, 3, 4, 5]);
     const dentists = users
       .filter((u) => {
         const roleId = Number(u.roleId);
