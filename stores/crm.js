@@ -421,5 +421,15 @@ export const useCrmStore = defineStore("crmStore", {
     createCrmCustomColumn(payload) { return this._wrap(() => crmService.createCrmCustomColumn(payload)); },
     updateCrmCustomColumn(payload) { return this._wrap(() => crmService.updateCrmCustomColumn(payload)); },
     deleteCrmCustomColumn(payload) { return this._wrap(() => crmService.deleteCrmCustomColumn(payload)); },
+
+    // Google (Search Console / general)
+    googleConnectionStatus() { return this._wrap(() => crmService.googleConnectionStatus()); },
+    startGoogleAuth() { return this._wrap(() => crmService.startGoogleAuth()); },
+    disconnectGoogle(tokenId) { return this._wrap(() => crmService.disconnectGoogle(tokenId)); },
+
+    // Google Calendar
+    startGoogleCalendarAuth() { return this._wrap(() => crmService.startGoogleCalendarAuth()); },
+    googleCalendarConnectionStatus() { return this._wrap(() => crmService.googleCalendarConnectionStatus()); },
+    disconnectGoogleCalendar() { return this._wrap(() => crmService.disconnectGoogleCalendar()); },
   },
 });

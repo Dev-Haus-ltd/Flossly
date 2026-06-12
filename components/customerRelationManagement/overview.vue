@@ -179,26 +179,15 @@
                 WhatsApp is available on paid plans only.
               </span>
             </template>
-            <!-- GOOGLE 
-            <template v-else-if="card.key === 'google'">
+            <template v-else-if="card.key === 'googleCalendar'">
               <v-btn
-                color="primary"
-                variant="outlined"
-                rounded="lg"
-                class="action-btn"
-                :disabled="!isGoogleConnected"
-                @click="openGoogleHealth"
-              >
-                Google Health
-              </v-btn>
-              <v-btn
-                v-if="isGoogleConnected"
+                v-if="isGoogleCalendarConnected"
                 color="grey-darken-1"
                 variant="outlined"
                 rounded="lg"
                 class="action-btn"
-                @click="disconnectGoogle"
-                :loading="googleDisconnecting"
+                :loading="googleCalendarDisconnecting"
+                @click="onDisconnectGoogleCalendar"
               >
                 Disconnect
               </v-btn>
@@ -208,25 +197,12 @@
                 variant="flat"
                 rounded="lg"
                 class="action-btn action-btn--primary"
-                :loading="googleConnecting"
-                @click="connectGoogle"
+                :loading="googleCalendarConnecting"
+                @click="onConnectGoogleCalendar"
               >
                 Connect
               </v-btn>
-            </template> 
-            -->
-            <!-- Google card actions hidden -->
-            <!-- <template v-else-if="card.key === 'google'">
-              <v-btn
-                color="primary"
-                variant="flat"
-                rounded="lg"
-                class="action-btn action-btn--primary"
-                disabled
-              >
-                Coming Soon
-              </v-btn>
-            </template> -->
+            </template>
             <template v-else>
               <v-btn
                 color="primary"
@@ -616,6 +592,11 @@ const googleStatus = reactive({
   expiresAt: '',
   scopes: [],
 })
+const isGoogleCalendarConnected = ref(false)
+const googleCalendarEmail = ref('')
+const googleCalendarConnecting = ref(false)
+const googleCalendarDisconnecting = ref(false)
+
 const autoReplyEnabled = ref(false)
 const whatsappAutoReplyEnabled = ref(false)
 const autoReplyLoading = ref(false)
@@ -719,6 +700,16 @@ const integrationCards = computed(() => ([
   //   icon: googleLogo,
   //   iconClass: 'google',
   // },
+  {
+    key: 'googleCalendar',
+    title: 'Google Calendar',
+    subtitlePrimary: googleCalendarEmail.value || userEmail.value || '-',
+    subtitleSecondary: currentOrgName.value || '-',
+    statusLabel: isGoogleCalendarConnected.value ? 'Connected' : INTEGRATION_STATUS_NOT_CONNECTED_LABEL,
+    statusColor: isGoogleCalendarConnected.value ? INTEGRATION_STATUS_CHIP_SUCCESS : INTEGRATION_STATUS_CHIP_ACCENT,
+    icon: googleLogo,
+    iconClass: 'google',
+  },
   {
     key: 'chatbot',
     title: 'Chatbot',
@@ -1280,6 +1271,64 @@ const handleGoogleCallback = () => {
   }
 }
 
+const checkGoogleCalendarConnection = async () => {
+  try {
+    const res = await crmStore.googleCalendarConnectionStatus()
+    if (res?.code === 0 && res.data?.connected) {
+      isGoogleCalendarConnected.value = true
+      googleCalendarEmail.value = res.data.email || ''
+    } else {
+      isGoogleCalendarConnected.value = false
+      googleCalendarEmail.value = ''
+    }
+  } catch {
+    isGoogleCalendarConnected.value = false
+    googleCalendarEmail.value = ''
+  }
+}
+
+const onConnectGoogleCalendar = async () => {
+  googleCalendarConnecting.value = true
+  try {
+    const res = await crmStore.startGoogleCalendarAuth()
+    if (res?.code === 0 && res.data?.url) {
+      window.location.href = res.data.url
+      return
+    }
+    mainStore?.setSnackbar?.({ title: res?.message || 'Unable to start Google Calendar connection', type: 'error' })
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Unable to start Google Calendar connection', type: 'error' })
+  } finally {
+    googleCalendarConnecting.value = false
+  }
+}
+
+const onDisconnectGoogleCalendar = async () => {
+  googleCalendarDisconnecting.value = true
+  try {
+    const res = await crmStore.disconnectGoogleCalendar()
+    if (res?.code === 0) {
+      isGoogleCalendarConnected.value = false
+      googleCalendarEmail.value = ''
+      mainStore?.setSnackbar?.({ title: 'Google Calendar disconnected', type: 'success' })
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to disconnect Google Calendar', type: 'error' })
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to disconnect Google Calendar', type: 'error' })
+  } finally {
+    googleCalendarDisconnecting.value = false
+  }
+}
+
+const handleGoogleCalendarCallback = () => {
+  if (route.query.google_calendar !== 'connected') return
+  checkGoogleCalendarConnection()
+  mainStore?.setSnackbar?.({ title: 'Google Calendar connected — diary appointments will now sync automatically', type: 'success' })
+  const nextQuery = { ...route.query }
+  delete nextQuery.google_calendar
+  router.replace({ query: nextQuery })
+}
 
 const updateLeadsChartData = async () => {
   try {
@@ -1489,8 +1538,9 @@ onMounted(async () => {
   loadUser()
   handleMetaQuery()
   handleGoogleCallback()
+  handleGoogleCalendarCallback()
   startWhapiStatusStream()
-  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads(), checkGoogleConnection(), loadAutoReplySettings()])
+  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads(), checkGoogleConnection(), checkGoogleCalendarConnection(), loadAutoReplySettings()])
   loadWhapiChannels(false)
 })
 

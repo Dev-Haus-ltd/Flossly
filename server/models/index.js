@@ -107,6 +107,8 @@ import { ConsentFormDocument } from "./diary/consentFormDocument";
 import { ConsentFormSignatureAudit } from "./diary/consentFormSignatureAudit";
 import { DiaryZone } from "./diary/diaryZones";
 import { DiaryPatientCommunicationLogs } from "./diary/patientCommunicationLogs";
+import { DiaryGoogleCalendarEvent } from "./diary/googleCalendarEvent";
+import { DiaryDentistGoogleCalendar } from "./diary/dentistGoogleCalendar";
 import { GCMandate } from "./diary/gcMandates";
 import { GCPayment } from "./diary/gcPayments";
 import { GCWebhookLog } from "./diary/gcWebhookLogs";
@@ -262,6 +264,12 @@ DiaryPatient.hasMany(DiaryAppointment, { foreignKey: 'patientId', as: 'appointme
 DiaryAppointment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryAppointment.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
 DiaryAppointment.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
+
+DiaryGoogleCalendarEvent.belongsTo(DiaryAppointment, { foreignKey: 'appointmentId', as: 'appointment', onDelete: 'CASCADE', hooks: true });
+DiaryAppointment.hasOne(DiaryGoogleCalendarEvent, { foreignKey: 'appointmentId', as: 'googleCalendarEvent', onDelete: 'CASCADE', hooks: true });
+
+DiaryDentistGoogleCalendar.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
+DiaryDentistGoogleCalendar.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 
 DiaryNote.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryNote.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
@@ -814,6 +822,8 @@ export {
   ConsentFormSignatureAudit,
   DiaryZone,
   DiaryPatientCommunicationLogs,
+  DiaryGoogleCalendarEvent,
+  DiaryDentistGoogleCalendar,
   GCMandate,
   GCPayment,
   GCWebhookLog,

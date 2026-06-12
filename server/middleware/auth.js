@@ -55,6 +55,7 @@ const isPublicPath = (path) => {
     "/api/chatbot/createAppointment",
     "/api/chatbot/createLead",
     "/api/google/handleAdsLeadWebhook",
+    "/api/google/calendarCallback",
     "/api/form/meta",
     "/api/form/submit",
     "/api/consent/documentGetForSigning",

@@ -98,7 +98,8 @@ export const GoogleOAuthToken = sequelize.define(
 export const GOOGLE_SCOPES = {
   SEARCH_CONSOLE: 'https://www.googleapis.com/auth/webmasters.readonly',
   BUSINESS_PROFILE: 'https://www.googleapis.com/auth/business.manage',
-  GOOGLE_ADS: 'https://www.googleapis.com/auth/adwords'
+  GOOGLE_ADS: 'https://www.googleapis.com/auth/adwords',
+  CALENDAR: 'https://www.googleapis.com/auth/calendar'
 }
 
 // Check if token has a specific scope
@@ -114,5 +115,10 @@ GoogleOAuthToken.prototype.hasSearchConsoleScope = function() {
 // Check if token has Business Profile scope
 GoogleOAuthToken.prototype.hasBusinessProfileScope = function() {
   return this.hasScope(GOOGLE_SCOPES.BUSINESS_PROFILE)
+}
+
+// Check if token has Calendar scope
+GoogleOAuthToken.prototype.hasCalendarScope = function() {
+  return this.hasScope(GOOGLE_SCOPES.CALENDAR)
 }
 
