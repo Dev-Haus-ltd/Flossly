@@ -67,6 +67,7 @@ export default defineNuxtConfig({
         process.env.NUXT_STRIPE_PK ||
         process.env.STRIPE_PK,
       MAX_FILE_SIZE_FOR_LOGO: process.env.MAX_FILE_SIZE_FOR_LOGO || 5 * 1024 * 1024, // Default 5MB in bytes
+      DEMO_DIARY: process.env.NUXT_PUBLIC_DEMO_DIARY || process.env.DEMO_DIARY ,
     },
     API_AUTH: "BasicAuth",
     JWT_SECRET: process.env.JWT_SECRET,

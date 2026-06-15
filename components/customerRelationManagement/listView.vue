@@ -1866,6 +1866,8 @@ const normalizeLicenseType = (value) => {
 };
 
 const currentOrgLicense = computed(() => {
+  const licenseType = String(authStore.loggedUser?.licenseType || user.value?.licenseType || '').trim();
+  if (licenseType) return licenseType;
   const orgId = Number(user.value?.currentLoggedInOrgId || 0);
   const prefs = Array.isArray(user.value?.preferences) ? user.value.preferences : [];
   const match = prefs.find((row) => Number(row?.organisationId || 0) === orgId);

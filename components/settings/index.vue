@@ -45,7 +45,7 @@
         </v-col>
 
         <!-- Diary Settings Card -->
-        <!-- <v-col cols="12" sm="6" md="4" lg="3">
+        <v-col v-if="demoDiary" cols="12" sm="6" md="4" lg="3">
           <div class="settings-card" @click="selectedSetting = 'diary'">
             <div class="card-content">
               <div class="card-icon-wrapper" style="background-color: #FFA977;">
@@ -60,7 +60,7 @@
               <p class="card-subtitle">Appointment configurations</p>
             </div>
           </div>
-        </v-col> -->
+        </v-col>
       </v-row>
     </div>
 
@@ -75,6 +75,10 @@
           <img src="@/assets/icons/mainDrawerIcons/settings.svg" alt="SMTP Settings" class="tab-icon" />
           SMTP Settings
         </v-tab>
+        <v-tab v-if="demoDiary" class="tab-text" value="diary">
+          <v-icon size="16" class="mr-1">mdi-calendar-clock</v-icon>
+          Diary Settings
+        </v-tab>
       </v-tabs>
       <v-tabs-window v-model="currentTab">
         <v-tabs-window-item value="billing">
@@ -83,19 +87,22 @@
         <v-tabs-window-item value="smtp">
           <SettingsItSupport />
         </v-tabs-window-item>
-        <!-- <v-tabs-window-item value="diary">
+        <v-tabs-window-item v-if="demoDiary" value="diary">
           <SettingsDiary />
-        </v-tabs-window-item> -->
+        </v-tabs-window-item>
       </v-tabs-window>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
+
+const config = useRuntimeConfig();
+const demoDiary = computed(() => !!config.public?.DEMO_DIARY);
 
 // Settings component for roleId 16
-const selectedSetting = ref(null); // null = primary view, 'smtp' or 'billing' = secondary view
+const selectedSetting = ref(null); // null = primary view, 'smtp' or 'billing' or 'diary' = secondary view
 const currentTab = ref("smtp");
 const route = useRoute();
 
@@ -104,7 +111,7 @@ const getSettingTitle = (setting) => {
   const titles = {
     billing: 'Plan & Billing',
     smtp: 'SMTP Settings',
-    // diary: 'Diary Settings',
+    diary: 'Diary Settings',
   };
   return titles[setting] || '';
 };
@@ -112,18 +119,14 @@ const getSettingTitle = (setting) => {
 watch(selectedSetting, (newVal) => {
   if (newVal === 'billing') currentTab.value = 'billing';
   else if (newVal === 'smtp') currentTab.value = 'smtp';
-  // else if (newVal === 'diary') currentTab.value = 'diary';
+  else if (newVal === 'diary') currentTab.value = 'diary';
 });
 
 watch(
   () => route.query.setting,
   (setting) => {
-    // if (setting === 'billing' || setting === 'smtp' || setting === 'diary') {
-    //   selectedSetting.value = setting;
-    //   currentTab.value = setting;
-    //   return;
-    // }
-    if (setting === 'billing' || setting === 'smtp') {
+    const valid = ['billing', 'smtp', ...(demoDiary.value ? ['diary'] : [])];
+    if (valid.includes(setting)) {
       selectedSetting.value = setting;
       currentTab.value = setting;
       return;

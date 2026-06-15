@@ -349,11 +349,14 @@ const resolvedPlan = computed(() => {
   const lt = authStore.loggedUser?.licenseType ?? 'Lite'
   return LEGACY_MAP[lt] ?? lt
 })
-const isTrialPlan = computed(() =>
-  ['CRM', 'Pro'].includes(resolvedPlan.value) &&
-  !authStore.loggedUser?.licenseBillingCycle &&
-  !!authStore.loggedUser?.licenseRenewalDate
-)
+const isTrialPlan = computed(() => {
+  const raw = authStore.loggedUser?.licenseType
+  // Only new-tier plans (CRM/Pro stored literally) can be trials.
+  // Legacy types (System, Soar, Glide, Drift, Trial) are grandfathered and never shown as trial.
+  return ['CRM', 'Pro'].includes(raw) &&
+    !authStore.loggedUser?.licenseBillingCycle &&
+    !!authStore.loggedUser?.licenseRenewalDate
+})
 const planChipLabel = computed(() => {
   if (isTrialPlan.value) return `${resolvedPlan.value} Trial`
   const map = { Lite: 'Lite Plan', CRM: 'CRM Plan', Pro: 'Pro Plan' }

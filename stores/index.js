@@ -59,8 +59,9 @@ const LOCK_VISIBLE_FEATURES = new Set([
   "patientBooking",
 ])
 
-const filterMenuByLicense = (menuItems, licenseType) => {
-  const allowed = LICENSE_FEATURES[licenseType] ?? LICENSE_FEATURES[LICENSE_TYPES.LITE];
+const filterMenuByLicense = (menuItems, licenseType, demoDiary = false) => {
+  const base = LICENSE_FEATURES[licenseType] ?? LICENSE_FEATURES[LICENSE_TYPES.LITE];
+  const allowed = demoDiary ? new Set([...base, 'patientBooking']) : base;
 
   return menuItems.reduce((acc, item) => {
     const hasChildren = Array.isArray(item.children) && item.children.length > 0
@@ -125,8 +126,10 @@ export const useMainStore = defineStore("mainStore", {
     getManagerOptions() {
       const licenseType = getLicenseTypeFromStorage();
       const authStore = useAuthStore();
+      const config = useRuntimeConfig();
 
       const isDeveloper = authStore.getIsDeveloper;
+      const demoDiary = !!config.public?.DEMO_DIARY;
 
       const { user } = useUser();
       const userRoleId = user.value?.roleId;
@@ -276,9 +279,16 @@ export const useMainStore = defineStore("mainStore", {
           title: "Flossy Diary",
           imgPath: tasksIcon,
           value: "flosslyDiary",
-          to: getDiaryRouteByLicense(licenseType),
+          to: demoDiary ? "/diary" : getDiaryRouteByLicense(licenseType),
           featureKey: "diary",
           children: [
+            ...(demoDiary ? [{
+              title: "Calendar",
+              value: "diaryCalendar",
+              imgPath: tasksIcon,
+              to: "/diary/calendar",
+              featureKey: "diary",
+            }] : []),
             {
               title: "Patients",
               value: "diaryPatients",
@@ -350,7 +360,7 @@ export const useMainStore = defineStore("mainStore", {
         });
       }
 
-      const filtered = filterMenuByLicense(menuItems, licenseType);
+      const filtered = filterMenuByLicense(menuItems, licenseType, demoDiary);
       return filtered;
     },
     getuserOptions() {

@@ -257,16 +257,17 @@ const onboardingUiConfig = computed(() => {
   };
 });
 const getOnboardingUiState = () => {
-  if (typeof window === "undefined") return { lastShown: {}, lastShownByKey: {} };
+  if (typeof window === "undefined") return { lastShown: {}, lastShownByKey: {}, dismissed: {} };
   try {
     const raw = window.localStorage.getItem(onboardingUiStorageKey);
     const parsed = raw ? JSON.parse(raw) : {};
     return {
       lastShown: parsed.lastShown || {},
       lastShownByKey: parsed.lastShownByKey || {},
+      dismissed: parsed.dismissed || {},
     };
   } catch (err) {
-    return { lastShown: {}, lastShownByKey: {} };
+    return { lastShown: {}, lastShownByKey: {}, dismissed: {} };
   }
 };
 const setOnboardingUiState = (state) => {
@@ -280,7 +281,14 @@ const isWithinQuietHours = (date, start, end) => {
   if (start < end) return hour >= start && hour < end;
   return hour >= start || hour < end;
 };
+const markPermanentlyDismissed = (type) => {
+  const state = getOnboardingUiState();
+  state.dismissed = { ...(state.dismissed || {}), [type]: true };
+  setOnboardingUiState(state);
+};
 const isPopupAllowed = (type, key) => {
+  const state = getOnboardingUiState();
+  if (state.dismissed?.[type]) return false;
   const configState = onboardingUiConfig.value;
   const now = new Date();
   if (configState.quietAppliesTo.includes(type)) {
@@ -290,7 +298,6 @@ const isPopupAllowed = (type, key) => {
   }
   const capHours = configState.capHours[type] || 0;
   if (capHours > 0) {
-    const state = getOnboardingUiState();
     const lastShown = state.lastShown?.[type];
     if (lastShown && now.getTime() - Number(lastShown) < capHours * 3600000) {
       return false;
@@ -450,6 +457,7 @@ const syncOnboardingState = () => {
       trackOnboardingUi("shown", { type: "welcome" });
     }
     markPopupShown("welcome");
+    markPermanentlyDismissed("welcome");
   }
   const wantsVideo = !showWelcomeDialog.value && Boolean(onboarding.showWelcomeVideoPopup);
   showVideoDialog.value = wantsVideo && isPopupAllowed("video");
@@ -459,6 +467,7 @@ const syncOnboardingState = () => {
       trackOnboardingUi("shown", { type: "video" });
     }
     markPopupShown("video");
+    markPermanentlyDismissed("video");
   }
   const messages = Array.isArray(onboarding.inAppMessages)
     ? onboarding.inAppMessages

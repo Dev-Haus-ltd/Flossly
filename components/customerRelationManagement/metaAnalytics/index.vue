@@ -41,6 +41,26 @@
       </div>
     </div>
 
+    <!-- Campaign bar chart + summary metrics -->
+    <div v-if="chartCampaigns.length" class="mt-5 px-5">
+      <v-card elevation="0" border rounded="lg" class="pa-5 chart-card">
+        <div class="chart-header mb-3 d-flex align-center justify-space-between">
+          <p class="chart-title">Campaign Spend Overview</p>
+          <span class="chart-period-label">{{ periodLabel }}</span>
+        </div>
+        <div style="height: 200px; position: relative;">
+          <canvas ref="chartCanvas"></canvas>
+        </div>
+        <v-divider class="my-4" />
+        <div class="summary-metrics">
+          <div v-for="(m, i) in summaryMetrics" :key="i" class="summary-item">
+            <p class="summary-label">{{ m.label }}</p>
+            <p class="summary-value">{{ m.value }}</p>
+          </div>
+        </div>
+      </v-card>
+    </div>
+
     <div class="mt-5 px-5">
       <v-sheet
         v-if="showDisconnectedBanner"
@@ -233,13 +253,22 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useCrmStore } from '@/stores/crm';
 import { useMainStore } from '@/stores';
 import { useUser } from '@/composables/useUser';
 import instagramIcon from '@/assets/crm/instagram.svg';
 import facebookIcon from '@/assets/crm/facebook.svg';
 import searchicon from '@/assets/icons/listView/serach-icon.svg';
+import {
+  Chart,
+  BarController,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  Tooltip,
+} from 'chart.js';
+Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
 
 const crmStore = useCrmStore();
 const mainStore = useMainStore();
@@ -1080,6 +1109,89 @@ const drillEmptyCopy = computed(() => {
   if (drill.level >= 1) return 'Run a Sync Now to refresh the latest structure from Meta.';
   return emptyStateCopy.value;
 });
+
+// ─── Chart ────────────────────────────────────────────────────────────────────
+// Only show campaign-level bars at drill level 0; max 10 campaigns for readability
+const chartCampaigns = computed(() =>
+  drill.level === 0 ? campaigns.value.filter(Boolean).slice(0, 10) : []
+);
+
+const statLinkClicks = computed(() =>
+  campaignInsightsInRange.value.reduce((sum, i) => sum + Number(i.linkClicks || 0), 0)
+);
+const statCpl = computed(() => {
+  const spend = statSpend.value / 100;
+  if (!statMetaLeads.value || !spend) return '—';
+  return `${currencySymbol.value}${(spend / statMetaLeads.value).toFixed(2)}`;
+});
+const statCtr = computed(() => {
+  if (!statImpressions.value) return '0%';
+  return `${((statLinkClicks.value / statImpressions.value) * 100).toFixed(1)}%`;
+});
+const summaryMetrics = computed(() => {
+  const sym = currencySymbol.value;
+  return [
+    { label: 'Total Ad Spend', value: `${sym}${(statSpend.value / 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+    { label: 'Leads Generated', value: String(statMetaLeads.value) },
+    { label: 'Cost Per Lead', value: statCpl.value },
+    { label: 'CTR', value: statCtr.value },
+    { label: 'Impressions', value: statImpressions.value.toLocaleString() },
+  ];
+});
+
+const chartCanvas = ref(null);
+let chartInstance = null;
+
+const renderChart = () => {
+  if (!chartCanvas.value) return;
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  const cards = chartCampaigns.value;
+  if (!cards.length) return;
+  const sym = currencySymbol.value;
+  chartInstance = new Chart(chartCanvas.value, {
+    type: 'bar',
+    data: {
+      labels: cards.map((c) => c.title.length > 20 ? c.title.slice(0, 20) + '…' : c.title),
+      datasets: [{
+        data: cards.map((c) => +(Number(c.spendMajor || 0).toFixed(2))),
+        backgroundColor: '#171952',
+        borderRadius: 6,
+        borderSkipped: false,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${sym}${Number(ctx.parsed.y).toFixed(2)}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 }, maxRotation: 30, minRotation: 0 },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: '#f3f4f6' },
+          ticks: {
+            font: { size: 11 },
+            callback: (v) => `${sym}${v}`,
+          },
+        },
+      },
+    },
+  });
+};
+
+watch(chartCampaigns, () => { nextTick(renderChart); }, { deep: true });
+watch(insightsInRange, () => { nextTick(renderChart); });
+onMounted(() => { nextTick(renderChart); });
+onBeforeUnmount(() => { if (chartInstance) { chartInstance.destroy(); chartInstance = null; } });
 </script>
 
 <style scoped lang="scss">
@@ -1192,6 +1304,59 @@ const drillEmptyCopy = computed(() => {
 @media (max-width: 480px) {
   .stats-container {
     gap: 8px;
+  }
+}
+
+/* Chart card */
+.chart-card {
+  background: #fff;
+}
+.chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+.chart-period-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+.chart-header {
+  gap: 8px;
+}
+
+/* Summary metrics row */
+.summary-metrics {
+  display: flex;
+  gap: 0;
+}
+.summary-item {
+  flex: 1;
+  border-right: 1px solid #f3f4f6;
+  padding: 4px 16px 4px 0;
+  &:last-child { border-right: none; }
+  &:first-child { padding-left: 0; }
+}
+.summary-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0 0 2px;
+}
+.summary-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .summary-metrics {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .summary-item {
+    flex: 1 1 45%;
+    border-right: none;
   }
 }
 </style>

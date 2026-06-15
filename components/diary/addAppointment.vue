@@ -447,6 +447,7 @@ const applyIncomingAppointmentState = () => {
 
   if (
     timeOptions.value.length &&
+    !props.initialTime &&
     (!time.value || !timeOptions.value.includes(time.value))
   ) {
     time.value = timeOptions.value[0] || "";
@@ -602,6 +603,7 @@ const saveNewTreatment = async () => {
 watch(duration, () => {
   if (
     timeOptions.value.length &&
+    !props.initialTime &&
     (!time.value || !timeOptions.value.includes(time.value))
   ) {
     time.value = timeOptions.value[0] || "";
@@ -642,6 +644,7 @@ watch(
       await loadDentistSchedules(orgId, Number(nextPractitioner));
       if (
         timeOptions.value.length &&
+        !props.initialTime &&
         time.value &&
         !timeOptions.value.includes(time.value)
       ) {

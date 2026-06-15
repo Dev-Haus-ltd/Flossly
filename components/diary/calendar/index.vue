@@ -189,6 +189,7 @@
                 :show-resize-handles="true"
                 :style-obj="getApptOverlayStyle(appt, dent.id)"
                 :status-colors="statusColors"
+                :demo-mode="demoDiary"
                 :override-start="
                   resizing.active && resizing.appt?.id === appt.id
                     ? toHHMM(resizing.curStart)
@@ -370,6 +371,8 @@ const emit = defineEmits([
 
 const router = useRouter();
 const route = useRoute();
+const config = useRuntimeConfig();
+const demoDiary = computed(() => !!config.public?.DEMO_DIARY);
 // ─── Constants ────────────────────────────────────────────────────────────────
 // WORK_START and WORK_END are now computed properties based on dentist schedules (see Derived section)
 // FALLBACK values if no schedule is available
@@ -955,6 +958,7 @@ const onCellClick = (dent, slot, minute = slot.minute) =>
   emit("slot-click", { dentist: dent, hour: slot.hour, minute });
 
 const onCellClickGuard = (event, dent, slot) => {
+  if (dragJustCompleted) { dragJustCompleted = false; return; }
   if (dragCreate.mouseDown || dragCreate.active) return;
 
   const clicked = getMinutesFromMouse(event, event.currentTarget);
@@ -992,6 +996,7 @@ const openPatient = (appt) => {
 };
 
 // ─── Drag-to-create ───────────────────────────────────────────────────────────
+let dragJustCompleted = false; // prevents the trailing click from re-firing slot-click
 const dragCreate = reactive({
   mouseDown: false,
   active: false,
@@ -1054,17 +1059,23 @@ function onGlobalMouseMove(event) {
     dragCreate.endMins = dragCreate.startMins + INTERVAL_MINS;
     dragCreate.startMins = cur;
   } else {
-    dragCreate.endMins = cur + INTERVAL_MINS;
+    // cursor position = end time; minimum 1 slot
+    dragCreate.endMins = Math.max(cur, dragCreate.startMins + INTERVAL_MINS);
   }
 }
 
 function onGlobalMouseUp() {
   if (!dragCreate.mouseDown) return;
-  const { startMins, endMins, dentistId } = dragCreate;
+  const { startMins, endMins, dentistId, active } = dragCreate;
   window.removeEventListener("mousemove", onGlobalMouseMove);
   window.removeEventListener("mouseup", onGlobalMouseUp);
   dragCreate.mouseDown = false;
   dragCreate.active = false;
+  // If the user just clicked (no drag movement), let onCellClickGuard handle it
+  if (!active) {
+    resetDragCreate();
+    return;
+  }
   if (startMins === null || endMins === null || endMins <= startMins) {
     resetDragCreate();
     return;
@@ -1072,6 +1083,7 @@ function onGlobalMouseUp() {
   const dentist = visibleDentists.value.find(
     (d) => String(d.id) === String(dentistId),
   );
+  dragJustCompleted = true; // suppress the trailing click event
   emit("slot-click", {
     dentist,
     hour: Math.floor(startMins / 60),
