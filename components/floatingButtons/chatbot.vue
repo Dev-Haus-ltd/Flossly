@@ -303,7 +303,7 @@
                       v-html="renderMarkdown(message.message)"
                     />
                     <p v-else>{{ String(message.message || '').replace(/\s+$/g, '') }}</p>
-                    
+
                     <!-- Attachments -->
                     <div v-if="message.attachments && message.attachments.length > 0" class="message-attachments">
                       <div
@@ -317,15 +317,37 @@
                         <span class="attachment-size">({{ formatFileSize(attachment.fileSize) }})</span>
                       </div>
                     </div>
-                    
+
                     <span class="message-time">{{ formatMessageTime(message.createdAt) }}</span>
+
+                    <!-- Export buttons for AI messages with tables or long content -->
+                    <div
+                      v-if="selectedOption?.id === 'ask-question' && message.senderType === 'ai' && !message.id?.toString().startsWith('stream-') && message.message?.length > 100"
+                      class="export-buttons"
+                    >
+                      <button v-if="hasTable(message.message)" class="export-btn" @click="downloadCSV(message.message)">
+                        <v-icon size="12">mdi-microsoft-excel</v-icon> Excel
+                      </button>
+                      <button class="export-btn" @click="downloadMarkdown(message.message)">
+                        <v-icon size="12">mdi-file-pdf-box</v-icon> PDF
+                      </button>
+                    </div>
                   </div>
                 </div>
 
               </template>
 
-              <!-- Typing indicator - shows at the end while waiting -->
-              <div v-if="isWaitingForResponse" class="bot-message typing-indicator-wrapper">
+              <!-- Streaming message - live text from SSE -->
+              <div v-if="streamingMessage" class="bot-message message-fade-in">
+                <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="bot-logo" />
+                <div class="bot-message-bubble">
+                  <div class="markdown-content" v-html="renderMarkdown(streamingMessage)" />
+                  <span class="streaming-cursor">▋</span>
+                </div>
+              </div>
+
+              <!-- Typing indicator - shows while waiting before streaming starts -->
+              <div v-if="isWaitingForResponse && !streamingMessage" class="bot-message typing-indicator-wrapper">
                 <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="bot-logo" />
                 <div class="bot-message-bubble typing-indicator-bubble">
                   <div class="typing-indicator">
@@ -673,23 +695,45 @@ const handleFCMNotification = (notification) => {
 // Watch for FCM notifications at the component level (not inside onMounted)
 let stopWatchingNotifications = null;
 
+const openChatbotConversation = async (conversationId) => {
+  isOpen.value = true;
+  await fetchConversations();
+  if (conversationId) {
+    const conv = allConversations.value.find(c => c.id === conversationId);
+    if (conv) openConversation(conv);
+  }
+};
+
+const handleSwMessage = (event) => {
+  if (event.data?.type === 'OPEN_CHATBOT') {
+    openChatbotConversation(event.data.conversationId);
+  }
+};
+
+const handleOpenChatbotEvent = (event) => {
+  openChatbotConversation(event.detail?.conversationId);
+};
+
 onMounted(() => {
-  // Set up FCM notification watcher
   stopWatchingNotifications = watch(lastNotification, handleFCMNotification, { immediate: true });
-  
-  // Fetch conversations when component mounts
   fetchConversations();
+  window.addEventListener('message', handleSwMessage);
+  window.addEventListener('open-chatbot', handleOpenChatbotEvent);
 });
 
+
+
 onUnmounted(() => {
-  // Stop watching notifications
-  if (stopWatchingNotifications) {
-    stopWatchingNotifications();
-  }
+  if (stopWatchingNotifications) stopWatchingNotifications();
+  if (activeEventSource) { activeEventSource.close(); activeEventSource = null; }
+  window.removeEventListener('message', handleSwMessage);
+  window.removeEventListener('open-chatbot', handleOpenChatbotEvent);
 });
 
 const isSubmitting = ref(false);
 const isWaitingForResponse = ref(false);
+const streamingMessage = ref('');
+let activeEventSource = null;
 const allConversations = ref([]);
 const loadingConversations = ref(false);
 const currentMessages = ref([]);
@@ -775,13 +819,14 @@ const fetchConversations = async () => {
     loadingConversations.value = true;
     const response = await supportChatService.getConversations({
       limit: 50,
-      offset: 0
+      offset: 0,
+      widgetView: true,
     });
     
     if (response.success) {
-      allConversations.value = response.data.map(conv => ({
+allConversations.value = response.data.map(conv => ({
         ...conv,
-        unreadCount: conv.messages?.filter(m => !m.isRead && (m.senderType === 'support' || m.senderType === 'admin')).length || 0
+        unreadCount: conv.messages?.filter(m => !m.isRead && (m.senderType === 'support' || m.senderType === 'admin' || m.senderType === 'ai')).length || 0
       }));
     }
   } catch (error) {
@@ -953,12 +998,15 @@ const handleActionOption = (optionId) => {
 };
 
 const goBack = () => {
+  if (activeEventSource) { activeEventSource.close(); activeEventSource = null; }
+  streamingMessage.value = '';
+  isWaitingForResponse.value = false;
   isChatView.value = false;
   selectedOption.value = null;
   userMessage.value = '';
-  attachedFiles.value = []; // Clear attached files
-  showBugAnnotation.value = false; // Close annotation if open
-  showScreenRecorder.value = false; // Close recorder if open
+  attachedFiles.value = [];
+  showBugAnnotation.value = false;
+  showScreenRecorder.value = false;
   currentConversationId.value = null;
   
   // Clear welcome message
@@ -1048,30 +1096,9 @@ const sendMessage = async () => {
       currentMessages.value = currentMessages.value.filter(m => m.id !== tempUserMessage.id);
       currentMessages.value.push(response.data);
       
-      // For ask-question flow, handle bot response directly from API
-      if (selectedOption.value?.id === 'ask-question') {
-        if (response.botResponse) {
-          console.log('Bot response received directly from API:', response.botResponse);
-          
-          // Add bot response to messages
-          currentMessages.value.push(response.botResponse);
-          
-          // Hide typing indicator
-          isWaitingForResponse.value = false;
-          
-          // Scroll to show bot response
-          await nextTick();
-          await scrollToBottomSoon();
-        } else {
-          // If no bot response received, hide typing indicator after a timeout
-          console.warn('No bot response received from API for ask-question flow');
-          setTimeout(() => {
-            if (isWaitingForResponse.value) {
-              isWaitingForResponse.value = false;
-              console.log('Typing indicator hidden after timeout');
-            }
-          }, 30000); // 30 second timeout
-        }
+      // For ask-question flow, open SSE stream for bot response
+      if (selectedOption.value?.id === 'ask-question' && response.streaming) {
+        openStreamingResponse(currentConversationId.value);
       }
       
       // Upload attachments if any
@@ -1110,6 +1137,139 @@ const sendMessage = async () => {
 
 // Bug reports and feature requests are now stored as conversation metadata
 // when the conversation is created - no separate functions needed
+
+const openStreamingResponse = (conversationId) => {
+  // Close any previous stream
+  if (activeEventSource) {
+    activeEventSource.close();
+    activeEventSource = null;
+  }
+
+  streamingMessage.value = '';
+  const es = new EventSource(`/api/reportingBot/stream?conversationId=${conversationId}`);
+  activeEventSource = es;
+
+  es.onmessage = async (event) => {
+    try {
+      const data = JSON.parse(event.data);
+
+      if (data.chunk) {
+        streamingMessage.value += data.chunk;
+        await nextTick();
+        scrollToBottom();
+      }
+
+      if (data.done || data.error) {
+        es.close();
+        activeEventSource = null;
+        isWaitingForResponse.value = false;
+
+        if (data.message) {
+          currentMessages.value.push(data.message);
+        }
+        streamingMessage.value = '';
+
+        await nextTick();
+        await scrollToBottomSoon();
+      }
+    } catch (e) {
+      console.error('Stream parse error:', e);
+    }
+  };
+
+  es.onerror = () => {
+    es.close();
+    activeEventSource = null;
+    isWaitingForResponse.value = false;
+    streamingMessage.value = '';
+  };
+};
+
+// Export helpers
+const hasTable = (text) => /^\|.+\|/m.test(text || '');
+
+const stripMd = (s) => s.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').trim();
+
+const parseMarkdownTables = (text) => {
+  const tables = [];
+  const lines = (text || '').split('\n');
+  let current = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('|')) {
+      if (/^\|[\s|:-]+\|$/.test(trimmed)) continue; // separator row
+      const cells = trimmed.split('|').slice(1, -1).map(c => stripMd(c));
+      if (!current) {
+        current = { headers: cells, rows: [] };
+      } else {
+        current.rows.push(cells);
+      }
+    } else {
+      if (current) { tables.push(current); current = null; }
+    }
+  }
+  if (current) tables.push(current);
+  return tables;
+};
+
+const downloadCSV = async (messageText) => {
+  const XLSX = await import('xlsx');
+  const tables = parseMarkdownTables(messageText);
+  if (!tables.length) return;
+
+  const wb = XLSX.utils.book_new();
+
+  tables.forEach((table, i) => {
+    const ws = XLSX.utils.aoa_to_sheet([table.headers, ...table.rows]);
+
+    // Bold header row
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cell = ws[XLSX.utils.encode_cell({ r: 0, c: col })];
+      if (cell) cell.s = { font: { bold: true } };
+    }
+
+    // Auto column widths
+    ws['!cols'] = table.headers.map((h, ci) => ({
+      wch: Math.max(h.length, ...table.rows.map(r => (r[ci] || '').length), 10)
+    }));
+
+    XLSX.utils.book_append_sheet(wb, ws, `Table ${i + 1}`);
+  });
+
+  XLSX.writeFile(wb, `report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+};
+
+const downloadMarkdown = (messageText) => {
+  const html = renderMarkdown(messageText || '');
+  const date = new Date().toLocaleDateString('en-GB', { dateStyle: 'long' });
+  const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Practice Report — ${date}</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 40px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.6; }
+      h1,h2,h3 { margin: 20px 0 10px; font-weight: 600; }
+      table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+      th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+      th { background: #f5f5f5; font-weight: 600; }
+      p { margin: 8px 0; }
+      .header { border-bottom: 2px solid #0061FB; padding-bottom: 12px; margin-bottom: 24px; }
+      .header h1 { color: #0061FB; margin: 0; font-size: 20px; }
+      .header small { color: #888; font-size: 13px; }
+    </style>
+  </head><body>
+    <div class="header"><h1>Practice Report</h1><small>${date}</small></div>
+    ${html}
+  </body></html>`;
+  const blob = new Blob([fullHtml], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+};
 
 const getBotMessage = () => {
   switch (selectedOption.value?.id) {
@@ -2025,6 +2185,50 @@ watch(showBugAnnotation, (val) => {
   border: none;
   border-top: 1px solid #e0e0e0;
   margin: 12px 0;
+}
+
+/* Streaming cursor */
+.streaming-cursor {
+  display: inline-block;
+  animation: blink 0.7s step-end infinite;
+  color: #0061FB;
+  font-size: 14px;
+  line-height: 1;
+  vertical-align: middle;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* Export buttons */
+.export-buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 20px;
+  background: white;
+  color: #555;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.export-btn:hover {
+  border-color: #0061FB;
+  color: #0061FB;
+  background: #f0f6ff;
 }
 
 /* Typing Indicator */

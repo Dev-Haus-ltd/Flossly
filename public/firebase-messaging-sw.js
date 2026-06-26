@@ -185,6 +185,10 @@ self.addEventListener('notificationclick', (event) => {
           ? `/crm/dms?conversationId=${notificationData.conversationId}`
           : '/crm/dms');
         break;
+      case 'chatbot_message':
+      case 'support_reply':
+        urlToOpen = '__OPEN_CHATBOT__';
+        break;
       default:
         urlToOpen = notificationData.url || '/';
     }
@@ -208,25 +212,33 @@ self.addEventListener('notificationclick', (event) => {
     }
   };
 
-  urlToOpen = appendOrgId(urlToOpen);
+  const isChatbotOpen = urlToOpen === '__OPEN_CHATBOT__';
+  if (!isChatbotOpen) urlToOpen = appendOrgId(urlToOpen);
 
-  // Open the URL in a window
-  const absoluteUrl = new URL(urlToOpen, self.location.origin).href;
+  const absoluteUrl = isChatbotOpen
+    ? new URL('/', self.location.origin).href
+    : new URL(urlToOpen, self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
-      // Check if there's already a window open
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
         if (client.url.startsWith(self.location.origin) && 'focus' in client) {
           const focusedClient = await client.focus();
-          // Post SW_NAVIGATE so the Vue router handles SPA navigation (no full reload).
-          // Falls back to navigate() if postMessage isn't available.
           if (focusedClient) {
             try {
-              focusedClient.postMessage({ type: 'SW_NAVIGATE', url: urlToOpen });
+              if (isChatbotOpen) {
+                focusedClient.postMessage({
+                  type: 'OPEN_CHATBOT',
+                  conversationId: notificationData.conversationId
+                    ? parseInt(notificationData.conversationId)
+                    : null,
+                });
+              } else {
+                focusedClient.postMessage({ type: 'SW_NAVIGATE', url: urlToOpen });
+              }
             } catch (_) {
-              if ('navigate' in focusedClient) {
+              if (!isChatbotOpen && 'navigate' in focusedClient) {
                 focusedClient.navigate(absoluteUrl);
               }
             }
@@ -234,7 +246,6 @@ self.addEventListener('notificationclick', (event) => {
           return;
         }
       }
-      // If no window is open, open a new one with an absolute URL
       if (clients.openWindow) {
         return clients.openWindow(absoluteUrl);
       }

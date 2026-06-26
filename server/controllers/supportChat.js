@@ -218,15 +218,21 @@ export const getConversations = async (event) => {
     const supportAgent = await isSupportAgent(user);
 
     const organisationId = user.orgId;
-    const where = supportAgent ? {} : { organisationId };
-    
+
+    // widgetView=true means the user is fetching their own conversations from the chatbot widget.
+    // Always scope to userId so each user sees only their own threads, regardless of role.
+    const isWidgetView = query.widgetView === 'true'
+    const where = isWidgetView
+      ? { organisationId, userId: user.userId }
+      : { organisationId }
+
     if (status) where.status = status;
 
     // Support agents don't need AI 'ask-question' conversations in the support inbox.
     // If a conversationType filter is explicitly provided, honor it.
     if (conversationType) {
       where.conversationType = conversationType;
-    } else if (supportAgent) {
+    } else if (!isWidgetView && supportAgent) {
       // Default inbox view: exclude AI Q&A conversations
       where.conversationType = { [Op.ne]: 'ask-question' };
     }
@@ -467,8 +473,7 @@ export const createMessage = async (event) => {
     });
 
     // Send FCM notification to the conversation participant
-    // Skip FCM for ask-question flow (response is returned directly in API)
-    // If message is from support, notify the user. If from user, notify support agents.
+    // If message is from support/ai, notify the user. If from user, notify support agents.
     if (conversation.conversationType !== 'ask-question') {
       if (senderType === 'support' || senderType === 'admin') {
         // Notify the user who created the conversation
@@ -483,89 +488,10 @@ export const createMessage = async (event) => {
     conversation.lastMessageAt = new Date();
     await conversation.save();
 
-    // Send to webhook if conversation type is 'ask-question' and wait for response
+    // Reporting bot handles all 'ask-question' conversations via SSE streaming
     if (conversation.conversationType === 'ask-question' && senderType === 'user') {
-      try {
-        const webhookUrl = 'https://n8n.flossly.ai/webhook/27c316ad-0504-4357-bb8d-f7193472d3a0';
-        
-        const webhookPayload = {
-          conversationId: conversation.id,
-          messageId: newMessage.id,
-          message: message,
-          user: {
-            id: user.userId,
-            name: conversation.user?.fullName,
-            email: conversation.user?.email
-          },
-          conversationType: conversation.conversationType,
-          subject: conversation.subject,
-          timestamp: new Date().toISOString()
-        };
-
-        // Send to webhook and WAIT for response
-        const webhookResponse = await $fetch(webhookUrl, {
-          method: 'POST',
-          body: webhookPayload
-        });
-
-        // Create bot response message with the webhook response
-        if (webhookResponse) {
-          // Extract the actual message from various possible response formats
-          let messageText = '';
-          
-          if (typeof webhookResponse === 'string') {
-            messageText = webhookResponse;
-          } else if (webhookResponse.output) {
-            messageText = webhookResponse.output;
-          } else if (webhookResponse.message) {
-            messageText = webhookResponse.message;
-          } else if (webhookResponse.response) {
-            messageText = webhookResponse.response;
-          } else if (webhookResponse.text) {
-            messageText = webhookResponse.text;
-          } else {
-            // Fallback to JSON string if no recognized field
-            messageText = JSON.stringify(webhookResponse, null, 2);
-          }
-          
-          const botMessage = await ChatbotMessage.create({
-            conversationId,
-            senderId: null, // Bot message, no specific sender
-            senderType: 'ai',
-            message: messageText,
-            isRead: false
-          });
-
-          // Return BOTH user message and bot response for ask-question flow
-          setResponseStatus(event, 201);
-          return {
-            success: true,
-            data: newMessage,
-            botResponse: botMessage.toJSON() // Include bot response in the API response
-          };
-        }
-
-      } catch (webhookError) {
-        // Log webhook errors but don't fail the message creation
-        console.error('>>> Failed to send webhook:', webhookError);
-        
-        // Create error message for user
-        const errMsg = await ChatbotMessage.create({
-          conversationId,
-          senderId: null,
-          senderType: 'ai',
-          message: 'Sorry, I encountered an error processing your request. Please try again later.',
-          isRead: false
-        });
-
-        // Return error response
-        setResponseStatus(event, 201);
-        return {
-          success: true,
-          data: newMessage,
-          botResponse: errMsg.toJSON() // Include error message in the API response
-        };
-      }
+      setResponseStatus(event, 201)
+      return { success: true, data: newMessage, streaming: true }
     }
 
     setResponseStatus(event, 201);
