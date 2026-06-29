@@ -296,13 +296,7 @@
                 <div v-else-if="message.senderType === 'support' || message.senderType === 'admin' || message.senderType === 'bot' || message.senderType === 'ai'" class="bot-message message-fade-in">
                   <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="bot-logo" />
                   <div class="bot-message-bubble">
-                    <!-- Only render markdown for AI answers in the Ask a question flow -->
-                    <div
-                      v-if="selectedOption?.id === 'ask-question' && message.senderType === 'ai'"
-                      class="markdown-content"
-                      v-html="renderMarkdown(message.message)"
-                    />
-                    <p v-else>{{ String(message.message || '').replace(/\s+$/g, '') }}</p>
+                    <p>{{ String(message.message || '').replace(/\s+$/g, '') }}</p>
 
                     <!-- Attachments -->
                     <div v-if="message.attachments && message.attachments.length > 0" class="message-attachments">
@@ -319,44 +313,10 @@
                     </div>
 
                     <span class="message-time">{{ formatMessageTime(message.createdAt) }}</span>
-
-                    <!-- Export buttons for AI messages with tables or long content -->
-                    <div
-                      v-if="selectedOption?.id === 'ask-question' && message.senderType === 'ai' && !message.id?.toString().startsWith('stream-') && message.message?.length > 100"
-                      class="export-buttons"
-                    >
-                      <button v-if="hasTable(message.message)" class="export-btn" @click="downloadCSV(message.message)">
-                        <v-icon size="12">mdi-microsoft-excel</v-icon> Excel
-                      </button>
-                      <button class="export-btn" @click="downloadMarkdown(message.message)">
-                        <v-icon size="12">mdi-file-pdf-box</v-icon> PDF
-                      </button>
-                    </div>
                   </div>
                 </div>
 
               </template>
-
-              <!-- Streaming message - live text from SSE -->
-              <div v-if="streamingMessage" class="bot-message message-fade-in">
-                <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="bot-logo" />
-                <div class="bot-message-bubble">
-                  <div class="markdown-content" v-html="renderMarkdown(streamingMessage)" />
-                  <span class="streaming-cursor">▋</span>
-                </div>
-              </div>
-
-              <!-- Typing indicator - shows while waiting before streaming starts -->
-              <div v-if="isWaitingForResponse && !streamingMessage" class="bot-message typing-indicator-wrapper">
-                <img src="@/assets/icons/Support/message-icon.svg" alt="Flossly" class="bot-logo" />
-                <div class="bot-message-bubble typing-indicator-bubble">
-                  <div class="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              </div>
 
               <!-- Bottom sentinel for reliable scroll-to-last-message -->
               <div ref="bottomSentinel" style="height: 1px;"></div>
@@ -661,11 +621,6 @@ const handleFCMNotification = (notification) => {
               (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
             );
             
-            // Hide typing indicator when bot/AI responds
-            if (message.senderType === 'bot' || message.senderType === 'ai') {
-              isWaitingForResponse.value = false;
-            }
-            
             nextTick(() => scrollToBottom());
           }
         }
@@ -695,45 +650,16 @@ const handleFCMNotification = (notification) => {
 // Watch for FCM notifications at the component level (not inside onMounted)
 let stopWatchingNotifications = null;
 
-const openChatbotConversation = async (conversationId) => {
-  isOpen.value = true;
-  await fetchConversations();
-  if (conversationId) {
-    const conv = allConversations.value.find(c => c.id === conversationId);
-    if (conv) openConversation(conv);
-  }
-};
-
-const handleSwMessage = (event) => {
-  if (event.data?.type === 'OPEN_CHATBOT') {
-    openChatbotConversation(event.data.conversationId);
-  }
-};
-
-const handleOpenChatbotEvent = (event) => {
-  openChatbotConversation(event.detail?.conversationId);
-};
-
 onMounted(() => {
   stopWatchingNotifications = watch(lastNotification, handleFCMNotification, { immediate: true });
   fetchConversations();
-  window.addEventListener('message', handleSwMessage);
-  window.addEventListener('open-chatbot', handleOpenChatbotEvent);
 });
-
-
 
 onUnmounted(() => {
   if (stopWatchingNotifications) stopWatchingNotifications();
-  if (activeEventSource) { activeEventSource.close(); activeEventSource = null; }
-  window.removeEventListener('message', handleSwMessage);
-  window.removeEventListener('open-chatbot', handleOpenChatbotEvent);
 });
 
 const isSubmitting = ref(false);
-const isWaitingForResponse = ref(false);
-const streamingMessage = ref('');
-let activeEventSource = null;
 const allConversations = ref([]);
 const loadingConversations = ref(false);
 const currentMessages = ref([]);
@@ -824,10 +750,12 @@ const fetchConversations = async () => {
     });
     
     if (response.success) {
-allConversations.value = response.data.map(conv => ({
-        ...conv,
-        unreadCount: conv.messages?.filter(m => !m.isRead && (m.senderType === 'support' || m.senderType === 'admin' || m.senderType === 'ai')).length || 0
-      }));
+      allConversations.value = response.data
+        .filter(conv => conv.conversationType !== 'reporting-bot')
+        .map(conv => ({
+          ...conv,
+          unreadCount: conv.messages?.filter(m => !m.isRead && (m.senderType === 'support' || m.senderType === 'admin' || m.senderType === 'ai')).length || 0
+        }));
     }
   } catch (error) {
     console.error('Failed to fetch conversations:', error);
@@ -998,9 +926,6 @@ const handleActionOption = (optionId) => {
 };
 
 const goBack = () => {
-  if (activeEventSource) { activeEventSource.close(); activeEventSource = null; }
-  streamingMessage.value = '';
-  isWaitingForResponse.value = false;
   isChatView.value = false;
   selectedOption.value = null;
   userMessage.value = '';
@@ -1052,11 +977,6 @@ const sendMessage = async () => {
     userMessage.value = '';
     await nextTick();
     
-    // Show typing indicator for ask-question flow
-    if (selectedOption.value?.id === 'ask-question') {
-      isWaitingForResponse.value = true;
-    }
-    
     // If no conversation exists, create one first
     if (!currentConversationId.value) {
       const metadata = {
@@ -1096,11 +1016,6 @@ const sendMessage = async () => {
       currentMessages.value = currentMessages.value.filter(m => m.id !== tempUserMessage.id);
       currentMessages.value.push(response.data);
       
-      // For ask-question flow, open SSE stream for bot response
-      if (selectedOption.value?.id === 'ask-question' && response.streaming) {
-        openStreamingResponse(currentConversationId.value);
-      }
-      
       // Upload attachments if any
       if (attachedFiles.value.length > 0) {
         await uploadAttachments(response.data.id);
@@ -1128,7 +1043,6 @@ const sendMessage = async () => {
   } catch (error) {
     console.error('Error sending message:', error);
     alert('Failed to send message. Please try again.');
-    isWaitingForResponse.value = false; // Hide typing indicator on error
     isSubmitting.value = false; // Re-enable input on error
   }
 };
@@ -1137,53 +1051,6 @@ const sendMessage = async () => {
 
 // Bug reports and feature requests are now stored as conversation metadata
 // when the conversation is created - no separate functions needed
-
-const openStreamingResponse = (conversationId) => {
-  // Close any previous stream
-  if (activeEventSource) {
-    activeEventSource.close();
-    activeEventSource = null;
-  }
-
-  streamingMessage.value = '';
-  const es = new EventSource(`/api/reportingBot/stream?conversationId=${conversationId}`);
-  activeEventSource = es;
-
-  es.onmessage = async (event) => {
-    try {
-      const data = JSON.parse(event.data);
-
-      if (data.chunk) {
-        streamingMessage.value += data.chunk;
-        await nextTick();
-        scrollToBottom();
-      }
-
-      if (data.done || data.error) {
-        es.close();
-        activeEventSource = null;
-        isWaitingForResponse.value = false;
-
-        if (data.message) {
-          currentMessages.value.push(data.message);
-        }
-        streamingMessage.value = '';
-
-        await nextTick();
-        await scrollToBottomSoon();
-      }
-    } catch (e) {
-      console.error('Stream parse error:', e);
-    }
-  };
-
-  es.onerror = () => {
-    es.close();
-    activeEventSource = null;
-    isWaitingForResponse.value = false;
-    streamingMessage.value = '';
-  };
-};
 
 // Export helpers
 const hasTable = (text) => /^\|.+\|/m.test(text || '');

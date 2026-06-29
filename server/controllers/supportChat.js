@@ -474,25 +474,15 @@ export const createMessage = async (event) => {
 
     // Send FCM notification to the conversation participant
     // If message is from support/ai, notify the user. If from user, notify support agents.
-    if (conversation.conversationType !== 'ask-question') {
-      if (senderType === 'support' || senderType === 'admin') {
-        // Notify the user who created the conversation
-        await notifyNewMessage(conversationId, newMessage.toJSON(), conversation.userId);
-      } else if (senderType === 'user') {
-        // Notify all support agents about the new user message
-        await notifySupportAgents(conversationId, newMessage.toJSON(), conversation);
-      }
+    if (senderType === 'support' || senderType === 'admin') {
+      await notifyNewMessage(conversationId, newMessage.toJSON(), conversation.userId);
+    } else if (senderType === 'user') {
+      await notifySupportAgents(conversationId, newMessage.toJSON(), conversation);
     }
 
     // Update conversation lastMessageAt
     conversation.lastMessageAt = new Date();
     await conversation.save();
-
-    // Reporting bot handles all 'ask-question' conversations via SSE streaming
-    if (conversation.conversationType === 'ask-question' && senderType === 'user') {
-      setResponseStatus(event, 201)
-      return { success: true, data: newMessage, streaming: true }
-    }
 
     setResponseStatus(event, 201);
     return {

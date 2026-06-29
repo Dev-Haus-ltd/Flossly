@@ -195,15 +195,6 @@ const handleNotificationClick = async (notification) => {
     await markAsRead(notification.id);
   }
 
-  if (notification.type === 'chatbot_message') {
-    menu.value = false;
-    const convId = notification.data?.conversationId
-      ? parseInt(notification.data.conversationId)
-      : null;
-    window.dispatchEvent(new CustomEvent('open-chatbot', { detail: { conversationId: convId } }));
-    return;
-  }
-
   const url = buildNotificationUrl(notification);
   menu.value = false;
   if (!url) return;

@@ -7,6 +7,7 @@ import flosslyDocs from '@/assets/icons/mainDrawerIcons/docs.svg'
 import crmIcon from '@/assets/icons/mainDrawerIcons/crm.svg'
 import academyIcon from '@/assets/icons/mainDrawerIcons/academy.svg'
 import settingsIcon from '@/assets/icons/mainDrawerIcons/settings.svg'
+import reportingBotIcon from '@/assets/icons/mainDrawerIcons/flow.svg'
 import { DEVELOPER_EMAILS } from '@/composables/useDeveloperAccess';
 
 export const LICENSE_TYPES = {
@@ -333,6 +334,15 @@ export const useMainStore = defineStore("mainStore", {
         //   ],
         // },
       ];
+
+      // Reporting Bot — available to all users
+      menuItems.push({
+        title: "Reporting Bot",
+        imgPath: reportingBotIcon,
+        value: "reportingBot",
+        to: "/reporting-bot",
+        featureKey: "dashboard",
+      });
 
       // Add Support Chat menu item only for developers
       if (isDeveloper) {
