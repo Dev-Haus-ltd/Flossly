@@ -4,6 +4,8 @@ import sequelize from '../utils/db'
 import { success, error } from '../utils/response'
 import { encrypt, decrypt } from '../utils/crypto'
 import { GoogleOAuthToken, GOOGLE_SCOPES } from '../models/crm/google_analytics/googleOAuthTokens'
+import { DiaryGoogleCalendarEvent } from '../models/diary/googleCalendarEvent'
+import { DiaryDentistGoogleCalendar } from '../models/diary/dentistGoogleCalendar'
 import { GoogleSearchConsoleSite } from '../models/crm/google_analytics/googleSearchConsoleSites'
 import { GoogleSearchConsoleSitePage } from '../models/crm/google_analytics/googleSearchConsoleSitePages'
 import { GoogleSearchConsolePerformance } from '../models/crm/google_analytics/googleSearchConsolePerformance'
@@ -1522,5 +1524,382 @@ export const getAdsPerformance = async (event) => {
   } catch (e) {
     console.error('[ADS] Failed to get performance:', e)
     return error(500, 'Failed to fetch analytics')
+  }
+}
+
+// =====================================================
+// GOOGLE CALENDAR API FUNCTIONS
+// =====================================================
+
+const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3'
+
+const CALENDAR_REQUESTED_SCOPES = [
+  GOOGLE_SCOPES.CALENDAR,
+  'email',
+  'profile'
+].join(' ')
+
+/**
+ * Start Google Calendar OAuth flow (full calendar scope for per-dentist calendar creation)
+ * GET /api/google/calendarAuthStart
+ */
+export const calendarAuthStart = async (event) => {
+  const { clientId, redirectUri } = getGoogleConfig()
+  if (!clientId || !redirectUri) {
+    return error(400, 'Google OAuth not configured')
+  }
+
+  const { userId, orgId } = event.context.user || {}
+  if (!userId || !orgId) {
+    return error(401, 'User must be logged in to connect Google Calendar')
+  }
+
+  const stateData = {
+    csrf: Math.random().toString(36).slice(2),
+    userId,
+    orgId,
+    calendarFlow: true,
+    timestamp: Date.now()
+  }
+  const stateToken = Buffer.from(JSON.stringify(stateData)).toString('base64url')
+
+  setCookie(event, 'google_calendar_oauth_state', stateToken, {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 600,
+    secure: process.env.NODE_ENV === 'production'
+  })
+
+  const calendarRedirectUri = redirectUri.replace('/callback', '/calendarCallback')
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: calendarRedirectUri,
+    response_type: 'code',
+    scope: CALENDAR_REQUESTED_SCOPES,
+    state: stateToken,
+    access_type: 'offline',
+    prompt: 'consent'
+  })
+
+  return success({ url: `${GOOGLE_AUTH_URL}?${params.toString()}` })
+}
+
+/**
+ * Handle Google Calendar OAuth callback
+ * GET /api/google/calendarCallback
+ */
+export const calendarAuthCallback = async (event) => {
+  const { clientId, clientSecret, redirectUri } = getGoogleConfig()
+  const calendarRedirectUri = redirectUri.replace('/callback', '/calendarCallback')
+
+  const q = getQuery(event)
+  const { code, state, error: oauthError } = q
+
+  if (oauthError) {
+    return sendRedirect(event, `/crm?error=${encodeURIComponent(oauthError)}`)
+  }
+
+  if (!code) {
+    return error(400, 'Missing authorization code')
+  }
+
+  const stateCookie = getCookie(event, 'google_calendar_oauth_state')
+  if (!state || !stateCookie || state !== stateCookie) {
+    return error(401, 'Invalid state - CSRF check failed')
+  }
+
+  let userId, orgId
+  try {
+    const stateData = JSON.parse(Buffer.from(state, 'base64url').toString())
+    userId = stateData.userId
+    orgId = stateData.orgId
+    if (Date.now() - stateData.timestamp > 600000) throw new Error('State expired')
+  } catch (e) {
+    return error(401, 'Invalid state data')
+  }
+
+  setCookie(event, 'google_calendar_oauth_state', '', { maxAge: -1 })
+
+  try {
+    const tokenResponse = await exchangeCodeForTokens({
+      code,
+      clientId,
+      clientSecret,
+      redirectUri: calendarRedirectUri
+    })
+
+    if (!tokenResponse.access_token) {
+      return sendRedirect(event, '/crm?error=Failed+to+get+access+token')
+    }
+
+    const grantedScopes = parseGrantedScopes(tokenResponse.scope)
+    const userInfo = await fetchUserInfo(tokenResponse.access_token)
+
+    const existing = await GoogleOAuthToken.findOne({
+      where: { organisationId: orgId, status: 'Active' }
+    })
+
+    const accessTokenEnc = encrypt(tokenResponse.access_token)
+    const refreshTokenEnc = tokenResponse.refresh_token ? encrypt(tokenResponse.refresh_token) : null
+    const expiresIn = Number(tokenResponse.expires_in || 0)
+    const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null
+
+    if (existing) {
+      const mergedScopes = [...new Set([...(existing.scopes || []), ...grantedScopes])]
+      existing.accessTokenEnc = accessTokenEnc
+      if (refreshTokenEnc) existing.refreshTokenEnc = refreshTokenEnc
+      existing.scopes = mergedScopes
+      existing.expiresAt = expiresAt
+      existing.googleAccountEmail = userInfo?.email || existing.googleAccountEmail
+      existing.googleAccountId = userInfo?.id || existing.googleAccountId
+      existing.status = 'Active'
+      existing.connectedAt = new Date()
+      await existing.save()
+    } else {
+      await GoogleOAuthToken.create({
+        organisationId: orgId,
+        userId,
+        googleAccountId: userInfo?.id || null,
+        googleAccountEmail: userInfo?.email || null,
+        accessTokenEnc,
+        refreshTokenEnc,
+        scopes: grantedScopes,
+        expiresAt,
+        status: 'Active',
+        connectedAt: new Date()
+      })
+    }
+
+    return sendRedirect(event, '/crm?google_calendar=connected')
+  } catch (e) {
+    console.error('[GOOGLE][CALENDAR][AUTH] Callback error:', e)
+    return sendRedirect(event, `/crm?error=${encodeURIComponent(e?.message || 'Calendar connection failed')}`)
+  }
+}
+
+/**
+ * Get Google Calendar connection status
+ * GET /api/google/calendarConnection
+ */
+export const calendarConnectionStatus = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const token = await GoogleOAuthToken.findOne({
+    where: { organisationId: orgId, status: 'Active' },
+    attributes: ['id', 'googleAccountEmail', 'scopes', 'connectedAt', 'expiresAt']
+  })
+
+  if (!token || !token.hasCalendarScope()) {
+    return success({ connected: false })
+  }
+
+  return success({
+    connected: true,
+    email: token.googleAccountEmail,
+    connectedAt: token.connectedAt
+  })
+}
+
+/**
+ * Disconnect Google Calendar.
+ * Removes calendar scope from token, cleans up per-dentist calendar mappings.
+ * POST /api/google/calendarDisconnect
+ */
+export const calendarDisconnect = async (event) => {
+  const { orgId } = event.context.user || {}
+  if (!orgId) return error(401, 'Unauthenticated')
+
+  const token = await GoogleOAuthToken.findOne({
+    where: { organisationId: orgId, status: 'Active' }
+  })
+
+  if (!token) return success({ disconnected: true })
+
+  const otherScopes = (token.scopes || []).filter(s => s !== GOOGLE_SCOPES.CALENDAR)
+
+  if (otherScopes.length === 0) {
+    token.status = 'Revoked'
+  } else {
+    token.scopes = otherScopes
+  }
+
+  await token.save()
+
+  // Clean up per-dentist calendar mappings and event mappings for this org
+  await DiaryDentistGoogleCalendar.destroy({ where: { organisationId: orgId } })
+  await DiaryGoogleCalendarEvent.destroy({ where: { organisationId: orgId } })
+
+  return success({ disconnected: true })
+}
+
+// ── Internal helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Get a valid access token for the org that has calendar scope, or null if not connected.
+ */
+async function getCalendarToken(orgId) {
+  const token = await GoogleOAuthToken.findOne({
+    where: { organisationId: orgId, status: 'Active' }
+  })
+  if (!token || !token.hasCalendarScope()) return null
+  return token
+}
+
+/**
+ * Get the Google Calendar ID for a dentist, creating a dedicated sub-calendar if needed.
+ * Returns the googleCalendarId string, or 'primary' on any failure.
+ */
+async function getOrCreateDentistCalendar(accessToken, orgId, dentistId, dentistName) {
+  try {
+    // Check if we already created a calendar for this dentist
+    const existing = await DiaryDentistGoogleCalendar.findOne({
+      where: { organisationId: orgId, dentistId }
+    })
+    if (existing) return existing.googleCalendarId
+
+    // Create a new secondary calendar under the connected Google account
+    const calendarName = dentistName ? `${dentistName} — Flossly` : `Dentist ${dentistId} — Flossly`
+
+    const created = await $fetch(`${GOOGLE_CALENDAR_API}/calendars`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: { summary: calendarName }
+    })
+
+    await DiaryDentistGoogleCalendar.create({
+      organisationId: orgId,
+      dentistId,
+      googleCalendarId: created.id,
+      calendarName
+    })
+
+    console.log(`[GOOGLE][CALENDAR] Created sub-calendar "${calendarName}" → ${created.id}`)
+    return created.id
+
+  } catch (e) {
+    console.error(`[GOOGLE][CALENDAR] Failed to get/create dentist calendar for dentist ${dentistId}:`, e?.message || e)
+    return 'primary' // Graceful fallback — event still syncs, just to main calendar
+  }
+}
+
+/**
+ * Sync a diary appointment to Google Calendar.
+ * Fire-and-forget — never throws to the caller.
+ *
+ * @param {'create'|'update'|'delete'} action
+ * @param {object} appt  { id, organisationId, dentistId, dentistName, startTime, endTime, patient, treatmentName, notes, status }
+ */
+export async function syncAppointmentToCalendar(action, appt) {
+  const orgId = appt.organisationId
+  if (!orgId) return
+
+  try {
+    const token = await getCalendarToken(orgId)
+    if (!token) return
+
+    const accessToken = await getValidAccessToken(token)
+    const tz = useRuntimeConfig().CLINIC_TIMEZONE || 'Europe/London'
+
+    if (action === 'create' || action === 'update') {
+      const eventBody = buildCalendarEvent(appt, tz)
+
+      if (action === 'create') {
+        const calendarId = await getOrCreateDentistCalendar(
+          accessToken, orgId, appt.dentistId, appt.dentistName
+        )
+
+        const created = await $fetch(`${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: eventBody
+        })
+
+        // Upsert mapping
+        const existingMapping = await DiaryGoogleCalendarEvent.findOne({
+          where: { organisationId: orgId, appointmentId: appt.id }
+        })
+        if (existingMapping) {
+          existingMapping.googleCalendarId = calendarId
+          existingMapping.googleEventId = created.id
+          await existingMapping.save()
+        } else {
+          await DiaryGoogleCalendarEvent.create({
+            organisationId: orgId,
+            appointmentId: appt.id,
+            googleCalendarId: calendarId,
+            googleEventId: created.id
+          })
+        }
+
+      } else {
+        // update — use stored calendarId so we update the right sub-calendar
+        const mapping = await DiaryGoogleCalendarEvent.findOne({
+          where: { organisationId: orgId, appointmentId: appt.id }
+        })
+        if (!mapping) return
+
+        await $fetch(
+          `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(mapping.googleCalendarId)}/events/${mapping.googleEventId}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: buildCalendarEvent(appt, tz)
+          }
+        )
+      }
+
+    } else if (action === 'delete') {
+      const mapping = await DiaryGoogleCalendarEvent.findOne({
+        where: { organisationId: orgId, appointmentId: appt.id }
+      })
+      if (!mapping) return
+
+      await $fetch(
+        `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(mapping.googleCalendarId)}/events/${mapping.googleEventId}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` }
+        }
+      ).catch(() => {})
+
+      await mapping.destroy()
+    }
+
+  } catch (e) {
+    console.error(`[GOOGLE][CALENDAR] sync ${action} failed for appt ${appt.id}:`, e?.message || e)
+  }
+}
+
+function buildCalendarEvent(appt, tz = 'Europe/London') {
+  const title = [appt.patient || appt.patientName, appt.treatmentName]
+    .filter(Boolean)
+    .join(' — ') || 'Appointment'
+
+  const start = appt.startTime instanceof Date ? appt.startTime : new Date(appt.startTime)
+  const end = appt.endTime instanceof Date ? appt.endTime : new Date(appt.endTime)
+
+  const description = [
+    appt.dentistName ? `Dentist: ${appt.dentistName}` : null,
+    appt.treatmentName ? `Treatment: ${appt.treatmentName}` : null,
+    appt.notes ? `Notes: ${appt.notes}` : null,
+    `Status: ${appt.status || 'Pending'}`
+  ].filter(Boolean).join('\n')
+
+  return {
+    summary: title,
+    description,
+    start: { dateTime: start.toISOString(), timeZone: tz },
+    end: { dateTime: end.toISOString(), timeZone: tz }
   }
 }

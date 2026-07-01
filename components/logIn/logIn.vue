@@ -352,7 +352,7 @@ const resendVerificationEmail = async () => {
 
 .right-heading {
   font-family: "Inter", sans-serif;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 26px;
   line-height: 1.3;
   color: #fff;

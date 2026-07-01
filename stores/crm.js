@@ -98,10 +98,6 @@ export const useCrmStore = defineStore("crmStore", {
     _notifyAutomationUpdate({ groupsChanged = false, leadIds = [] } = {}) {
       this._ensureAutomationOrgScope();
       const normalizedLeadIds = this._normalizeAutomationLeadIds(leadIds);
-      this._clearAutomationLeadCaches(groupsChanged ? [] : normalizedLeadIds);
-      if (groupsChanged) {
-        this.automationGroupRows = [];
-      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('crm-automations-updated', {
           detail: {
@@ -114,6 +110,14 @@ export const useCrmStore = defineStore("crmStore", {
           window.dispatchEvent(new CustomEvent('crm-automation-groups-updated'));
         }
       }
+    },
+    _notifyOnboardingRefresh(reason, detail = {}) {
+      if (typeof window === "undefined") return;
+      window.dispatchEvent(
+        new CustomEvent("onboarding-refresh", {
+          detail: { reason, ...detail, refreshedAt: Date.now() },
+        })
+      );
     },
     _isCurrentAnalyticsOrg(orgId) {
       if (!orgId) return true;
@@ -161,7 +165,9 @@ export const useCrmStore = defineStore("crmStore", {
     listDmConversations(params = {}) { return this._wrap(() => crmService.listDmConversations(params)); },
     listDmMessages(params = {}) { return this._wrap(() => crmService.listDmMessages(params)); },
     sendDmMessage(payload) { return this._wrap(() => crmService.sendDmMessage(payload)); },
+    uploadDmAttachment(formData) { return this._wrap(() => crmService.uploadDmAttachment(formData)); },
     markDmRead(payload) { return this._wrap(() => crmService.markDmRead(payload)); },
+    deleteDmConversation(payload) { return this._wrap(() => crmService.deleteDmConversation(payload)); },
     processDmQueue(payload = {}) { return this._wrap(() => crmService.processDmQueue(payload)); },
     getDmConnectionStatus() { return this._wrap(() => crmService.getDmConnectionStatus()); },
     // Fire-and-forget — don't wrap with _wrap so it doesn't block the loading state
@@ -219,10 +225,26 @@ export const useCrmStore = defineStore("crmStore", {
 
     // Leads
     listLeads(filters = {}) { return this._wrap(() => crmService.listLeads(filters)); },
-    createLead(payload) { return this._wrap(() => crmService.createLead(payload)); },
-    updateLead(payload) { return this._wrap(() => crmService.updateLead(payload)); },
+    async createLead(payload) {
+      const res = await this._wrap(() => crmService.createLead(payload));
+      if (res?.code === 0) this._notifyOnboardingRefresh("lead-created");
+      return res;
+    },
+    async updateLead(payload) {
+      const res = await this._wrap(() => crmService.updateLead(payload));
+      if (res?.code === 0 && payload?.leadStatus) {
+        this._notifyOnboardingRefresh("lead-status-updated", {
+          leadStatus: payload.leadStatus,
+        });
+      }
+      return res;
+    },
     deleteLeads(ids) { return this._wrap(() => crmService.deleteLeads(ids)); },
-    bulkUploadLeads(payload) { return this._wrap(() => crmService.bulkUploadLeads(payload)); },
+    async bulkUploadLeads(payload) {
+      const res = await this._wrap(() => crmService.bulkUploadLeads(payload));
+      if (res?.code === 0) this._notifyOnboardingRefresh("lead-bulk-uploaded");
+      return res;
+    },
 
     // Options
     listOptions(category) { return this._wrap(() => crmService.listOptions(category)); },
@@ -370,6 +392,7 @@ export const useCrmStore = defineStore("crmStore", {
     },
 
     getLeadAutomationLog(leadId, params = {}) { return this._wrap(() => crmService.getLeadAutomationLog(leadId, params)); },
+    getLeadAutomationPreview(leadId, key) { return this._wrap(() => crmService.getLeadAutomationPreview(leadId, key)); },
 
     // Mail
     sendLeadMail(payload) { return this._wrap(() => crmService.sendLeadMail(payload)); },
@@ -392,5 +415,21 @@ export const useCrmStore = defineStore("crmStore", {
     getAvailableFields() { return this._wrap(() => webFormService.getAvailableFields()); },
     getAutoReplySettings() { return this._wrap(() => crmService.getAutoReplySettings()); },
     updateAutoReplySettings(payload) { return this._wrap(() => crmService.updateAutoReplySettings(payload)); },
+
+    // CRM Custom Columns
+    listCrmCustomColumns() { return this._wrap(() => crmService.listCrmCustomColumns()); },
+    createCrmCustomColumn(payload) { return this._wrap(() => crmService.createCrmCustomColumn(payload)); },
+    updateCrmCustomColumn(payload) { return this._wrap(() => crmService.updateCrmCustomColumn(payload)); },
+    deleteCrmCustomColumn(payload) { return this._wrap(() => crmService.deleteCrmCustomColumn(payload)); },
+
+    // Google (Search Console / general)
+    googleConnectionStatus() { return this._wrap(() => crmService.googleConnectionStatus()); },
+    startGoogleAuth() { return this._wrap(() => crmService.startGoogleAuth()); },
+    disconnectGoogle(tokenId) { return this._wrap(() => crmService.disconnectGoogle(tokenId)); },
+
+    // Google Calendar
+    startGoogleCalendarAuth() { return this._wrap(() => crmService.startGoogleCalendarAuth()); },
+    googleCalendarConnectionStatus() { return this._wrap(() => crmService.googleCalendarConnectionStatus()); },
+    disconnectGoogleCalendar() { return this._wrap(() => crmService.disconnectGoogleCalendar()); },
   },
 });

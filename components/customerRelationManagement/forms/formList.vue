@@ -247,7 +247,7 @@
                         <v-tooltip activator="parent" location="top">Edit</v-tooltip>
                       </v-btn>
                       <v-btn icon size="small" variant="text" @click.stop="openShare(item)">
-                        <img src="/lead-forms/Frame-2.svg" class="row-action-icon" alt="Share" />
+                        <img :src="exportIcon" class="row-action-icon" alt="Share" />
                         <v-tooltip activator="parent" location="top">Share / Embed</v-tooltip>
                       </v-btn>
                       <v-btn icon size="small" variant="text" @click.stop="archiveOne(item)">
@@ -479,6 +479,7 @@
 import { useCrmStore } from '@/stores/crm'
 import { useMainStore } from '@/stores/index'
 import { resetUsageState, useUsageSummary } from '@/composables/useUsageSummary'
+import exportIcon from '@/assets/icons/teamfloss/userDetails/export.svg'
 
 const emit = defineEmits(['builder-open', 'builder-close'])
 

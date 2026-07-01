@@ -126,26 +126,11 @@
       <!-- ── Bottom panel: switches per step ────────────────────────── -->
 
       <!-- Step 1: Diagnosis notes + findings list -->
-      <div v-if="currentStep === 1" class="notes-layout" :class="{ 'notes-layout--sidebar-open': isNoteSidebarOpen }">
-        <div class="notes-layout__main">
-          <DiagnosePanel
-            :base-items="baseChartItems"
-            :notation="store.notation"
-            :selected-note-item-id="selectedNoteItemId"
-            :images="store.chartImages"
-            :history="store.historyEntries"
-            :practitioners="store.practitioners"
-            @save-success="mainStore?.setSnackbar?.({ title: 'Diagnosis saved.', type: 'success' })"
-            @remove="store.removeTreatmentItemById($event)"
-            @update="onTreatmentUpdate"
-            @select-note-item="onSelectNoteItem"
-            @add-image="onAddChartImage"
-            @remove-image="store.removeChartImage($event)"
-          />
-        </div>
-        <div v-if="isNoteSidebarOpen" class="notes-side notes-side--panel">
+      <div v-if="currentStep === 1">
+        <!-- Empty chart: AI charting panel full width -->
+        <div v-if="isChartEmpty" class="ai-charting-full">
           <ChartClinicalNoteSidebar
-            :item="selectedNoteItem"
+            :item="null"
             type="diagnosis"
             :patient-id="patientId"
             :patient-name="patientName"
@@ -153,6 +138,36 @@
             @apply-summary="onNoteSidebarSummary"
             @close="closeNoteSidebar"
           />
+        </div>
+        <!-- Has findings: normal layout -->
+        <div v-else class="notes-layout" :class="{ 'notes-layout--sidebar-open': isNoteSidebarOpen }">
+          <div class="notes-layout__main">
+            <DiagnosePanel
+              :base-items="baseChartItems"
+              :notation="store.notation"
+              :selected-note-item-id="selectedNoteItemId"
+              :images="store.chartImages"
+              :history="store.historyEntries"
+              :practitioners="store.practitioners"
+              @save-success="mainStore?.setSnackbar?.({ title: 'Diagnosis saved.', type: 'success' })"
+              @remove="store.removeTreatmentItemById($event)"
+              @update="onTreatmentUpdate"
+              @select-note-item="onSelectNoteItem"
+              @add-image="onAddChartImage"
+              @remove-image="store.removeChartImage($event)"
+            />
+          </div>
+          <div v-if="isNoteSidebarOpen" class="notes-side notes-side--panel">
+            <ChartClinicalNoteSidebar
+              :item="selectedNoteItem"
+              type="diagnosis"
+              :patient-id="patientId"
+              :patient-name="patientName"
+              @apply-template="onNoteSidebarTemplate"
+              @apply-summary="onNoteSidebarSummary"
+              @close="closeNoteSidebar"
+            />
+          </div>
         </div>
       </div>
 
@@ -531,6 +546,8 @@ const baseChartItems = computed(() =>
   (store.treatmentPlan || [])
     .filter(i => String(i.status || '') === 'existing')
 )
+
+const isChartEmpty = computed(() => baseChartItems.value.length === 0)
 
 const plannedItems = computed(() =>
   (store.treatmentItems || []).filter(i => String(i.status || '').toLowerCase() !== 'existing')
@@ -1288,6 +1305,10 @@ onMounted(() => {
   align-self: stretch;
   overflow: hidden;
   min-height: 0;
+}
+
+.ai-charting-full {
+  width: 100%;
 }
 
 .notes-layout {

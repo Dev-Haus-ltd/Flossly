@@ -131,11 +131,33 @@ export const deriveAttachmentPreview = (normalizedAttachments, messageText) => {
 
 /**
  * Resolve participant profile data for a Meta DM sender.
+ *
+ * For Messenger, the direct PSID lookup (GET /{PSID}?fields=name,...) is restricted in
+ * API v12+ and returns no data for most apps. The conversations participants endpoint
+ * (GET /{PAGE_ID}/conversations?user_id={PSID}&fields=participants{name,profile_pic}) is
+ * the reliable alternative — pass pageId to enable it.
  */
-export const resolveDmParticipantProfile = async ({ platform, senderId, accessToken }) => {
+export const resolveDmParticipantProfile = async ({ platform, senderId, accessToken, pageId = null }) => {
   if (!senderId || !accessToken) return {}
   try {
     if (platform === 'messenger') {
+      // Primary: conversations participants endpoint — works in API v24+
+      if (pageId) {
+        try {
+          const convUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(pageId)}/conversations?user_id=${encodeURIComponent(senderId)}&fields=participants%7Bid%2Cname%2Cprofile_pic%7D&access_token=${encodeURIComponent(accessToken)}`
+          const convResp = await $fetch(convUrl, { method: 'GET' })
+          const participants = convResp?.data?.[0]?.participants?.data || []
+          const user = participants.find((p) => String(p.id || '') !== String(pageId))
+          if (user?.name || user?.profile_pic) {
+            return {
+              name: user.name || null,
+              avatar: user.profile_pic || null,
+            }
+          }
+        } catch {}
+      }
+
+      // Fallback: direct PSID lookup (works for some apps/permissions)
       const primaryUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=first_name,last_name,profile_pic,name&access_token=${encodeURIComponent(accessToken)}`
       const primaryResp = await $fetch(primaryUrl, { method: 'GET' })
       const primaryName = [primaryResp?.first_name, primaryResp?.last_name].filter(Boolean).join(' ').trim()
@@ -148,7 +170,6 @@ export const resolveDmParticipantProfile = async ({ platform, senderId, accessTo
         }
       }
 
-      // Some page-scoped IDs only expose minimal fields in one call shape.
       const fallbackUrl = `https://graph.facebook.com/${META_VERSION}/${encodeURIComponent(senderId)}?fields=name,profile_pic&access_token=${encodeURIComponent(accessToken)}`
       const fallbackResp = await $fetch(fallbackUrl, { method: 'GET' })
       return {

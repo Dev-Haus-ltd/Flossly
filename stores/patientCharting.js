@@ -590,7 +590,44 @@ export const usePatientChartingStore = defineStore('patientChartingStore', {
         )
       }
 
-      if (hasConditionFlow) this._scheduleSave(fdi)
+if (hasConditionFlow) this._scheduleSave(fdi)
+    },
+
+    applyConditionBatch(actions = []) {
+      if (!Array.isArray(actions) || !actions.length) return
+      const previousCondition = this.activeCondition
+
+      for (const action of actions) {
+        if (action.type === 'missing') {
+          this.activeCondition = 'missing'
+          this.applyCondition(action.fdi, null)
+          continue
+        }
+
+        if (action.type === 'unerupted') {
+          if (!this.chart[action.fdi]) this.chart[action.fdi] = createDefaultTooth(action.fdi)
+          this.chart[action.fdi].unerupted = true
+          continue
+        }
+
+        if (action.type === 'surface') {
+          this.activeCondition = action.condition
+          const surfaces = Array.isArray(action.surfaces) ? action.surfaces : []
+          for (const surface of surfaces) {
+            this.applyCondition(action.fdi, surface, { status: action.status ?? 'existing' })
+          }
+          continue
+        }
+
+        if (action.type === 'tooth') {
+          this.activeCondition = action.condition
+          this.applyCondition(action.fdi, null, { status: action.status ?? 'existing' })
+          continue
+        }
+      }
+
+      this.activeCondition = previousCondition
+      this._scheduleSave()
     },
 
     _handleBridgeClick(fdi) {

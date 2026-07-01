@@ -191,8 +191,9 @@ const getFeatureKeyFromType = (type) => {
   return "other";
 };
 
-const planOrder = { pro: 0, crm: 1, lite: 2, other: 3 };
-const planSequence = ["pro", "crm", "lite"];
+const HIDDEN_PLAN_KEYS = new Set(["pro"]);
+const planOrder = { crm: 0, lite: 1, other: 2, pro: 3 };
+const planSequence = ["crm", "lite"];
 const selectedPlanId = ref(null);
 const getFirstEnabledPlan = (list) =>
   (Array.isArray(list) ? list : []).find((plan) => !plan?.disabled) ||
@@ -216,8 +217,8 @@ const displayPlans = computed(() => {
       const featureList = featureObj?.features || [];
       const description = featureObj?.description || plan.product?.description || plan.description || "";
       // Lite is the free plan — not purchasable through this modal
-      // Hardcoded UI fallbacks until Stripe plans are updated (CRM £199, Pro £499)
-      const FALLBACK_PENCE = { crm: 19900, pro: 49900 }
+      // Hardcoded UI fallback until Stripe plans are updated.
+      const FALLBACK_PENCE = { crm: 14900, pro: 49900 }
       const displayAmount = key === "lite" ? 0 : (FALLBACK_PENCE[key] ?? plan.unit_amount);
       return {
         ...plan,
@@ -231,6 +232,7 @@ const displayPlans = computed(() => {
         displayAmount,
       };
     })
+    .filter((plan) => !HIDDEN_PLAN_KEYS.has(plan.key))
     .sort((a, b) => (planOrder[a.key] || 99) - (planOrder[b.key] || 99));
   const planMap = new Map();
   mapped.forEach((plan) => {

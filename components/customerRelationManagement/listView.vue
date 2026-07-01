@@ -7,7 +7,7 @@
       multiple
       class="table-panels"
     >
-      <v-expansion-panel rounded="lg" class="border-sm pb-1">
+      <v-expansion-panel v-if="!clientsMode" rounded="lg" class="border-sm pb-1">
         <v-expansion-panel-title>
           <div class="d-flex align-center justify-space-between w-100">
             <div class="d-flex align-center">
@@ -360,48 +360,21 @@
               </template>
             </template>
           </v-data-table-server>
-          <v-card
+          <CommonSelectionActionBar
             v-if="selectedLeads.length"
-            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
-            style="padding: 0px 50px; gap: 40px;"
-            :elevation="5"
-            flat
-          >
-            <div class="selected-count d-flex align-center">
-              <span class="selected-text">
-                {{ selectedLeads.length }}
-              </span>
-              <p class="ml-3 mt-1">Items Selected</p>
-            </div>
-
-    <div class="actions-container d-flex align-center" style="gap: 8px;">
-      <div
-        v-for="(action, i) in actions"
-        :key="i"
-        class="action-item d-flex flex-column align-center"
-        :class="{ 'action-item--locked': isActionLocked(action.key) }"
-        @click="onActionClick(action.key)"
-      >
-        <img v-if="action.icon" :src="action.icon" :alt="action.label" class="action-icon" />
-        <v-icon v-else-if="action.mdiIcon" size="22" color="#6d6d6d">{{ action.mdiIcon }}</v-icon>
-        <span class="action-label">{{ action.label }}</span>
-      </div>
-
-      <v-divider vertical class="mx-2" style="height: 40px;" />
-
-      <div class="action-item d-flex flex-column align-center" @click="closeTray">
-        <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
-        <span class="action-label">Close</span>
-      </div>
-    </div>
-
-          </v-card>
+            :count="selectedLeads.length"
+            :actions="crmTrayActions"
+            :mobile-primary-keys="crmMobilePrimaryKeys"
+            fixed
+            @action="onActionClick"
+            @close="closeTray"
+          />
         </v-expansion-panel-text>
       </v-expansion-panel>
 
       <!-- Converted Leads Panel -->
-      <v-expansion-panel rounded="lg" class="border-sm pb-1">
-        <v-expansion-panel-title>
+      <v-expansion-panel rounded="lg" :class="clientsMode ? '' : 'border-sm pb-1'">
+        <v-expansion-panel-title v-if="!clientsMode">
           <div class="d-flex align-center justify-space-between w-100">
             <div class="d-flex align-center">
               <v-chip color="primary" label>
@@ -480,7 +453,31 @@
                     }"
                   >
                     <div v-if="i !== 0" class="d-flex align-center th-content" style="cursor: grab;">
-                      <p class="px-1 w-100 mb-0">{{ column.title }}</p>
+                      <input
+                        v-if="column.isCustom && editingHeaderKey === column.key"
+                        :value="column.title"
+                        @input="(e) => { column.title = e.target.value }"
+                        @blur="saveHeaderRename(column)"
+                        @keyup.enter="(e) => e.target.blur()"
+                        @keyup.esc="cancelHeaderRename(column)"
+                        @click.stop
+                        class="inline-edit-input px-1 w-100"
+                        style="font-size:14px"
+                        autofocus
+                      />
+                      <p
+                        v-else
+                        class="px-1 w-100 mb-0"
+                        :style="column.isCustom ? 'cursor:text' : ''"
+                        @click.stop="column.isCustom ? startHeaderRename(column) : null"
+                      >{{ column.title }}</p>
+                      <v-icon
+                        v-if="column.isCustom"
+                        size="13"
+                        color="error"
+                        style="cursor:pointer; flex-shrink:0;"
+                        @click.stop="emit('request-delete-column', column)"
+                      >mdi-close</v-icon>
                       <v-icon
                         v-if="column.key !== 'name'"
                         size="14"
@@ -725,48 +722,45 @@
                   />
                 </div>
               </template>
+              <template v-else-if="col.isCustom">
+                <div class="pa-1">
+                  <input
+                    v-if="editingCell.id === item.id && editingCell.field === col.key"
+                    :value="getCustomValue(item, col.columnDefinitionId)"
+                    @input="(e) => setCustomValue(item, col.columnDefinitionId, e.target.value)"
+                    @blur="saveCustomField(item, col)"
+                    @keyup.enter="saveCustomField(item, col)"
+                    @keyup.esc="cancelEdit"
+                    class="inline-edit-input"
+                    autofocus
+                  />
+                  <p
+                    v-else
+                    class="ml-2 mb-0 editable-field"
+                    @click="startEdit(item, col.key)"
+                  >{{ getCustomValue(item, col.columnDefinitionId) || 'Click to edit' }}</p>
+                </div>
+              </template>
               <template v-else>
                 <p class="ml-2 mb-0">{{ item[col.key] }}</p>
               </template>
             </template>
           </v-data-table-server>
-          <v-card
+          <CommonSelectionActionBar
             v-if="selectedConvertedLeads.length"
-            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
-            style="padding: 0px 50px; gap: 40px;"
-            :elevation="5"
-            flat
-          >
-            <div class="selected-count d-flex align-center">
-              <span class="selected-text">
-                {{ selectedConvertedLeads.length }}
-              </span>
-              <p class="ml-3 mt-1">Items Selected</p>
-            </div>
-            <div class="actions-container d-flex align-center" style="gap: 8px;">
-              <div
-                v-for="(action, i) in actions"
-                :key="i"
-                class="action-item d-flex flex-column align-center"
-                :class="{ 'action-item--locked': isActionLocked(action.key) }"
-                @click="onConvertedActionClick(action.key)"
-              >
-                <img v-if="action.icon" :src="action.icon" :alt="action.label" class="action-icon" />
-                <v-icon v-else-if="action.mdiIcon" size="22" color="#6d6d6d">{{ action.mdiIcon }}</v-icon>
-                <span class="action-label">{{ action.label }}</span>
-              </div>
-              <v-divider vertical class="mx-2" style="height: 40px;" />
-              <div class="action-item d-flex flex-column align-center" @click="selectedConvertedLeads = []">
-                <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
-                <span class="action-label">Close</span>
-              </div>
-            </div>
-          </v-card>
+            :count="selectedConvertedLeads.length"
+            :actions="crmTrayActions"
+            :mobile-primary-keys="crmMobilePrimaryKeys"
+            fixed
+            @action="onConvertedActionClick"
+            @close="selectedConvertedLeads = []"
+          />
         </v-expansion-panel-text>
       </v-expansion-panel>
 
       <!-- Archived Leads Panel -->
       <v-expansion-panel
+        v-if="!clientsMode"
         rounded="lg"
         class="border-sm pb-1"
       >
@@ -924,46 +918,16 @@
               </template>
             </template>
           </v-data-table-server>
-          <v-card
+          <CommonSelectionActionBar
             v-if="selectedArchivedLeads.length"
-            class="action-bar py-4 d-flex justify-center align-center rounded-lg"
-            style="padding: 0px 50px; gap: 40px;"
-            :elevation="5"
-            flat
-          >
-            <div class="selected-count d-flex align-center">
-              <span class="selected-text">
-                {{ selectedArchivedLeads.length }}
-              </span>
-              <p class="ml-3 mt-1">Archived Selected</p>
-            </div>
-
-            <div class="actions-container d-flex align-center" style="gap: 8px;">
-              <div
-                class="action-item d-flex flex-column align-center"
-                @click="confirmRestore = true"
-              >
-                <v-icon size="22" color="#6d6d6d">mdi-restore</v-icon>
-                <span class="action-label">Restore</span>
-              </div>
-
-              <div
-                v-if="canDelete"
-                class="action-item d-flex flex-column align-center"
-                @click="confirmArchivedDelete = true"
-              >
-                <img :src="deleteIcon" alt="Delete" class="action-icon" />
-                <span class="action-label">Delete</span>
-              </div>
-
-              <v-divider vertical class="mx-2" style="height: 40px;" />
-
-              <div class="action-item d-flex flex-column align-center" @click="closeTray">
-                <v-icon size="20" color="#6d6d6d">mdi-close</v-icon>
-                <span class="action-label">Close</span>
-              </div>
-            </div>
-          </v-card>
+            :count="selectedArchivedLeads.length"
+            count-label-desktop="Archived Selected"
+            :actions="archivedTrayActions"
+            :mobile-primary-keys="archivedMobilePrimaryKeys"
+            fixed
+            @action="onArchivedActionClick"
+            @close="closeTray"
+          />
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
@@ -1014,7 +978,7 @@
 
           <!-- Body -->
           <div class="px-5 pt-3 pb-4">
-            <CrmEmailTemplateEditor v-model="compose.html" />
+            <CrmEmailTemplateEditor v-model="compose.html" v-model:attachments="compose.attachments" :allow-attachments="true" />
           </div>
         </div>
 
@@ -1240,6 +1204,7 @@
                 :disable-toggle="false"
                 :show-sent-status-column="false"
                 :show-resend-action="false"
+                @bulk-toggle-done="showBulkAutomationsDialog = false"
               />
             </v-tabs-window-item>
             <v-tabs-window-item value="my-automations">
@@ -1253,6 +1218,7 @@
                 :disable-toggle="false"
                 :show-sent-status-column="false"
                 :show-resend-action="false"
+                @bulk-toggle-done="showBulkAutomationsDialog = false"
               />
             </v-tabs-window-item>
           </v-tabs-window>
@@ -1325,7 +1291,7 @@ import { applyCrmPlaceholders } from '@/lib/crm/placeholders'
 import { formatDateDDMMYYYY, formatDateTime } from "@/lib/dateFormatter";
 import { formatAssignedUsers, formatTreatmentValue } from "@/lib/misc";
 import { getLeadDisplayName, getLeadEmail, getLeadPhone } from "@/lib/normalizers/lead";
-import { LICENSE_TYPES, resolveUserLicenseType } from '@/stores/index'
+import { LICENSE_TYPES } from '@/stores/index'
 import { useDiaryStore } from '@/stores/diary'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults'
 const defaultAutomationMap = new Map(crmAutomationDefaults.map((d) => [d.key, d]))
@@ -1339,7 +1305,7 @@ import shareLocationIcon from '@/assets/crm/shareLocation.svg'
 import whatsappIcon from '@/assets/crm/whatsapp-logo.svg'
 import convertIcon from '@/assets/crm/convert.svg'
 import archiveIcon from '@/assets/crm/archive.svg'
-import deleteIcon from '@/assets/crm/delete.svg'
+import deleteIcon from '@/assets/tasks/delete.svg'
 import exportIcon from '@/assets/crm/export.svg'
 const crmStore = useCrmStore();
 const diaryStore = useDiaryStore();
@@ -1358,6 +1324,7 @@ const emit = defineEmits([
   'update:itemsPerPage',
   'alert-options-saved',
   'options-refreshed',
+  'request-delete-column',
 ]);
 const props = defineProps({
   leads: { type: Array, default: () => [] },
@@ -1379,6 +1346,8 @@ const props = defineProps({
   users: { type: Array, required: true },
   alertOptions: { type: Array, default: () => [] },
   whatsappConnected: { type: Boolean, default: false },
+  clientsMode: { type: Boolean, default: false },
+  customColumnDefinitions: { type: Array, default: () => [] },
 });
 const openedPanels = ref([0]);
 
@@ -1392,7 +1361,8 @@ const filteredAvailableHeaders = computed(() => {
 
 const saveColumnPreferences = () => {
   try {
-    localStorage.setItem('crmLeadTableColumns', JSON.stringify(selectedHeaders.value))
+    const key = props.clientsMode ? 'clientsTableColumns' : 'crmLeadTableColumns'
+    localStorage.setItem(key, JSON.stringify(selectedHeaders.value))
   } catch {}
 }
 
@@ -1425,7 +1395,7 @@ const getColColor = (name) => {
 
 onMounted(() => {
   try {
-    const stored = localStorage.getItem('crmLeadTableColumns')
+    const stored = localStorage.getItem(props.clientsMode ? 'clientsTableColumns' : 'crmLeadTableColumns')
     if (stored) {
       const parsed = JSON.parse(stored)
       if (Array.isArray(parsed) && parsed.length) {
@@ -1632,6 +1602,34 @@ const ALL_ACTIONS = [
 const actions = computed(() =>
   canDelete.value ? ALL_ACTIONS : ALL_ACTIONS.filter(a => a.key !== 'delete')
 );
+const crmMobilePrimaryKeys = ['mail', 'whatsapp'];
+const crmTrayActions = computed(() =>
+  actions.value.map((action) => ({
+    ...action,
+    disabled: isActionLocked(action.key),
+    mobileLabel:
+      action.key === 'mail'
+        ? 'Mail'
+        : action.key === 'whatsapp'
+          ? 'Chat'
+          : action.label,
+  }))
+);
+const archivedMobilePrimaryKeys = ['restore'];
+const archivedTrayActions = computed(() => [
+  {
+    key: 'restore',
+    label: 'Restore',
+    mobileLabel: 'Restore',
+    mdiIcon: 'mdi-restore',
+  },
+  {
+    key: 'delete',
+    label: 'Delete',
+    icon: deleteIcon,
+    hidden: !canDelete.value,
+  },
+]);
 const showBulkAutomationsDialog = ref(false);
 const bulkAutomationsTab = ref('automation');
 const selectedLeadIds = computed(() =>
@@ -1644,7 +1642,7 @@ watch(showBulkAutomationsDialog, async (open) => {
       selectedLeads.value
         .map((lead) => Number(lead?.id || 0))
         .filter(Boolean)
-        .map((id) => crmStore.invalidateLeadAutomations(id))
+        .map((id) => crmStore.fetchLeadAutomations(id, { force: true, silent: true }))
     );
   }
 });
@@ -2103,7 +2101,7 @@ const buildAutomationPayload = (row, leadId, groupKey) => {
 const toggleLeadGroup = async (lead, group, enabled) => {
   const leadId = lead?.id;
   if (!leadId || !group) return;
-  await crmStore.fetchLeadAutomations(leadId, { force: true });
+  await crmStore.fetchLeadAutomations(leadId);
 
   const currentRows = crmStore.automationRowsCache[Number(leadId)] || [];
   const keys = group?.templateKeys || [];
@@ -2160,7 +2158,7 @@ const toggleLeadGroup = async (lead, group, enabled) => {
   automationSaving[leadId] = true;
   try {
     await crmStore.saveAutomationBatch({ items: updates });
-    await crmStore.invalidateLeadAutomations(leadId);
+    await crmStore.fetchLeadAutomations(leadId, { force: true, silent: true });
   } catch (e) {
     // Roll back optimistic update
     crmStore.setLeadAutomationsOptimistic(
@@ -2268,9 +2266,6 @@ const onActionClick = (key) => {
   else if (key === 'automations') {
     bulkAutomationsTab.value = 'automation'
     showBulkAutomationsDialog.value = true
-    selectedLeads.value.forEach(lead => {
-      if (lead?.id) crmStore.fetchLeadAutomations(lead.id, { force: true })
-    })
   }
   else if (key === 'delete') confirmDelete.value = true;
   else if (key === 'archive') confirmArchive.value = true;
@@ -2292,6 +2287,11 @@ const onConvertedActionClick = (key) => {
   if (!selectedConvertedLeads.value.length) return;
   selectedLeads.value = [...selectedConvertedLeads.value];
   onActionClick(key);
+};
+
+const onArchivedActionClick = (key) => {
+  if (key === 'restore') confirmRestore.value = true;
+  else if (key === 'delete' && canDelete.value) confirmArchivedDelete.value = true;
 };
 
 const formatDate = (d) => {
@@ -2505,6 +2505,59 @@ const updateValueRow = async (row, key) => {
   } catch (e) {}
 };
 
+const editingHeaderKey = ref(null)
+const headerOriginalTitle = ref('')
+
+const startHeaderRename = (column) => {
+  editingHeaderKey.value = column.key
+  headerOriginalTitle.value = column.title
+}
+
+const cancelHeaderRename = (column) => {
+  column.title = headerOriginalTitle.value
+  editingHeaderKey.value = null
+}
+
+const saveHeaderRename = async (column) => {
+  const newTitle = column.title?.trim()
+  editingHeaderKey.value = null
+  if (!newTitle || newTitle === headerOriginalTitle.value) {
+    column.title = headerOriginalTitle.value
+    return
+  }
+  try {
+    const res = await crmStore.updateCrmCustomColumn({ columnId: column.columnDefinitionId, displayName: newTitle })
+    if (res?.code !== 0) {
+      column.title = headerOriginalTitle.value
+      mainStore.setSnackbar({ title: res?.message || 'Failed to rename column', type: 'error' })
+    } else {
+      saveColumnPreferences()
+    }
+  } catch {
+    column.title = headerOriginalTitle.value
+  }
+}
+
+const getCustomValue = (item, columnDefinitionId) => {
+  const cf = (item.customFields || []).find(f => f.columnDefinitionId === columnDefinitionId)
+  return cf?.value || ''
+}
+
+const setCustomValue = (item, columnDefinitionId, value) => {
+  if (!item.customFields) item.customFields = []
+  const cf = item.customFields.find(f => f.columnDefinitionId === columnDefinitionId)
+  if (cf) cf.value = value
+  else item.customFields.push({ columnDefinitionId, value })
+}
+
+const saveCustomField = async (item, col) => {
+  const value = getCustomValue(item, col.columnDefinitionId)
+  cancelEdit()
+  try {
+    await crmStore.updateLead({ id: item.id, customFields: [{ columnDefinitionId: col.columnDefinitionId, value }] })
+  } catch (e) {}
+}
+
 const openLeadDialog = (lead) => {
   selectedLead.value = lead;
   showLeadDetailDialog.value = true;
@@ -2543,7 +2596,7 @@ const composeLoading = ref(false)
 let EditorCtor = null
 let Header = null
 let List = null
-const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '' })
+const compose = reactive({ key: 'mail', subject: '', recipients: [], html: '', attachments: [] })
 const showSendPriceCompose = ref(false)
 const sendPriceLoading = ref(false)
 const sendPriceUploadLoading = ref(false)
@@ -2620,6 +2673,7 @@ async function openCompose(actionKey) {
   })
   compose.subject = renderTemplateWithContext(def.subject, ctx, lead)
   compose.html = renderTemplateWithContext(def.html, ctx, lead)
+  compose.attachments = []
   showCompose.value = true
 }
 
@@ -2766,6 +2820,7 @@ async function sendCompose() {
       subject: resolvedSubject,
       html: resolvedHtml,
       key: `manual_${compose.key}`,
+      attachments: Array.isArray(compose.attachments) ? compose.attachments : [],
     })
     if (res && res.code === 0) {
       if (mainStore && mainStore.setSnackbar) mainStore.setSnackbar({ title: `Mail sent to ${res.data?.sent || compose.recipients.length} recipient(s)`, type: 'success' })
@@ -3109,82 +3164,6 @@ defineExpose({
   border: solid rgb(var(--v-theme-on-primary));
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
-}
-
-
-.selected-text {
-  
-  font-weight: 600;
-  font-size: 14px;
-  padding: 5px 13px;
-  border-radius: 50%;
-  color: rgb(var(--v-theme-on-primary));
-  background: rgb(var(--v-theme-primary));
-}
-.action-bar {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: white;
-  z-index: 1000;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}
-
-.actions-container {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  justify-content: center;
-}
-
-.action-item {
-  flex: 0 0 auto;
-  cursor: pointer;
-  border-radius: 8px;
-  padding: 6px 12px;
-  transition: background-color 0.15s ease, transform 0.1s ease;
-  white-space: nowrap;
-  text-align: center;
-  min-width: 60px;
-}
-
-.action-item:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-  transform: translateY(-1px);
-}
-
-.action-item--locked {
-  opacity: 0.38;
-  cursor: not-allowed;
-  pointer-events: auto;
-}
-
-.action-item--locked:hover {
-  background-color: transparent;
-  transform: none;
-}
-
-.action-item--locked .action-icon {
-  filter: grayscale(1) opacity(0.5);
-}
-
-.action-item--locked .action-label {
-  color: #aaaaaa;
-}
-
-.action-label {
-  font-size: 12px;
-  margin-top: 4px;
-  font-weight: 400;
-  color: #6d6d6d;
-  line-height: 1.2;
-}
-
-.action-icon {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
 }
 
 /* Inline editing styles */

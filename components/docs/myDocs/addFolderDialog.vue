@@ -89,6 +89,14 @@ const close = () => {
 };
 
 const save = () => {
+  if (!name.value.trim()) {
+    mainStore.setSnackbar({ title: "Folder name is required.", type: "error" });
+    return;
+  }
+  if (name.value.trim().length > 255) {
+    mainStore.setSnackbar({ title: "Folder name must be 255 characters or fewer.", type: "error" });
+    return;
+  }
   const data = {
     name: name.value,
     color: getRandomHexColor(),

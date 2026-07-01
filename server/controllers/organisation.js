@@ -110,6 +110,7 @@ export const updateOrganisationDetails = async (event) => {
   const loggedUser = event.context.user;
   const orgId = loggedUser.orgId;
   const form = formidable({ multiples: false, keepExtensions: true });
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   // Helper: pick first value, treat empty strings as undefined
   const firstNonEmpty = (fields, key) => {
@@ -141,11 +142,25 @@ export const updateOrganisationDetails = async (event) => {
     const contact = firstNonEmpty(fields, 'contact');
     const postalCode = firstNonEmpty(fields, 'postalCode');
     const typeVal = firstNonEmpty(fields, 'type');
+    const hasReplyToEmailField = fields && Object.prototype.hasOwnProperty.call(fields, 'replyToEmail');
+    const replyToEmailRaw = hasReplyToEmailField
+      ? (Array.isArray(fields.replyToEmail) ? fields.replyToEmail[0] : fields.replyToEmail)
+      : undefined;
 
     if (name !== undefined) organisation.name = name;
     if (address !== undefined) organisation.address = address;
     if (contact !== undefined) organisation.contact = contact;
     if (postalCode !== undefined) organisation.postalCode = postalCode;
+    if (hasReplyToEmailField) {
+      const replyToEmail = typeof replyToEmailRaw === 'string' ? replyToEmailRaw.trim() : replyToEmailRaw;
+      if (!replyToEmail) {
+        organisation.replyToEmail = null;
+      } else if (!emailRegex.test(replyToEmail)) {
+        return error(400, 'Invalid reply-to email address');
+      } else {
+        organisation.replyToEmail = replyToEmail;
+      }
+    }
 
     // Validate enum against model allowed values (Sequelize stores them on rawAttributes)
     if (typeVal !== undefined) {
@@ -1195,6 +1210,7 @@ export const getAllOrganisationReferrals = async (event) => {
  */
 export const createOrganisationForUser = async (event) => {
   const loggedUser = event.context.user;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   // RBAC check
   if (!PRIVILEGED_ROLE_IDS.includes(Number(loggedUser.roleId))) {
@@ -1234,12 +1250,19 @@ export const createOrganisationForUser = async (event) => {
 
   const organisationName = firstNonEmpty(fields, 'name') || firstNonEmpty(fields, 'organisationName');
   const contact = firstNonEmpty(fields, 'contact');
+  const replyToEmail = firstNonEmpty(fields, 'replyToEmail');
   const address = firstNonEmpty(fields, 'address');
   const typeVal = firstNonEmpty(fields, 'type');
   const postalCode = firstNonEmpty(fields, 'postalCode');
 
   if (!organisationName) {
     return error(400, "Organisation name is required");
+  }
+  if (!replyToEmail) {
+    return error(400, "Reply-to email is required");
+  }
+  if (!emailRegex.test(replyToEmail)) {
+    return error(400, "Invalid reply-to email address");
   }
 
   const transaction = await DB.transaction();
@@ -1263,6 +1286,7 @@ export const createOrganisationForUser = async (event) => {
 
     // Add optional fields if provided (for full creation mode)
     if (contact) orgData.contact = contact;
+    orgData.replyToEmail = replyToEmail;
     if (address) orgData.address = address;
     if (postalCode) orgData.postalCode = postalCode;
     if (typeVal) {

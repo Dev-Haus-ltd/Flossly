@@ -97,6 +97,10 @@ const close = () => {
 const save = async () => {
   if (!props.folder || !folderName.value.trim()) return;
   if (folderName.value === originalName.value) return;
+  if (folderName.value.trim().length > 255) {
+    mainStore.setSnackbar({ title: "Folder name must be 255 characters or fewer.", type: "error" });
+    return;
+  }
   
   loading.value = true;
   try {

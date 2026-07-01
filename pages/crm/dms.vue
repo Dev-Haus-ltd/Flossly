@@ -241,6 +241,16 @@
                     </template>
                   </v-tooltip>
                 </template>
+                <v-btn
+                  v-if="activeConversationId"
+                  icon
+                  variant="text"
+                  size="small"
+                  class="dms-delete-btn"
+                  @click="openDeleteConversationDialog"
+                >
+                  <img :src="deleteIcon" alt="Delete conversation" width="16" height="16" />
+                </v-btn>
               </div>
             </div>
           </div>
@@ -260,19 +270,49 @@
               <template v-if="lastInboundAgo"> Last received {{ lastInboundAgo }}.</template>
             </span>
           </div>
+          <div v-if="pendingFiles.length" class="chat-pending-files">
+            <div
+              v-for="(file, idx) in pendingFiles"
+              :key="`${file.name}-${idx}`"
+              class="chat-pending-file"
+            >
+              <template v-if="isImageFile(file)">
+                <div class="chat-pending-image">
+                  <img :src="getObjectUrl(file)" :alt="file.name" />
+                  <button class="chat-pending-remove" @click="removePendingFile(idx)">
+                    <v-icon size="10" color="white">mdi-close</v-icon>
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <div class="chat-pending-doc">
+                  <v-icon size="18" :color="fileIconColor(file)">{{ fileIcon(file) }}</v-icon>
+                  <div class="chat-pending-doc-info">
+                    <span class="chat-pending-doc-name">{{ file.name }}</span>
+                    <span class="chat-pending-doc-size">{{ formatBytes(file.size) }}</span>
+                  </div>
+                  <button class="chat-pending-doc-remove" @click="removePendingFile(idx)">
+                    <v-icon size="13">mdi-close</v-icon>
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
           <ChatInputBar
             v-model="draftMessage"
             :can-send="canSend"
             :disabled="!activeConversationId || !withinMessageWindow"
             :loading="sending"
+            :allow-attachments="true"
             :placeholder="withinMessageWindow ? 'Type here...' : 'Cannot reply - 24-hour window closed'"
+            @files-selected="onFilesSelected"
             @send="sendMessage"
           />
         </v-card>
       </div>
     </div>
 
-    <v-dialog v-model="autoReplyConfigDialog" max-width="600" persistent>
+    <v-dialog v-model="autoReplyConfigDialog" max-width="600" persistent scrollable>
       <v-card>
         <v-card-title class="d-flex align-center justify-space-between pa-4">
           <span>Auto-Reply Configuration</span>
@@ -281,7 +321,7 @@
           </v-btn>
         </v-card-title>
         <v-divider />
-        <v-card-text class="pa-4">
+        <v-card-text class="pa-4" style="max-height: 70vh; overflow-y: auto;">
           <p class="text-caption text-medium-emphasis mb-4">
             Provide context about your practice so the bot can respond intelligently to incoming leads. All fields are required to enable auto-reply.
           </p>
@@ -315,6 +355,17 @@
             persistent-hint
             rows="4"
           />
+          <v-divider class="my-4" />
+          <div class="text-subtitle-2 mb-2">Appointment Booking</div>
+          <v-switch
+            v-model="autoReplyConfig.bookingEnabled"
+            label="Enable appointment booking via DM"
+            density="compact"
+            class="mb-2"
+          />
+          <div v-if="autoReplyConfig.bookingEnabled" class="text-caption text-medium-emphasis mb-4">
+            The AI will collect the customer's name, phone, and preferred time, then book a real appointment and create a CRM lead automatically.
+          </div>
         </v-card-text>
         <v-divider />
         <v-card-actions class="pa-4">
@@ -324,17 +375,32 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <ConfirmDialog
+      v-model="deleteConversationDialog"
+      title="Delete conversation?"
+      :message="deleteConversationMessage"
+      confirm-text="Delete conversation"
+      cancel-text="Keep conversation"
+      confirm-color="error"
+      icon="mdi-trash-can-outline"
+      :loading="deletingConversation"
+      @confirm="confirmDeleteConversation"
+      @cancel="deleteConversationDialog = false"
+    />
   </v-sheet>
 </template>
 
 <script setup>
 import ChatThread from "@/components/Chat/Thread.vue";
 import ChatInputBar from "@/components/Chat/InputBar.vue";
-import { groupChatItems, formatChatTimestamp, buildDayKey, buildDayLabel } from "@/lib/chatThread";
-import { resolveDmStatusIcon, resolveDmStatusColor } from "@/lib/chatShared";
+import ConfirmDialog from "@/components/Common/ConfirmDialog.vue";
+import { mapDmMessageToChatItem } from "@/lib/chatMappers";
+import { groupChatItems } from "@/lib/chatThread";
 import { useCrmStore } from "@/stores/crm";
 import { useMainStore } from "@/stores/index";
 import { useRoute } from "vue-router";
+import deleteIcon from "@/assets/crm/delete.svg";
 import searchicon from "@/assets/icons/listView/serach-icon.svg";
 import filtericon from "@/assets/icons/listView/filter-icon.svg";
 
@@ -374,10 +440,14 @@ const syncingHistory = ref(false);
 const autoReplyEnabled = ref(false);
 const whatsappAutoReplyEnabled = ref(false);
 const autoReplyLoading = ref(false);
-const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "" });
+const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "", bookingEnabled: false });
 const autoReplyConfigDialog = ref(false);
 const autoReplyConfigLoading = ref(false);
 const conversationAutoReplyEnabled = ref(true);
+const deleteConversationDialog = ref(false);
+const deletingConversation = ref(false);
+const pendingFiles = ref([]);
+const objectUrls = ref([]);
 let searchTimer = null;
 let metaEventSource = null;
 
@@ -440,27 +510,18 @@ const activeConversation = computed(() => {
   return conversations.value.find((c) => c.id === activeConversationId.value) || null;
 });
 
+const deleteConversationMessage = computed(() => {
+  const title = activeConversation.value?.title || "this conversation";
+  return `This will permanently remove ${title} and all messages from your CRM inbox. This action cannot be undone.`;
+});
+
 const messageItems = computed(() => {
   const conv = activeConversation.value;
-  return messages.value.map((row) => {
-    const isOutbound = String(row?.direction || "").toLowerCase() === "outbound";
-    return {
-      id: row.id,
-      isOutbound,
-      sender: row.senderName || (isOutbound ? "Flossly" : "Client"),
-      message: row.message,
-      attachments: row.attachments || null,
-      timeLabel: formatChatTimestamp(row.createdAt),
-      statusIcon: isOutbound ? resolveDmStatusIcon(row?.status) : "",
-      statusColor: isOutbound ? resolveDmStatusColor(row?.status) : "",
-      automated: false,
-      avatarUrl: isOutbound ? "" : (conv?.avatarUrl || ""),
-      avatarText: isOutbound ? "F" : (conv?.avatarText || "C"),
-      dayKey: buildDayKey(row.createdAt),
-      dayLabel: buildDayLabel(row.createdAt),
-      createdAt: row.createdAt,
-    };
-  });
+  return messages.value.map((row) => mapDmMessageToChatItem(row, {
+    inboundAvatarUrl: conv?.avatarUrl || "",
+    inboundAvatarText: conv?.avatarText || "C",
+    outboundAvatarText: "F",
+  }));
 });
 
 const groupedMessages = computed(() => groupChatItems(messageItems.value));
@@ -532,13 +593,69 @@ const toggleConversationAutoReply = async (newValue) => {
 };
 
 const canSend = computed(() => {
+  const hasText = String(draftMessage.value || "").trim().length > 0;
+  const hasFiles = pendingFiles.value.length > 0;
   return (
     !!activeConversationId.value &&
-    String(draftMessage.value || "").trim().length > 0 &&
+    (hasText || hasFiles) &&
     !sending.value &&
     withinMessageWindow.value
   );
 });
+
+const getObjectUrl = (file) => {
+  const existing = objectUrls.value.find((entry) => entry.file === file);
+  if (existing) return existing.url;
+  const url = URL.createObjectURL(file);
+  objectUrls.value.push({ file, url });
+  return url;
+};
+
+const revokeObjectUrls = () => {
+  objectUrls.value.forEach((entry) => URL.revokeObjectURL(entry.url));
+  objectUrls.value = [];
+};
+
+const isImageFile = (file) => file?.type?.startsWith("image/");
+
+const fileIcon = (file) => {
+  const type = String(file?.type || "").toLowerCase();
+  if (type.startsWith("video/")) return "mdi-file-video-outline";
+  if (type.startsWith("audio/")) return "mdi-file-music-outline";
+  if (type.includes("pdf")) return "mdi-file-pdf-box";
+  if (type.includes("word") || type.includes("document")) return "mdi-file-word-outline";
+  if (type.includes("sheet") || type.includes("excel")) return "mdi-file-excel-outline";
+  return "mdi-file-outline";
+};
+
+const fileIconColor = (file) => {
+  const type = String(file?.type || "").toLowerCase();
+  if (type.includes("pdf")) return "#e53935";
+  if (type.includes("word") || type.includes("document")) return "#1565c0";
+  if (type.includes("sheet") || type.includes("excel")) return "#2e7d32";
+  return "#546e7a";
+};
+
+const formatBytes = (bytes) => {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+};
+
+const onFilesSelected = (files) => {
+  pendingFiles.value = [...pendingFiles.value, ...files];
+};
+
+const removePendingFile = (idx) => {
+  const removed = pendingFiles.value[idx];
+  if (removed) {
+    const entry = objectUrls.value.find((item) => item.file === removed);
+    if (entry) URL.revokeObjectURL(entry.url);
+    objectUrls.value = objectUrls.value.filter((item) => item.file !== removed);
+  }
+  pendingFiles.value = pendingFiles.value.filter((_, i) => i !== idx);
+};
 
 const clearFilters = () => {
   showUnreadOnly.value = false;
@@ -601,10 +718,6 @@ const toggleAutoReply = async (newValue) => {
     const res = await crmStore.updateAutoReplySettings({ autoReplyEnabled: newValue });
     if (res?.code === 0) {
       autoReplyEnabled.value = !!res.data?.autoReplyEnabled;
-      mainStore?.setSnackbar?.({ 
-        title: newValue ? "Auto-reply enabled" : "Auto-reply disabled", 
-        type: "success" 
-      });
     } else {
       autoReplyEnabled.value = !newValue;
       mainStore?.setSnackbar?.({ title: res?.message || "Failed to update auto-reply settings", type: "error" });
@@ -631,7 +744,6 @@ const saveAutoReplyConfig = async () => {
     });
     if (res?.code === 0) {
       autoReplyConfig.value = res.data?.autoReplyConfig || autoReplyConfig.value;
-      mainStore?.setSnackbar?.({ title: "Auto-reply config saved", type: "success" });
       autoReplyConfigDialog.value = false;
     } else {
       mainStore?.setSnackbar?.({ title: res?.message || "Failed to save config", type: "error" });
@@ -660,17 +772,48 @@ const writeConversationCache = (conversationId) => {
   });
 };
 
+const removeConversationLocally = (conversationId) => {
+  const numericId = Number(conversationId);
+  conversations.value = conversations.value.filter((row) => Number(row?.id) !== numericId);
+  messageCache.value.delete(numericId);
+
+  if (activeConversationId.value !== numericId) return;
+
+  const nextConversationId = conversations.value[0]?.id || null;
+  if (nextConversationId) {
+    selectConversation(nextConversationId, { forceRefresh: true });
+    return;
+  }
+  clearActiveConversation();
+};
+
+const refreshPlaceholderConversations = async () => {
+  const placeholderRows = conversations.value.filter((conv) =>
+    isPlaceholderParticipantName(conv?.title, conv?.platform)
+  );
+  if (!placeholderRows.length) return;
+
+  try {
+    const res = await crmStore.refreshAllDmProfiles();
+    if (res?.code === 0 && Number(res.data?.updated || 0) > 0) {
+      await loadConversations(true);
+    }
+  } catch {}
+};
+
 const selectConversation = (id, options = {}) => {
   const forceRefresh = !!options.forceRefresh;
   if (!forceRefresh && activeConversationId.value === id) return;
   activeConversationId.value = id;
   draftMessage.value = "";
+  pendingFiles.value = [];
+  revokeObjectUrls();
   const conv = conversations.value.find((c) => c.id === id);
   conversationAutoReplyEnabled.value = conv?.autoReplyEnabled !== false;
   loadMessages(true, { forceRefresh });
 
   // Silently refresh profile if name is a raw ID or avatar is missing
-  const needsRefresh = conv && (!conv.avatarUrl || isRawId(conv.title) || conv.title === "Instagram User" || conv.title === "Messenger User");
+  const needsRefresh = conv && (!conv.avatarUrl || isPlaceholderParticipantName(conv.title, conv.platform));
   if (needsRefresh) {
     crmStore.refreshDmProfile({ conversationId: id }).then((res) => {
       if (res?.code === 0 && res.data?.updated) {
@@ -697,8 +840,34 @@ const clearActiveConversation = () => {
   activeConversationId.value = null;
   messages.value = [];
   draftMessage.value = "";
+  pendingFiles.value = [];
+  revokeObjectUrls();
   messageCursor.value = null;
   messageHasMore.value = true;
+};
+
+const openDeleteConversationDialog = () => {
+  if (!activeConversationId.value) return;
+  deleteConversationDialog.value = true;
+};
+
+const confirmDeleteConversation = async () => {
+  if (!activeConversationId.value || deletingConversation.value) return;
+  const conversationId = activeConversationId.value;
+  deletingConversation.value = true;
+  try {
+    const res = await crmStore.deleteDmConversation({ conversationId });
+    if (res?.code === 0) {
+      deleteConversationDialog.value = false;
+      removeConversationLocally(conversationId);
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || res?.error || "Failed to delete conversation", type: "error" });
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.data?.message || e?.message || "Failed to delete conversation", type: "error" });
+  } finally {
+    deletingConversation.value = false;
+  }
 };
 
 const openConnectionsSetup = () => {
@@ -784,7 +953,7 @@ const loadMessages = async (reset = false, options = {}) => {
       if (!newMessages.length) messageHasMore.value = false;
       if (newMessages.length < 30) messageHasMore.value = false;
       writeConversationCache(activeConversationId.value);
-      await crmStore.markDmRead({ conversationId: activeConversationId.value });
+      crmStore.markDmRead({ conversationId: activeConversationId.value }).catch(() => {});
     }
   } finally {
     loadingMessages.value = false;
@@ -794,17 +963,30 @@ const loadMessages = async (reset = false, options = {}) => {
 const sendMessage = async () => {
   if (!canSend.value) return;
   const text = String(draftMessage.value || "").trim();
-  if (!text) return;
+  if (!text && !pendingFiles.value.length) return;
   try {
     sending.value = true;
+    const attachments = [];
+    for (const file of pendingFiles.value) {
+      const form = new FormData();
+      form.append("file", file);
+      const resUpload = await crmStore.uploadDmAttachment(form);
+      if (resUpload?.code !== 0) {
+        mainStore?.setSnackbar?.({ title: resUpload?.error || "Failed to upload attachment", type: "error" });
+        return;
+      }
+      if (resUpload?.data) attachments.push(resUpload.data);
+    }
     const res = await crmStore.sendDmMessage({
       conversationId: activeConversationId.value,
       message: text,
+      attachments,
     });
     if (res?.code === 0) {
       draftMessage.value = "";
+      pendingFiles.value = [];
+      revokeObjectUrls();
       await loadMessages(true, { forceRefresh: true });
-      await crmStore.processDmQueue({ limit: 20 });
       return;
     }
     const msg = res?.error || res?.message || "Failed to send message";
@@ -825,12 +1007,20 @@ const fallbackParticipantName = (platform) => {
   return "Unknown";
 };
 
+const isPlaceholderParticipantName = (name, platform) => {
+  const normalizedName = String(name || "").trim().toLowerCase();
+  if (!normalizedName || normalizedName === "unknown" || isRawId(normalizedName)) return true;
+
+  const fallback = String(fallbackParticipantName(platform) || "").trim().toLowerCase();
+  return !!fallback && normalizedName === fallback;
+};
+
 const resolveConversationTitle = ({ platform, participantName, metadataName, threadId }) => {
   const candidates = [participantName, metadataName]
     .map((v) => String(v || "").trim())
     .filter(Boolean);
 
-  const firstHumanName = candidates.find((name) => !isRawId(name));
+  const firstHumanName = candidates.find((name) => !isPlaceholderParticipantName(name, platform));
   if (firstHumanName) return firstHumanName;
 
   const thread = String(threadId || "").trim();
@@ -953,14 +1143,18 @@ onMounted(async () => {
     await navigateTo({ query: { ...(convoId ? { conversationId: convoId } : {}) } }, { replace: true });
   }
 
-  await loadConversations(true);
-  await loadDmConnectionStatus();
-  await loadAutoReplySettings();
+  // All three are independent — run in parallel to cut initial load time
+  await Promise.all([
+    loadConversations(true),
+    loadDmConnectionStatus(),
+    loadAutoReplySettings(),
+  ]);
 
   if (convoId) {
     selectConversation(convoId);
   }
 
+  refreshPlaceholderConversations();
   startMetaStream();
 });
 
@@ -970,13 +1164,27 @@ const startMetaStream = () => {
   metaEventSource.addEventListener('dm', async (e) => {
     try {
       const data = JSON.parse(e.data);
-      if (data.conversationId && data.conversationId === activeConversationId.value) {
+      const changedId = Number(data.conversationId || 0) || null;
+
+      // Reload messages if the active conversation received a new message
+      if (changedId && changedId === activeConversationId.value) {
         await loadMessages(true, { forceRefresh: true });
       }
-      if (data.orgId) {
-        await loadConversations(true);
+
+      const existingIdx = changedId
+        ? conversations.value.findIndex((c) => c.id === changedId)
+        : -1;
+
+      if (existingIdx !== -1) {
+        // Known conversation: bump to top and increment unread count if it isn't open
+        const updated = { ...conversations.value[existingIdx] };
+        if (changedId !== activeConversationId.value) {
+          updated.unreadCount = (updated.unreadCount || 0) + 1;
+        }
+        conversations.value = [updated, ...conversations.value.filter((_, i) => i !== existingIdx)];
       } else {
-        await loadConversations(false);
+        // Unknown conversation (new DM from someone new): full reload to pick it up
+        await loadConversations(true);
       }
     } catch {}
   });
@@ -994,6 +1202,7 @@ const stopMetaStream = () => {
 
 onUnmounted(() => {
   stopMetaStream();
+  revokeObjectUrls();
 });
 </script>
 
@@ -1219,6 +1428,15 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
+.dms-delete-btn {
+  opacity: 0.72;
+}
+
+.dms-delete-btn:hover {
+  opacity: 1;
+  background: rgba(220, 38, 38, 0.08);
+}
+
 .dms-thread-body {
   flex: 1;
   overflow-y: auto;
@@ -1241,6 +1459,97 @@ onUnmounted(() => {
 }
 
 /* ── Misc ──────────────────────────────────────────── */
+.chat-pending-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f0f2f5;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.chat-pending-file { flex: 0 0 auto; }
+
+.chat-pending-image {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #e2e8f0;
+}
+
+.chat-pending-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chat-pending-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.chat-pending-remove:hover { background: rgba(0, 0, 0, 0.85); }
+
+.chat-pending-doc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 6px 8px;
+  max-width: 200px;
+}
+
+.chat-pending-doc-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-pending-doc-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-pending-doc-size {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.chat-pending-doc-remove {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+}
+
+.chat-pending-doc-remove:hover { color: #ef4444; }
+
 .custom-search {
   height: 46px;
   border-radius: 8px;

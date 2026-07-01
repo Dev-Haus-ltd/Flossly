@@ -585,19 +585,17 @@ export const adminBulkUploadChecklistsForOrg = async (event) => {
         if (taskCache.has(key)) return taskCache.get(key);
 
         const task = await Task.findOne({
-          where: { title: { [Op.iLike]: rawTitle }, isSystemTask: false },
+          where: {
+            title: { [Op.iLike]: rawTitle },
+            isSystemTask: false,
+            categoryId: { [Op.in]: [...orgCategoryIds] },
+          },
           attributes: ["id", "title", "categoryId"],
         });
 
         if (!task) {
           rowErrors.push(
-            `Row ${rowNum}: No org task found with title "${rawTitle}"`
-          );
-          return null;
-        }
-        if (!orgCategoryIds.has(task.categoryId)) {
-          rowErrors.push(
-            `Row ${rowNum}: Task "${rawTitle}" does not belong to organisation ${organisationId}`
+            `Row ${rowNum}: No org task found with title "${rawTitle}" for organisation ${organisationId}`
           );
           return null;
         }

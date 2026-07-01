@@ -9,7 +9,7 @@ export const SystemDocumentFolder = sequelize.define(
       autoIncrement: true,
     },
     name: {
-      type: DataTypes.STRING(50),
+      type: DataTypes.STRING(255),
       allowNull: false,
     },
     color: {

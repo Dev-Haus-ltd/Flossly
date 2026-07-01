@@ -5,45 +5,52 @@
 
     <!-- Left: Floating glass signup card -->
     <div class="signup-card-col d-flex align-center justify-center">
-      <div class="d-flex flex-column align-center" style="width: 100%; max-width: 480px;">
+      <div class="d-flex flex-column align-center" style="width: 100%; max-width: 600px;">
         <img src="/white-logo.svg" alt="FlosslyOS" class="page-logo mb-6" />
-      <div class="signup-card pa-10" style="width: 100%">
+      <div class="signup-card pa-8" style="width: 100%">
         <template v-if="!isSignedUp">
           <h2 class="welcome-heading text-center mb-2">Sign Up</h2>
-          <p class="welcome-sub text-center mb-6">Get started with Flossly to streamline your clinic in minutes.</p>
+          <p class="welcome-sub text-center mb-4">Get started with Flossly to streamline your clinic in minutes.</p>
 
           <v-form ref="form" @submit.prevent="openConfirmDialog">
-            <label class="lbl">Full Name</label>
-            <v-text-field
-              v-model="signUpDetails.fullName"
-              type="text"
-              placeholder="John Doe"
-              :rules="[
-                (v) => !!v || 'Full name is required',
-                (v) => (v && v.trim().length > 0) || 'Full name cannot be just spaces'
-              ]"
-              density="compact"
-              variant="solo"
-              single-line
-              required
-              class="mb-2 input-bordered"
-              flat
-            />
+            <!-- Row 1: Full Name + Email -->
+            <div class="fields-grid mb-2">
+              <div>
+                <label class="lbl">Full Name</label>
+                <v-text-field
+                  v-model="signUpDetails.fullName"
+                  type="text"
+                  placeholder="John Doe"
+                  :rules="[
+                    (v) => !!v || 'Full name is required',
+                    (v) => (v && v.trim().length > 0) || 'Full name cannot be just spaces'
+                  ]"
+                  density="compact"
+                  variant="solo"
+                  single-line
+                  required
+                  class="input-bordered"
+                  flat
+                />
+              </div>
+              <div>
+                <label class="lbl">Email</label>
+                <v-text-field
+                  v-model="signUpDetails.email"
+                  type="email"
+                  placeholder="you@example.com"
+                  :rules="emailRules"
+                  density="compact"
+                  variant="solo"
+                  single-line
+                  required
+                  class="input-bordered"
+                  flat
+                />
+              </div>
+            </div>
 
-            <label class="lbl">Email</label>
-            <v-text-field
-              v-model="signUpDetails.email"
-              type="email"
-              placeholder="you@example.com"
-              :rules="emailRules"
-              density="compact"
-              variant="solo"
-              single-line
-              required
-              class="mb-2 input-bordered"
-              flat
-            />
-
+            <!-- Row 2: Password (full width) -->
             <label class="lbl">Password</label>
             <v-text-field
               v-model="signUpDetails.password"
@@ -60,34 +67,40 @@
               flat
             />
 
-            <label class="lbl">Clinic Name</label>
-            <v-text-field
-              v-model="signUpDetails.organisationName"
-              placeholder="Your Clinic Name"
-              :rules="[(v) => !!v || 'Clinic name is required']"
-              variant="solo"
-              required
-              single-line
-              density="compact"
-              class="mb-2 input-bordered"
-              flat
-            />
-
-            <label class="lbl">Clinic Role</label>
-            <v-select
-              v-model="signUpDetails.roleId"
-              :items="rolesList"
-              placeholder="Select Role"
-              variant="solo"
-              required
-              single-line
-              item-title="title"
-              item-value="id"
-              density="compact"
-              :rules="[(v) => !!v || 'Role is required']"
-              class="mb-2 input-bordered select-bordered"
-              flat
-            />
+            <!-- Row 3: Clinic Name + Clinic Role -->
+            <div class="fields-grid mb-2">
+              <div>
+                <label class="lbl">Clinic Name</label>
+                <v-text-field
+                  v-model="signUpDetails.organisationName"
+                  placeholder="Your Clinic"
+                  :rules="[(v) => !!v || 'Clinic name is required']"
+                  variant="solo"
+                  required
+                  single-line
+                  density="compact"
+                  class="input-bordered"
+                  flat
+                />
+              </div>
+              <div>
+                <label class="lbl">Clinic Role</label>
+                <v-select
+                  v-model="signUpDetails.roleId"
+                  :items="rolesList"
+                  placeholder="Select Role"
+                  variant="solo"
+                  required
+                  single-line
+                  item-title="title"
+                  item-value="id"
+                  density="compact"
+                  :rules="[(v) => !!v || 'Role is required']"
+                  class="input-bordered select-bordered"
+                  flat
+                />
+              </div>
+            </div>
 
             <div class="d-flex align-center mb-4">
               <v-checkbox
@@ -155,7 +168,7 @@
     </div>
 
     <!-- Right: Illustration + tagline (hidden on mobile) -->
-    <div v-if="!smAndDown" class="right-panel d-flex flex-column align-center justify-center">
+    <div v-if="!mdAndDown" class="right-panel d-flex flex-column align-center justify-center">
       <img
         src="/illustration.png"
         class="right-illustration"
@@ -173,7 +186,7 @@
 
 <script setup>
 import { useDisplay } from "vuetify";
-const { smAndDown } = useDisplay();
+const { smAndDown, mdAndDown } = useDisplay();
 
 const signUpDetails = ref({
   email: "",
@@ -305,15 +318,15 @@ const goToLogin = () => {
 .signup-card-col {
   position: relative;
   z-index: 1;
-  flex: 0 0 50%;
-  max-width: 50%;
+  flex: 0 0 55%;
+  max-width: 55%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: 24px 24px;
 }
 
-@media (max-width: 959px) {
+@media (max-width: 1100px) {
   .signup-card-col {
     flex: 0 0 100%;
     max-width: 100%;
@@ -322,28 +335,13 @@ const goToLogin = () => {
 
 .signup-card {
   width: 100%;
-  max-width: 480px;
-  max-height: 90vh;
-  overflow-y: auto;
+  max-width: 600px;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(50px);
   -webkit-backdrop-filter: blur(50px);
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 15px;
   box-shadow: 0px 40px 40px 0px rgba(0, 0, 0, 0.2);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
-}
-
-.signup-card::-webkit-scrollbar {
-  width: 4px;
-}
-.signup-card::-webkit-scrollbar-track {
-  background: transparent;
-}
-.signup-card::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.15);
-  border-radius: 4px;
 }
 
 .right-panel {
@@ -366,7 +364,7 @@ const goToLogin = () => {
 
 .right-heading {
   font-family: "Inter", sans-serif;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 26px;
   line-height: 1.3;
   color: #fff;
@@ -438,6 +436,18 @@ const goToLogin = () => {
   line-height: 44px;
 }
 
+.fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 560px) {
+  .fields-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .agreement-text {
   font-family: "Inter", sans-serif;
   font-weight: 400;
@@ -480,9 +490,4 @@ const goToLogin = () => {
   background-color: rgba(38, 109, 240, 0.06) !important;
 }
 
-@media (max-width: 960px) {
-  .signup-page {
-    align-items: flex-start;
-  }
-}
 </style>

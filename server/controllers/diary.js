@@ -47,6 +47,8 @@ import {
   serializeClinicalTemplate,
 } from "../utils/clinicalNoteTemplates";
 import { gatherTreatmentPlanResearch } from "../utils/treatmentPlanResearch";
+import { createEventNotification } from "../utils/notificationService.js"
+import { syncAppointmentToCalendar } from "./google";
 
 const _researchCache = new Map();
 const RESEARCH_CACHE_TTL = 30 * 60 * 1000;
@@ -567,7 +569,7 @@ export const getPatientStats = async (event) => {
 
 export const createPatient = async (event) => {
   try {
-    const { orgId } = event.context.user;
+    const { orgId, userId } = event.context.user;
     const body = await readBody(event);
     const payload = typeof body === "string" ? parseJsonBody(body) : body;
     const required = ["firstName", "lastName"];
@@ -618,6 +620,12 @@ export const createPatient = async (event) => {
       recallInterval: payload.recallInterval || null,
     };
     const created = await DiaryPatient.create(data);
+    try {
+      const acquisitionSource = String(payload?.acquisitionSource || "").toLowerCase();
+      if (acquisitionSource.includes("crm lead") && orgId && userId) {
+        await createEventNotification(orgId, userId, "celebrate_b4_patient");
+      }
+    } catch {}
     return success(created);
   } catch (e) {
     const msg =
@@ -913,6 +921,23 @@ export const createAppointment = async (event) => {
       notes: payload.notes || null,
       amount: amount || 0,
     });
+
+    // Fire-and-forget Google Calendar sync (fetch dentist name outside the async chain)
+    User.findByPk(created.dentistId, { attributes: ['fullName'] }).then((dentist) => {
+      syncAppointmentToCalendar('create', {
+        id: created.id,
+        organisationId: Number(orgId),
+        dentistId: created.dentistId,
+        dentistName: dentist?.fullName || null,
+        patientId: created.patientId,
+        startTime: created.startTime,
+        endTime: created.endTime,
+        treatmentName: created.treatmentName,
+        status: created.status,
+        notes: created.notes,
+      })
+    }).catch(() => {})
+
     // Return consistent time fields for UI convenience
     return success({
       id: created.id,
@@ -2237,6 +2262,23 @@ export const updateAppointment = async (event) => {
       }
     }
     await row.save();
+
+    // Fire-and-forget Google Calendar sync
+    User.findByPk(row.dentistId, { attributes: ['fullName'] }).then((dentist) => {
+      syncAppointmentToCalendar('update', {
+        id: row.id,
+        organisationId: Number(orgId),
+        dentistId: row.dentistId,
+        dentistName: dentist?.fullName || null,
+        patientId: row.patientId,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        treatmentName: row.treatmentName,
+        status: row.status,
+        notes: row.notes,
+      })
+    }).catch(() => {})
+
     return success({ ok: true });
   } catch (e) {
     const msg =
@@ -2278,6 +2320,12 @@ export const deleteAppointment = async (event) => {
       },
     );
 
+    // Fire-and-forget Google Calendar sync before destroy (we need the id)
+    syncAppointmentToCalendar('delete', {
+      id: row.id,
+      organisationId: Number(orgId),
+    }).catch(() => {})
+
     await row.destroy();
     return success({ ok: true, id });
   } catch (e) {
@@ -2299,18 +2347,17 @@ export const listDentistsForDate = async (event) => {
     // Only include Active users (exclude Invited, Disabled, Expired)
     const users = await User.findAll({
       attributes: ["id", "fullName", "email", "photo", "roleId"],
-      where: { status: "Active" },
       include: [
         { model: Role, as: "role", attributes: ["title"] },
         {
           model: UserOrganisation,
           as: "userOrganisations",
           attributes: [],
-          where: { organisationId: Number(orgId) },
+          where: { organisationId: Number(orgId), status: "Active" },
         },
       ],
     });
-    const dentistRoleIds = new Set([1, 2, 5]);
+    const dentistRoleIds = new Set([1, 2, 3, 4, 5]);
     const out = users
       .filter((u) => {
         const roleId = Number(u.roleId);

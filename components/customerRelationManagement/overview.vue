@@ -179,26 +179,15 @@
                 WhatsApp is available on paid plans only.
               </span>
             </template>
-            <!-- GOOGLE 
-            <template v-else-if="card.key === 'google'">
+            <template v-else-if="card.key === 'googleCalendar'">
               <v-btn
-                color="primary"
-                variant="outlined"
-                rounded="lg"
-                class="action-btn"
-                :disabled="!isGoogleConnected"
-                @click="openGoogleHealth"
-              >
-                Google Health
-              </v-btn>
-              <v-btn
-                v-if="isGoogleConnected"
+                v-if="isGoogleCalendarConnected"
                 color="grey-darken-1"
                 variant="outlined"
                 rounded="lg"
                 class="action-btn"
-                @click="disconnectGoogle"
-                :loading="googleDisconnecting"
+                :loading="googleCalendarDisconnecting"
+                @click="onDisconnectGoogleCalendar"
               >
                 Disconnect
               </v-btn>
@@ -208,25 +197,12 @@
                 variant="flat"
                 rounded="lg"
                 class="action-btn action-btn--primary"
-                :loading="googleConnecting"
-                @click="connectGoogle"
+                :loading="googleCalendarConnecting"
+                @click="onConnectGoogleCalendar"
               >
                 Connect
               </v-btn>
-            </template> 
-            -->
-            <!-- Google card actions hidden -->
-            <!-- <template v-else-if="card.key === 'google'">
-              <v-btn
-                color="primary"
-                variant="flat"
-                rounded="lg"
-                class="action-btn action-btn--primary"
-                disabled
-              >
-                Coming Soon
-              </v-btn>
-            </template> -->
+            </template>
             <template v-else>
               <v-btn
                 color="primary"
@@ -452,7 +428,16 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="autoReplyConfigDialog" max-width="600" persistent>
+    <CommonConfirmDialog
+      v-model="confirmDisconnectMeta"
+      title="Disconnect Meta?"
+      message="This will remove the Meta integration. New leads from Facebook forms will stop arriving until you reconnect."
+      confirm-text="Disconnect"
+      @confirm="doDisconnectMeta"
+      @cancel="confirmDisconnectMeta = false"
+    />
+
+    <v-dialog v-model="autoReplyConfigDialog" max-width="600" persistent scrollable>
       <v-card>
         <v-card-title class="d-flex align-center justify-space-between pa-4">
           <span>Auto-Reply Configuration</span>
@@ -461,7 +446,7 @@
           </v-btn>
         </v-card-title>
         <v-divider />
-        <v-card-text class="pa-4">
+        <v-card-text class="pa-4" style="max-height: 70vh; overflow-y: auto;">
           <p class="text-caption text-medium-emphasis mb-4">
             Provide context about your practice so the bot can respond intelligently to incoming leads. All fields are required to enable auto-reply.
           </p>
@@ -495,6 +480,17 @@
             persistent-hint
             rows="4"
           />
+          <v-divider class="my-4" />
+          <div class="text-subtitle-2 mb-2">Appointment Booking</div>
+          <v-switch
+            v-model="autoReplyConfig.bookingEnabled"
+            label="Enable appointment booking in Flossly Diary via DM"
+            density="compact"
+            class="mb-2"
+          />
+          <div v-if="autoReplyConfig.bookingEnabled" class="text-caption text-medium-emphasis mb-4">
+            The AI will collect the customer's name, phone, and preferred time, then book a real appointment and create a CRM lead automatically.
+          </div>
         </v-card-text>
         <v-divider />
         <v-card-actions class="pa-4">
@@ -596,10 +592,15 @@ const googleStatus = reactive({
   expiresAt: '',
   scopes: [],
 })
+const isGoogleCalendarConnected = ref(false)
+const googleCalendarEmail = ref('')
+const googleCalendarConnecting = ref(false)
+const googleCalendarDisconnecting = ref(false)
+
 const autoReplyEnabled = ref(false)
 const whatsappAutoReplyEnabled = ref(false)
 const autoReplyLoading = ref(false)
-const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "" })
+const autoReplyConfig = ref({ services: "", cta: "", outOfScopeMessage: "Thank you so much! Our team will contact you shortly.", ctaScript: "", bookingEnabled: false })
 const autoReplyConfigDialog = ref(false)
 const autoReplyConfigLoading = ref(false)
 
@@ -662,8 +663,9 @@ const currentOrgLicense = computed(() => {
 })
 const canManageWhapi = computed(() => {
   const type = String(currentOrgLicense.value || '').toLowerCase()
+  if (type === 'system') return true
   const billingCycle = authStore.loggedUser?.licenseBillingCycle || user.value?.licenseBillingCycle || null
-  return ['crm', 'pro', 'glide', 'soar', 'system'].includes(type) && !!billingCycle
+  return ['crm', 'pro', 'glide', 'soar'].includes(type) && !!billingCycle
 })
 
 const integrationCards = computed(() => ([
@@ -698,6 +700,16 @@ const integrationCards = computed(() => ([
   //   icon: googleLogo,
   //   iconClass: 'google',
   // },
+  {
+    key: 'googleCalendar',
+    title: 'Google Calendar',
+    subtitlePrimary: googleCalendarEmail.value || userEmail.value || '-',
+    subtitleSecondary: currentOrgName.value || '-',
+    statusLabel: isGoogleCalendarConnected.value ? 'Connected' : INTEGRATION_STATUS_NOT_CONNECTED_LABEL,
+    statusColor: isGoogleCalendarConnected.value ? INTEGRATION_STATUS_CHIP_SUCCESS : INTEGRATION_STATUS_CHIP_ACCENT,
+    icon: googleLogo,
+    iconClass: 'google',
+  },
   {
     key: 'chatbot',
     title: 'Chatbot',
@@ -1259,6 +1271,64 @@ const handleGoogleCallback = () => {
   }
 }
 
+const checkGoogleCalendarConnection = async () => {
+  try {
+    const res = await crmStore.googleCalendarConnectionStatus()
+    if (res?.code === 0 && res.data?.connected) {
+      isGoogleCalendarConnected.value = true
+      googleCalendarEmail.value = res.data.email || ''
+    } else {
+      isGoogleCalendarConnected.value = false
+      googleCalendarEmail.value = ''
+    }
+  } catch {
+    isGoogleCalendarConnected.value = false
+    googleCalendarEmail.value = ''
+  }
+}
+
+const onConnectGoogleCalendar = async () => {
+  googleCalendarConnecting.value = true
+  try {
+    const res = await crmStore.startGoogleCalendarAuth()
+    if (res?.code === 0 && res.data?.url) {
+      window.location.href = res.data.url
+      return
+    }
+    mainStore?.setSnackbar?.({ title: res?.message || 'Unable to start Google Calendar connection', type: 'error' })
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Unable to start Google Calendar connection', type: 'error' })
+  } finally {
+    googleCalendarConnecting.value = false
+  }
+}
+
+const onDisconnectGoogleCalendar = async () => {
+  googleCalendarDisconnecting.value = true
+  try {
+    const res = await crmStore.disconnectGoogleCalendar()
+    if (res?.code === 0) {
+      isGoogleCalendarConnected.value = false
+      googleCalendarEmail.value = ''
+      mainStore?.setSnackbar?.({ title: 'Google Calendar disconnected', type: 'success' })
+    } else {
+      mainStore?.setSnackbar?.({ title: res?.message || 'Failed to disconnect Google Calendar', type: 'error' })
+    }
+  } catch (e) {
+    mainStore?.setSnackbar?.({ title: e?.message || 'Failed to disconnect Google Calendar', type: 'error' })
+  } finally {
+    googleCalendarDisconnecting.value = false
+  }
+}
+
+const handleGoogleCalendarCallback = () => {
+  if (route.query.google_calendar !== 'connected') return
+  checkGoogleCalendarConnection()
+  mainStore?.setSnackbar?.({ title: 'Google Calendar connected — diary appointments will now sync automatically', type: 'success' })
+  const nextQuery = { ...route.query }
+  delete nextQuery.google_calendar
+  router.replace({ query: nextQuery })
+}
 
 const updateLeadsChartData = async () => {
   try {
@@ -1468,8 +1538,9 @@ onMounted(async () => {
   loadUser()
   handleMetaQuery()
   handleGoogleCallback()
+  handleGoogleCalendarCallback()
   startWhapiStatusStream()
-  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads(), checkGoogleConnection(), loadAutoReplySettings()])
+  await Promise.all([checkMetaConnection(), loadWhapiStatus(), loadLeads(), checkGoogleConnection(), checkGoogleCalendarConnection(), loadAutoReplySettings()])
   loadWhapiChannels(false)
 })
 

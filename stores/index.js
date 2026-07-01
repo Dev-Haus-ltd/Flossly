@@ -22,13 +22,7 @@ export const LICENSE_TYPES = {
   SOAR:   "Soar",
 };
 
-export const resolveUserLicenseType = (user) => {
-  const preference = Array.isArray(user?.preferences)
-    ? user.preferences[0]
-    : user?.preferences;
-
-  return preference?.licenseType || LICENSE_TYPES.LITE;
-};
+export const resolveUserLicenseType = (_user) => getLicenseTypeFromStorage();
 
 // Maps any legacy or current license type to the menu feature set it should see
 const LICENSE_FEATURES = {
@@ -56,7 +50,7 @@ const getDiaryRouteByLicense = (licenseType) =>
   [LICENSE_TYPES.PRO, LICENSE_TYPES.SYSTEM, LICENSE_TYPES.SOAR].includes(
     licenseType,
   )
-    ? "/diary"
+    ? "/diary/calendar"
     : "/diary/calendar";
 
 const LOCK_VISIBLE_FEATURES = new Set([
@@ -230,7 +224,14 @@ export const useMainStore = defineStore("mainStore", {
               title: "Leads",
               value: "crmLeads",
               imgPath: crmIcon,
-              to: "/crm/leads",
+              to: { path: "/crm/leads", query: {} },
+              featureKey: "crm_leads",
+            },
+            {
+              title: "Clients",
+              value: "crmClients",
+              imgPath: crmIcon,
+              to: "/crm/clients",
               featureKey: "crm_leads",
             },
             {
@@ -280,26 +281,19 @@ export const useMainStore = defineStore("mainStore", {
           featureKey: "diary",
           children: [
             {
-              title: "Calendar",
-              value: "diaryCalendar",
-              imgPath: tasksIcon,
-              to: "/diary/calendar",
-              featureKey: "diary",
-            },
-            {
               title: "Patients",
               value: "diaryPatients",
               imgPath: tasksIcon,
               to: "/diary/patients",
               featureKey: "patientBooking",
             },
-            {
-              title: "Finance",
-              value: "diaryfinance",
-              imgPath: tasksIcon,
-              to: "/diary/finance",
-              featureKey: "patientBooking",
-            },
+            // {
+            //   title: "Finance",
+            //   value: "diaryfinance",
+            //   imgPath: tasksIcon,
+            //   to: "/diary/finance",
+            //   featureKey: "patientBooking",
+            // },
           ],
         },
         // {
@@ -417,7 +411,14 @@ export const useMainStore = defineStore("mainStore", {
               title: "Leads",
               value: "crmLeads",
               imgPath: crmIcon,
-              to: "/crm/leads",
+              to: { path: "/crm/leads", query: {} },
+              featureKey: "crm_leads",
+            },
+            {
+              title: "Clients",
+              value: "crmClients",
+              imgPath: crmIcon,
+              to: "/crm/clients",
               featureKey: "crm_leads",
             },
             {

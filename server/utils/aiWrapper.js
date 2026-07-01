@@ -531,3 +531,99 @@ export const aiWrapper = {
   applyClinicalNoteTemplateDraft,
   getLlmModel,
 };
+
+const bookAppointmentTool = {
+  name: "book_appointment",
+  description: "Book a diary appointment for the customer. Call this only when you have confirmed the patient's name, phone number, and a preferred date/time. Do not guess values.",
+  input_schema: {
+    type: "object",
+    properties: {
+      patient_name: { "type": "string" },
+      patient_phone: { "type": "string" },
+      preferred_date: { "type": "string", description: "YYYY-MM-DD" },
+      preferred_time: { "type": "string", description: "HH:MM (24h)" },
+      treatment: { "type": "string", description: "Optional treatment interest" },
+      notes: { "type": "string", description: "Any other relevant info from the conversation" },
+    },
+    required: ["patient_name", "patient_phone", "preferred_date", "preferred_time"],
+  },
+};
+
+export async function generateAutoReplyWithTools({ organisationName, organisationType, message, history = [], autoReplyConfig = {} }) {
+  const { services = "", cta = "", outOfScopeMessage = "Thank you so much! Our team will contact you shortly.", ctaScript = "" } = autoReplyConfig;
+
+  const systemPrompt = `You are a warm, friendly, and professional assistant for a practice called "${organisationName}".
+
+Your goal is to respond like a real human team member — not a robot. Your tone should feel natural, reassuring, and conversational, while still being professional and clear.
+
+RESPONSE STYLE:
+- Be friendly and conversational, but avoid repeating greetings in every message
+- Acknowledge the user's message naturally and directly
+- Provide helpful, clear, and relevant information based on their question
+- Keep responses concise (typically 2–4 sentences, expand only if needed)
+- Use light warmth where appropriate, but avoid overusing emojis
+- Only include a call-to-action when it feels natural and relevant to the conversation
+
+IMPORTANT RULES:
+1. You have access to a booking tool. When a customer clearly wants to book an appointment AND you have collected all four of: patient name, phone number, preferred date, and preferred time — call the book_appointment tool.
+2. Do NOT call the tool until you have ALL four pieces of information: name, phone, date, and time.
+3. If information is missing, ask the customer for the missing details before proceeding.
+4. Do not provide exact pricing, timelines, or availability unless explicitly given.
+5. Avoid sounding repetitive, scripted, or overly generic — vary your phrasing based on the specific user message.
+6. Use conversation history to stay consistent and personalized.
+
+SERVICES/PRACTICE INFO: ${services}
+
+MAIN CALL-TO-ACTION:
+${cta || 'If you\'d like, I can help you get started or have our team reach out 😊'}
+
+SCOPE HANDLING:
+- If the question is clearly outside the scope of the practice, respond politely and guide the user back to relevant services or offer further help
+- Do not use a fixed or repetitive sentence; keep the response natural and context-aware
+${ctaScript ? `
+CTA REPLY SCRIPT:
+A lead has replied to or engaged with the call-to-action above. Follow the flow and intent of the script below when guiding the conversation — you do not need to use the exact wording, but the overall direction, steps, and goals should be respected:
+${ctaScript}
+
+Apply this script progressively across the conversation. Do not dump all steps into a single reply — move naturally through the flow as the lead responds.` : ""}`;
+
+  const client = await initializeAnthropicClient();
+  const llmModel = getLlmModel();
+
+  const messages = [];
+  if (history.length > 0) {
+    for (const msg of history) {
+      messages.push({ role: msg.role || "user", content: msg.content });
+    }
+  }
+  messages.push({ role: "user", content: message });
+
+  const response = await client.messages.create({
+    model: llmModel,
+    messages,
+    tools: [bookAppointmentTool],
+    tool_choice: { type: "auto" },
+    system: systemPrompt,
+    temperature: 0.4,
+    max_tokens: 700,
+  });
+
+  const stopReason = response.stop_reason;
+  const content = response.content;
+
+  if (stopReason === "tool_use") {
+    const toolBlock = content.find((b) => b.type === "tool_use");
+    if (toolBlock) {
+      return {
+        reply: null,
+        toolCall: {
+          name: toolBlock.name,
+          input: toolBlock.input,
+        },
+      };
+    }
+  }
+
+  const replyText = content.find((b) => b.type === "text")?.text?.trim() || "";
+  return { reply: replyText, toolCall: null };
+}

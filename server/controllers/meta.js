@@ -1,13 +1,14 @@
 import { Op, fn, col } from 'sequelize'
 import crypto from 'crypto'
-import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, OrganisationTreatment } from '../models'
+import { CrmLead, MetaPage, Organisation, User, UserOrganisation, MetaUserToken, MetaWhatsAppConfig, MetaAdAccount, MetaCampaign, MetaAdSet, MetaAd, MetaInsight, CrmDmAccount, CrmDmConversation, CrmDmMessage, OrganisationTreatment, DiaryAppointment, DiaryPatient, Role } from '../models'
 import { encrypt, decrypt } from '../utils/crypto'
 import { success, error } from '../utils/response'
 import { isLeadAllowedForOrg } from '../utils/requireUsageAllowed'
 import { addMetaClient, broadcastMetaEvent } from '../utils/metaStream'
-import { sendNotificationToMultipleUsers } from '../utils/fcmNotification'
+import { sendMetaDMNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification'
 import { parseJsonBody } from "../utils/body"
-import { chat, generateAutoReply } from '../utils/aiWrapper'
+import { chat, generateAutoReply, generateAutoReplyWithTools } from '../utils/aiWrapper'
+import { createLeadInternal } from './crm'
 import {
   runStructureSync,
   runInsightsSync,
@@ -117,6 +118,180 @@ const isWithinStandardMessagingWindow = (lastInboundAt) => {
   return Date.now() - lastInboundAt.getTime() <= STANDARD_MESSAGING_WINDOW_MS;
 };
 
+const fallbackDmParticipantName = (platform) => {
+  const normalized = String(platform || '').toLowerCase()
+  if (normalized === 'instagram') return 'Instagram User'
+  if (normalized === 'messenger') return 'Messenger User'
+  return 'Unknown'
+}
+
+const isRawDmIdentifier = (value) => /^\d{10,}$/.test(String(value || '').trim())
+
+const isPlaceholderDmParticipantName = (value, platform = null) => {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized) return true
+  if (normalized === 'unknown') return true
+  if (isRawDmIdentifier(normalized)) return true
+
+  const platformFallback = String(fallbackDmParticipantName(platform) || '').trim().toLowerCase()
+  return !!platformFallback && normalized === platformFallback
+}
+
+const resolveDmParticipantName = ({ platform, preferredName, currentName, threadId }) => {
+  const candidates = [preferredName, currentName]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+
+  const firstHumanName = candidates.find((name) => !isPlaceholderDmParticipantName(name, platform))
+  if (firstHumanName) return firstHumanName
+
+  const thread = String(threadId || '').trim()
+  if (thread && !isRawDmIdentifier(thread)) return thread
+  return fallbackDmParticipantName(platform)
+}
+
+const getDmLeadSource = (platform) => {
+  const normalized = String(platform || '').trim().toLowerCase()
+  if (normalized === 'instagram') return 'Instagram DM'
+  if (normalized === 'messenger') return 'Facebook DM'
+  return 'Meta DM'
+}
+
+const getLeadNameFromConversation = (conversation, fallbackThreadId = '') => {
+  const participantName = String(conversation?.participantName || '').trim()
+  if (participantName && !isPlaceholderDmParticipantName(participantName, conversation?.platform)) {
+    return participantName
+  }
+  const threadId = String(fallbackThreadId || conversation?.threadId || '').trim()
+  return threadId || null
+}
+
+const ensureLeadForDmConversation = async ({
+  organisationId,
+  conversation,
+  platform,
+  threadId,
+  pageId = null,
+  timestamp = new Date(),
+  messageText = '',
+  platformMessageId = null,
+}) => {
+  if (!organisationId || !conversation?.id) return null
+
+  const existingLeadId = Number(conversation?.metadata?.leadId || 0)
+  if (existingLeadId) {
+    const existingLead = await CrmLead.findOne({
+      where: { id: existingLeadId, organisationId: Number(organisationId), softDeleted: false },
+    })
+    if (existingLead) return existingLead
+  }
+
+  const existingLead = await CrmLead.findOne({
+    where: {
+      organisationId: Number(organisationId),
+      softDeleted: false,
+      rawData: {
+        [Op.contains]: {
+          metaDm: {
+            conversationId: Number(conversation.id),
+            platform: String(platform || ''),
+            threadId: String(threadId || ''),
+          },
+        },
+      },
+    },
+    order: [['createdAt', 'DESC']],
+  })
+
+  if (existingLead) {
+    conversation.metadata = {
+      ...(conversation.metadata || {}),
+      leadId: existingLead.id,
+      leadSource: existingLead.leadSource || getDmLeadSource(platform),
+    }
+    await conversation.save()
+    return existingLead
+  }
+
+  const leadAllowed = await isLeadAllowedForOrg(Number(organisationId))
+  if (!leadAllowed) {
+    console.warn('[META WEBHOOK] Lead limit reached, skipping DM lead creation', {
+      organisationId,
+      conversationId: conversation.id,
+      platform,
+      threadId,
+    })
+    return null
+  }
+
+  const leadSource = getDmLeadSource(platform)
+  const messagePreview = String(messageText || '').trim()
+  const created = await CrmLead.create({
+    organisationId: Number(organisationId),
+    pageId: pageId ? String(pageId) : null,
+    name: getLeadNameFromConversation(conversation, threadId),
+    inquiryDate: timestamp || new Date(),
+    leadSource,
+    leadStatus: 'New',
+    comments: messagePreview || null,
+    rawData: {
+      metaDm: {
+        conversationId: Number(conversation.id),
+        platform: String(platform || ''),
+        threadId: String(threadId || ''),
+        accountId: String(conversation.accountId || ''),
+        pageId: pageId ? String(pageId) : '',
+        platformMessageId: platformMessageId ? String(platformMessageId) : '',
+        createdFrom: 'dm_webhook',
+      },
+    },
+  })
+
+  conversation.metadata = {
+    ...(conversation.metadata || {}),
+    leadId: created.id,
+    leadSource,
+  }
+  await conversation.save()
+
+  try {
+    const orgUsers = await UserOrganisation.findAll({
+      where: { organisationId: Number(organisationId), status: 'Active' },
+      attributes: ['userId'],
+    })
+    const userIds = [...new Set(orgUsers.map((u) => u.userId).filter(Boolean))]
+    if (userIds.length) {
+      await sendNotificationToMultipleUsers({
+        userIds,
+        organisationId: Number(organisationId),
+        title: 'New DM Lead',
+        body: created.name || messagePreview || 'A new lead was created from a direct message',
+        type: 'lead_created',
+        referenceType: 'lead',
+        referenceId: created.id,
+        data: {
+          leadId: String(created.id),
+          leadName: created.name || '',
+          leadSource,
+          conversationId: String(conversation.id),
+          platform: String(platform || ''),
+          url: `/crm/leads?leadId=${created.id}`,
+        },
+        priority: 'high',
+      })
+    }
+  } catch (notifyErr) {
+    console.warn('[META WEBHOOK] DM lead notification failed', {
+      organisationId,
+      conversationId: conversation.id,
+      error: notifyErr?.message || notifyErr,
+    })
+  }
+
+  broadcastMetaEvent('lead', { orgId: organisationId, leadId: created.id, conversationId: conversation.id })
+  return created
+}
+
 const sendMetaMessage = async ({ accessToken, senderId, recipientId, message, messagingType = 'RESPONSE', tag = null }) => {
   const targetNode = encodeURIComponent(String(senderId || 'me'));
   const url = `https://graph.facebook.com/${META_VERSION}/${targetNode}/messages`;
@@ -176,13 +351,47 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
 
     console.log(`[Meta AutoReply] Conversation history: ${conversationHistory.length} messages for org ${orgId}`);
 
-    const { reply: replyText } = await generateAutoReply({
-      organisationName: org.name,
-      organisationType: org.type,
-      message: messageText,
-      history: conversationHistory,
-      autoReplyConfig: config,
-    });
+    let replyText;
+    let appointmentBooked = false;
+
+    if (config.bookingEnabled) {
+      const result = await generateAutoReplyWithTools({
+        organisationName: org.name,
+        organisationType: org.type,
+        message: messageText,
+        history: conversationHistory,
+        autoReplyConfig: config,
+      });
+
+      if (result.toolCall) {
+        const bookingResult = await executeBookAppointment({
+          orgId,
+          input: result.toolCall.input,
+          conversation,
+        });
+
+        const confirmationReply = await chat({
+          systemPrompt: `You are a warm, friendly, and professional assistant for a practice called "${org.name}". You help customers by confirming appointment bookings in a natural, reassuring way.`,
+          prompt: bookingResult.success
+            ? `The appointment was successfully booked for ${bookingResult.date} at ${bookingResult.time} with ${bookingResult.dentistName}. Write a warm confirmation message to the customer.`
+            : `The booking failed: ${bookingResult.reason}. Ask the customer for an alternative date/time.`,
+          history: conversationHistory,
+        });
+        replyText = confirmationReply;
+        appointmentBooked = bookingResult.success;
+      } else {
+        replyText = result.reply;
+      }
+    } else {
+      const { reply } = await generateAutoReply({
+        organisationName: org.name,
+        organisationType: org.type,
+        message: messageText,
+        history: conversationHistory,
+        autoReplyConfig: config,
+      });
+      replyText = reply;
+    }
 
     if (!replyText) return;
 
@@ -210,7 +419,7 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
       return;
     }
 
-    await sendMetaMessage({
+    const sendResp = await sendMetaMessage({
       accessToken: resolvedAccessToken,
       senderId: resolvedSenderId,
       recipientId: String(conversation.threadId),
@@ -222,13 +431,13 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
       organisationId: orgId,
       conversationId: conversation.id,
       platform: conversation.platform,
-      platformMessageId: null,
+      platformMessageId: sendResp?.message_id || null,
       direction: 'outbound',
       senderName: 'Flossly',
       message: replyText,
       attachments: null,
       status: 'sent',
-      metadata: { autoReply: true },
+      metadata: { autoReply: true, appointmentBooked },
     });
 
     conversation.lastMessageAt = new Date();
@@ -245,6 +454,103 @@ const sendAutoReply = async ({ orgId, conversation, messageText, accessToken, se
     console.error(`[Meta AutoReply] Failed for org ${orgId}:`, err?.message || err);
   }
 };
+
+export const executeBookAppointment = async ({ orgId, input, conversation }) => {
+  try {
+    const users = await User.findAll({
+      attributes: ['id', 'fullName', 'email', 'photo', 'roleId'],
+      include: [
+        { model: Role, as: 'role', attributes: ['title'] },
+        { model: UserOrganisation, as: 'userOrganisations', attributes: [], where: { organisationId: Number(orgId), status: 'Active' } },
+      ],
+    });
+    const dentistRoleIds = new Set([1, 2, 3, 4, 5]);
+    const dentists = users
+      .filter((u) => {
+        const roleId = Number(u.roleId);
+        const title = (u.role?.title || '').toLowerCase();
+        return dentistRoleIds.has(roleId) || title.includes('dentist');
+      })
+      .map((u) => ({ id: u.id, name: u.fullName }));
+
+    if (dentists.length === 0) {
+      return { success: false, reason: 'No dentist available' };
+    }
+
+    const dentistId = dentists[0].id;
+    const dentistName = dentists[0].name;
+
+    const startTime = parseLocalDateTime(input.preferred_date, input.preferred_time);
+    if (!startTime || isNaN(startTime.getTime())) {
+      return { success: false, reason: 'Invalid date or time format' };
+    }
+    const endTime = new Date(startTime);
+    endTime.setMinutes(endTime.getMinutes() + 30);
+
+    const { Op } = await import('sequelize');
+    const overlapWindow = { [Op.and]: [{ startTime: { [Op.lt]: endTime } }, { endTime: { [Op.gt]: startTime } }] };
+    const notCancelled = { status: { [Op.ne]: 'Cancelled' } };
+    const overlap = await DiaryAppointment.count({
+      where: { organisationId: Number(orgId), ...overlapWindow, ...notCancelled, dentistId },
+    });
+    if (overlap > 0) {
+      return { success: false, reason: 'Dentist unavailable at that time' };
+    }
+
+    let patientId = null;
+    const nameParts = String(input.patient_name || '').split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || '-';
+    const patient = await DiaryPatient.create({
+      organisationId: Number(orgId),
+      firstName,
+      lastName,
+    });
+    patientId = patient.id;
+
+    const appointment = await DiaryAppointment.create({
+      organisationId: Number(orgId),
+      patientId,
+      dentistId,
+      treatmentName: input.treatment || null,
+      status: 'Pending',
+      startTime,
+      endTime,
+      notes: input.notes || null,
+    });
+
+    const leadResult = await createLeadInternal({
+      orgId: Number(orgId),
+      name: input.patient_name,
+      telephone: input.patient_phone,
+      email: null,
+      treatment: input.treatment || null,
+      leadSource: 'Meta DM',
+      comments: input.notes || null,
+      rawData: conversation ? { conversationId: conversation.id, platform: conversation.platform } : null,
+    });
+
+    return {
+      success: true,
+      appointmentId: appointment.id,
+      leadId: leadResult.leadId,
+      dentistName,
+      date: input.preferred_date,
+      time: input.preferred_time,
+    };
+  } catch (err) {
+    console.error('[executeBookAppointment]', err?.message || err);
+    return { success: false, reason: 'Booking failed: ' + (err.message || 'unknown error') };
+  }
+};
+
+function parseLocalDateTime(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return null;
+  const [year, month, day] = String(dateStr).split('-').map(Number);
+  const [hour, minute] = String(timeStr).split(':').map(Number);
+  if ([year, month, day, hour, minute].some(isNaN)) return null;
+  return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
 
 export const authStart = async (event) => {
   const config = useRuntimeConfig()
@@ -1000,6 +1306,12 @@ const fetchDmHistoryForOrg = async (
 
           const participantNameFromApi = otherParticipant?.name || otherParticipant?.username || null
           const participantAvatarFromApi = otherParticipant?.profile_pic || null
+          const resolvedParticipantName = resolveDmParticipantName({
+            platform,
+            preferredName: participantNameFromApi,
+            currentName: conversation?.participantName,
+            threadId,
+          })
 
           if (!conversation) {
             conversation = await CrmDmConversation.create({
@@ -1007,13 +1319,13 @@ const fetchDmHistoryForOrg = async (
               platform,
               accountId,
               threadId,
-              participantName: participantNameFromApi || threadId,
+              participantName: resolvedParticipantName,
               participantAvatar: participantAvatarFromApi || null,
               lastMessageAt: convUpdated && !Number.isNaN(convUpdated.getTime()) ? convUpdated : new Date(),
               unreadCount: 0,
               metadata: {
                 inboxConversationId: conv?.id || null,
-                participantName: participantNameFromApi || threadId,
+                participantName: resolvedParticipantName,
                 participantAvatar: participantAvatarFromApi || null,
                 assignedUserId: acc.connectedByUserId || null,
                 sourceNodeId: conversationNodeId,
@@ -1023,10 +1335,9 @@ const fetchDmHistoryForOrg = async (
             debug.conversationsUpserted += 1
             accountDebug.conversationsUpserted += 1
           } else {
-            // Only overwrite name/avatar if the current value is missing or is a raw numeric ID
-            const currentNameIsRaw = /^\d{10,}$/.test(String(conversation.participantName || '').trim())
-            const nextName = (!conversation.participantName || currentNameIsRaw)
-              ? (participantNameFromApi || conversation.participantName || threadId)
+            // Only overwrite name/avatar if the current value is missing or is still a placeholder.
+            const nextName = isPlaceholderDmParticipantName(conversation.participantName, platform)
+              ? resolvedParticipantName
               : conversation.participantName
             const nextAvatar = conversation.participantAvatar || participantAvatarFromApi || null
             conversation.participantName = nextName
@@ -1047,8 +1358,7 @@ const fetchDmHistoryForOrg = async (
 
           // If name or avatar is still missing/raw after the upsert, fire an async profile
           // refresh using the Meta Graph API (doesn't block the sync loop).
-          const nameStillRaw = /^\d{10,}$/.test(String(conversation.participantName || '').trim())
-          const needsProfileFetch = nameStillRaw || !conversation.participantAvatar
+          const needsProfileFetch = isPlaceholderDmParticipantName(conversation.participantName, platform) || !conversation.participantAvatar
           if (needsProfileFetch && pageAccessToken) {
             ;(async () => {
               try {
@@ -1056,9 +1366,15 @@ const fetchDmHistoryForOrg = async (
                   platform,
                   senderId: threadId,
                   accessToken: pageAccessToken,
+                  pageId: platform === 'messenger' ? conversationNodeId : null,
                 })
                 if (profile?.name || profile?.avatar) {
-                  conversation.participantName = profile?.name || conversation.participantName
+                  conversation.participantName = resolveDmParticipantName({
+                    platform,
+                    preferredName: profile?.name,
+                    currentName: conversation.participantName,
+                    threadId,
+                  })
                   conversation.participantAvatar = profile?.avatar || conversation.participantAvatar
                   conversation.metadata = {
                     ...(conversation.metadata || {}),
@@ -1096,6 +1412,7 @@ const fetchDmHistoryForOrg = async (
               if (!hasContent) continue
 
               const preview = deriveAttachmentPreview(normalizedAttachments, messageText) || ''
+              const storedMessageText = messageText || (normalizedAttachments.length ? '[Attachment]' : null)
 
               const platformMessageId = String(m?.id || '').trim() || null
               if (platformMessageId) {
@@ -1112,7 +1429,7 @@ const fetchDmHistoryForOrg = async (
                   const hasPlaceholder = !currentMsg || currentMsg === '[Attachment]'
                   const hasNoAttachments = !already.attachments || (Array.isArray(already.attachments) && !already.attachments.length)
                   if (hasPlaceholder || hasNoAttachments) {
-                    if (messageText) already.message = messageText
+                    if (storedMessageText) already.message = storedMessageText
                     if (normalizedAttachments.length) already.attachments = normalizedAttachments
                     already.metadata = { ...(already.metadata || {}), ...(m || {}) }
                     await already.save()
@@ -1141,7 +1458,7 @@ const fetchDmHistoryForOrg = async (
                 platformMessageId,
                 direction: isOutbound ? 'outbound' : 'inbound',
                 senderName: m?.from?.name || m?.from?.username || conversation.participantName || threadId,
-                message: messageText || null,
+                message: storedMessageText,
                 attachments: normalizedAttachments.length ? normalizedAttachments : null,
                 status: isOutbound ? 'sent' : 'received',
                 metadata: m,
@@ -2012,6 +2329,20 @@ export const webhook = async (event) => {
             const timestamp = msgEvent?.timestamp ? new Date(msgEvent.timestamp) : new Date()
             const accessToken = account?.accessTokenEnc ? decrypt(account.accessTokenEnc) : null
 
+            // For Messenger, the page ID is recipientId. Look up the page access token
+            // (MetaPage stores it) — needed for the conversations participants profile API.
+            let profileToken = accessToken
+            const messengerPageId = platform === 'messenger' ? recipientId : null
+            if (messengerPageId) {
+              try {
+                const metaPage = await MetaPage.findOne({
+                  where: { organisationId: orgId, pageId: messengerPageId, status: 'Active' },
+                  attributes: ['accessTokenEnc'],
+                })
+                if (metaPage?.accessTokenEnc) profileToken = decrypt(metaPage.accessTokenEnc) || accessToken
+              } catch {}
+            }
+
             let conversation = await CrmDmConversation.findOne({
               where: { organisationId: orgId, platform, threadId },
             })
@@ -2020,33 +2351,45 @@ export const webhook = async (event) => {
               const profile = await resolveDmParticipantProfile({
                 platform,
                 senderId,
-                accessToken,
+                accessToken: profileToken,
+                pageId: messengerPageId,
+              })
+              const participantName = resolveDmParticipantName({
+                platform,
+                preferredName: profile?.name,
+                currentName: null,
+                threadId: senderId,
               })
               conversation = await CrmDmConversation.create({
                 organisationId: orgId,
                 platform,
                 accountId: account.accountId,
                 threadId,
-                participantName: profile?.name || senderId,
+                participantName,
                 participantAvatar: profile?.avatar || null,
                 lastMessageAt: timestamp,
                 unreadCount: 0,
                 metadata: {
                   recipientId,
-                  participantName: profile?.name || senderId,
+                  participantName,
                   participantAvatar: profile?.avatar || null,
                   assignedUserId: account.connectedByUserId || null,
                   lastInboundAt: timestamp.toISOString(),
                 },
               })
-            } else if (!conversation.participantName || !conversation.participantAvatar || !conversation?.metadata?.assignedUserId || /^\d{10,}$/.test(String(conversation.participantName || '').trim())) {
+            } else if (!conversation.participantName || !conversation.participantAvatar || !conversation?.metadata?.assignedUserId || isPlaceholderDmParticipantName(conversation.participantName, platform)) {
               const profile = await resolveDmParticipantProfile({
                 platform,
                 senderId,
-                accessToken,
+                accessToken: profileToken,
+                pageId: messengerPageId,
               })
-              const currentNameIsRaw = /^\d{10,}$/.test(String(conversation.participantName || '').trim())
-              const nextName = (!conversation.participantName || currentNameIsRaw) ? (profile?.name || conversation.participantName || senderId) : conversation.participantName
+              const nextName = resolveDmParticipantName({
+                platform,
+                preferredName: profile?.name,
+                currentName: conversation.participantName,
+                threadId: senderId,
+              })
               const nextAvatar = conversation.participantAvatar || profile?.avatar || null
               conversation.participantName = nextName
               conversation.participantAvatar = nextAvatar
@@ -2072,6 +2415,7 @@ export const webhook = async (event) => {
             const messagePreview = deriveAttachmentPreview(normalizedAttachments, messageText) || ''
 
             const platformMessageId = msgEvent?.message?.mid || null
+            const storedMessageText = messageText || (normalizedAttachments.length ? '[Attachment]' : null)
             if (platformMessageId) {
               const existingInbound = await CrmDmMessage.findOne({
                 where: {
@@ -2081,6 +2425,15 @@ export const webhook = async (event) => {
                 },
               })
               if (existingInbound) {
+                const currentMsg = String(existingInbound.message || '').trim()
+                const hasPlaceholder = !currentMsg || currentMsg === '[Attachment]'
+                const hasNoAttachments = !existingInbound.attachments || (Array.isArray(existingInbound.attachments) && !existingInbound.attachments.length)
+                if (hasPlaceholder || hasNoAttachments) {
+                  if (storedMessageText) existingInbound.message = storedMessageText
+                  if (normalizedAttachments.length) existingInbound.attachments = normalizedAttachments
+                  existingInbound.metadata = { ...(existingInbound.metadata || {}), ...(msgEvent || {}) }
+                  await existingInbound.save()
+                }
                 webhookTrace('message:duplicate', JSON.stringify({
                   organisationId: orgId,
                   conversationId: conversation.id,
@@ -2097,7 +2450,7 @@ export const webhook = async (event) => {
               platformMessageId,
               direction: 'inbound',
               senderName: conversation.participantName || senderId,
-              message: messageText || null,
+              message: storedMessageText,
               attachments: normalizedAttachments.length ? normalizedAttachments : null,
               status: 'received',
               metadata: msgEvent,
@@ -2114,6 +2467,17 @@ export const webhook = async (event) => {
               lastInboundAt: timestamp.toISOString(),
             }
             await conversation.save()
+
+            await ensureLeadForDmConversation({
+              organisationId: orgId,
+              conversation,
+              platform,
+              threadId,
+              pageId,
+              timestamp,
+              messageText: messageText || messagePreview,
+              platformMessageId,
+            })
 
             if (messageText && accessToken) {
               sendAutoReply({
@@ -2146,22 +2510,14 @@ export const webhook = async (event) => {
               })
               const userIds = orgUsers.map((u) => u.userId).filter(Boolean)
               if (userIds.length) {
-                await sendNotificationToMultipleUsers({
-                  userIds,
+                await Promise.all(userIds.map((userId) => sendMetaDMNotification({
+                  userId,
                   organisationId: orgId,
-                  title: `New ${platform === 'instagram' ? 'Instagram' : 'Messenger'} DM`,
-                  body: messagePreview.length > 80 ? `${messagePreview.slice(0, 80)}...` : messagePreview,
-                  type: 'meta_dm',
-                  referenceType: 'dm_conversation',
-                  referenceId: conversation.id,
-                  data: {
-                    conversationId: String(conversation.id),
-                    platform,
-                    senderId,
-                    url: `/crm/dms?conversationId=${conversation.id}`,
-                  },
-                  priority: 'high',
-                })
+                  conversationId: conversation.id,
+                  platform,
+                  sender: conversation.participantName || senderId,
+                  message: messagePreview,
+                })))
               }
             } catch (notifyErr) {}
           }

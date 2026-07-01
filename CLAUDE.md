@@ -30,7 +30,7 @@ Auto-imported (no explicit imports needed): `ref`, `reactive`, `computed`, `watc
 Component
   → Service (services/featureService.js)
     → apiWrapper.Get/Post("/api/feature/endpoint")
-      → Nuxt Server Route (server/api/feature/[name].js)  ← switch/case on `name`
+      → Nuxt Server Route (server/api/feature/resource/[id].get.js)
         → Controller (server/controllers/feature.js)
           → Sequelize ORM → PostgreSQL
           → External APIs (Meta, Stripe, Firebase, S3, OpenAI/Anthropic, Redis)
@@ -50,7 +50,28 @@ API responses use `{ code: 0, data: ... }` — always check `res?.code === 0`.
 
 ### Server Route Pattern
 
-Each domain has a single catch-all file `server/api/[domain]/[name].js` that dispatches via `switch(getRouterParam(event, "name"))`. Controllers live in `server/controllers/[domain].js`.
+Routes use Nitro's file-based routing with HTTP method suffixes. Each route file is a thin wrapper that calls a controller function:
+
+```
+server/api/feature/resource/index.get.js     → GET /api/feature/resource
+server/api/feature/resource/index.post.js    → POST /api/feature/resource
+server/api/feature/resource/[id].get.js      → GET /api/feature/resource/:id
+server/api/feature/resource/[id].patch.js    → PATCH /api/feature/resource/:id
+server/api/feature/resource/[id].delete.js   → DELETE /api/feature/resource/:id
+server/api/feature/resource/[id]/action.post.js  → POST /api/feature/resource/:id/action
+```
+
+Route files contain only the handler delegation:
+```js
+import { myController } from '~/server/controllers/feature';
+export default defineEventHandler((event) => myController(event));
+```
+
+Controllers live in `server/controllers/[domain].js`. Admin routes (`server/api/admin/**`) are protected by `server/middleware/adminAuth.js`.
+
+**Response utilities** (`server/utils/response.js`) — always use these in controllers:
+- `success(data)` — returns `{ code: 0, success: true, data }`
+- `error(statusCode, message)` — throws a `createError()` with normalized message
 
 ### State Management
 
@@ -83,9 +104,25 @@ JWT is verified server-side only. `event.context.user` is populated by server mi
 
 Magic link auth: `sendMagicLink` / `verifyMagicLink` in `server/controllers/auth.js` — used for the Lite signup flow.
 
-### Server Routes
+### Key Composables
 
-`server/api/[domain]/[name].js` — organized by feature domain (auth, crm, diary, tasks, dms, stripe, meta, whapi, admin, lead). Dynamic routes use `[name].js` with a `switch` dispatch pattern.
+Beyond auto-imported Vue/Pinia primitives, notable composables in `composables/`:
+- `useBus()` — global event bus (mitt). Use for cross-component communication without props/emits.
+- `useUser()` — user state with localStorage persistence (complements `useAuthStore`)
+- `useCrmFeatureAccess()` — CRM feature flags scoped to current user/org
+- `useDeveloperAccess()` — dev-only mode; checks `DEVELOPER_EMAILS` allowlist
+- `usePricingModal()` — triggers the upgrade/pricing modal
+- `useUsageSummary()` — current org usage vs. limits (leads, storage, members)
+- `useWhapiStream()` — SSE stream for real-time WhatsApp messages
+
+### Client Utilities
+
+`lib/` directory contains shared client-side utilities (not auto-imported, must be explicitly imported):
+- `lib/dateFormatter.js`, `lib/timeFormatters.js` — date/time formatting
+- `lib/crm/automation.js`, `lib/crm/placeholders.js` — CRM automation helpers
+- `lib/chatMappers.js`, `lib/chatShared.js` — DM/chat display logic
+- `lib/auth.js` — auth checks, profile completion, role helpers
+- `lib/normalizers/lead.js` — lead data normalization
 
 ### Background Schedulers
 

@@ -107,6 +107,8 @@ import { ConsentFormDocument } from "./diary/consentFormDocument";
 import { ConsentFormSignatureAudit } from "./diary/consentFormSignatureAudit";
 import { DiaryZone } from "./diary/diaryZones";
 import { DiaryPatientCommunicationLogs } from "./diary/patientCommunicationLogs";
+import { DiaryGoogleCalendarEvent } from "./diary/googleCalendarEvent";
+import { DiaryDentistGoogleCalendar } from "./diary/dentistGoogleCalendar";
 import { GCMandate } from "./diary/gcMandates";
 import { GCPayment } from "./diary/gcPayments";
 import { GCWebhookLog } from "./diary/gcWebhookLogs";
@@ -122,6 +124,8 @@ import { CrmAutomationGroupTemplate } from "./crm/automationGroupTemplates";
 import { CrmAutomationDictionaryGroup } from "./crm/crmAutomationDictionaryGroups";
 import { CrmAutomationDictionaryTemplate } from "./crm/crmAutomationDictionaryTemplates";
 import { FormConfig } from "./crm/formConfig";
+import { CrmCustomColumnDefinition } from "./crm/crmCustomColumnDefinition";
+import { LeadCustomField } from "./crm/leadCustomField";
 import { PatientAutomationDictionary } from "./patientJourney/patientAutomationDictionary";
 import { PatientAutomationTemplate } from "./patientJourney/patientAutomationTemplates";
 import { OrganisationReferral } from "./organisationReferrals";
@@ -260,6 +264,12 @@ DiaryPatient.hasMany(DiaryAppointment, { foreignKey: 'patientId', as: 'appointme
 DiaryAppointment.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryAppointment.belongsTo(DiaryPatient, { foreignKey: 'patientId', as: 'patient', onDelete: 'CASCADE', hooks: true });
 DiaryAppointment.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
+
+DiaryGoogleCalendarEvent.belongsTo(DiaryAppointment, { foreignKey: 'appointmentId', as: 'appointment', onDelete: 'CASCADE', hooks: true });
+DiaryAppointment.hasOne(DiaryGoogleCalendarEvent, { foreignKey: 'appointmentId', as: 'googleCalendarEvent', onDelete: 'CASCADE', hooks: true });
+
+DiaryDentistGoogleCalendar.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
+DiaryDentistGoogleCalendar.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 
 DiaryNote.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 DiaryNote.belongsTo(User, { foreignKey: 'dentistId', as: 'dentist', onDelete: 'CASCADE', hooks: true });
@@ -441,6 +451,17 @@ Organisation.hasMany(MetaPage, { foreignKey: 'organisationId', as: 'metaPages', 
 
 CrmLead.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 Organisation.hasMany(CrmLead, { foreignKey: 'organisationId', as: 'crmLeads', onDelete: 'CASCADE', hooks: true });
+
+// CRM Custom Columns
+Organisation.hasMany(CrmCustomColumnDefinition, { foreignKey: 'organisationId', as: 'crmCustomColumns', onDelete: 'CASCADE', hooks: true });
+CrmCustomColumnDefinition.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
+CrmCustomColumnDefinition.belongsTo(User, { foreignKey: 'createdBy', as: 'creator', onDelete: 'SET NULL' });
+User.hasMany(CrmCustomColumnDefinition, { foreignKey: 'createdBy', as: 'crmCustomColumns', onDelete: 'SET NULL' });
+
+CrmLead.hasMany(LeadCustomField, { foreignKey: 'leadId', as: 'customFields', onDelete: 'CASCADE', hooks: true });
+LeadCustomField.belongsTo(CrmLead, { foreignKey: 'leadId', as: 'lead', onDelete: 'CASCADE', hooks: true });
+CrmCustomColumnDefinition.hasMany(LeadCustomField, { foreignKey: 'columnDefinitionId', as: 'fieldValues', onDelete: 'CASCADE', hooks: true });
+LeadCustomField.belongsTo(CrmCustomColumnDefinition, { foreignKey: 'columnDefinitionId', as: 'columnDefinition', onDelete: 'CASCADE', hooks: true });
 
 MetaUserToken.belongsTo(Organisation, { foreignKey: 'organisationId', as: 'organisation', onDelete: 'CASCADE', hooks: true });
 MetaUserToken.belongsTo(User, { foreignKey: 'userId', as: 'user', onDelete: 'CASCADE', hooks: true });
@@ -755,6 +776,8 @@ export {
   CrmAutomationDictionaryGroup,
   CrmAutomationDictionaryTemplate,
   FormConfig,
+  CrmCustomColumnDefinition,
+  LeadCustomField,
   CrmWhatsAppMessageLog,
   CrmDmConversation,
   CrmDmMessage,
@@ -799,6 +822,8 @@ export {
   ConsentFormSignatureAudit,
   DiaryZone,
   DiaryPatientCommunicationLogs,
+  DiaryGoogleCalendarEvent,
+  DiaryDentistGoogleCalendar,
   GCMandate,
   GCPayment,
   GCWebhookLog,

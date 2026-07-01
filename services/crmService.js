@@ -48,9 +48,23 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  uploadDmAttachment(formData) {
+    return new Promise((resolve, reject) => {
+      PostFormData("/dms/uploadAttachment", formData)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   markDmRead(payload) {
     return new Promise((resolve, reject) => {
       Post("/dms/read", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteDmConversation(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/dms/deleteConversation", payload)
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });
@@ -558,6 +572,13 @@ export default {
         .catch((err) => reject(err));
     });
   },
+  getLeadAutomationPreview(leadId, key) {
+    return new Promise((resolve, reject) => {
+      Get(`/lead/automationLogPreview?leadId=${encodeURIComponent(leadId)}&key=${encodeURIComponent(key)}`)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
   // Mail
   sendLeadMail(payload) {
     return new Promise((resolve, reject) => {
@@ -632,6 +653,80 @@ export default {
   updateAutoReplySettings(payload) {
     return new Promise((resolve, reject) => {
       Post("/dms/autoReply", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  listCrmCustomColumns() {
+    return new Promise((resolve, reject) => {
+      Get("/lead/customColumnsList")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  createCrmCustomColumn(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/customColumnsCreate", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  updateCrmCustomColumn(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/customColumnsUpdate", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  deleteCrmCustomColumn(payload) {
+    return new Promise((resolve, reject) => {
+      Post("/lead/customColumnsDelete", payload)
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Google (Search Console / general)
+  googleConnectionStatus() {
+    return new Promise((resolve, reject) => {
+      Get("/google/connection")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  startGoogleAuth() {
+    return new Promise((resolve, reject) => {
+      Get("/google/authStart")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  disconnectGoogle(tokenId) {
+    return new Promise((resolve, reject) => {
+      Post("/google/disconnect", { tokenId: tokenId || null })
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+
+  // Google Calendar
+  startGoogleCalendarAuth() {
+    return new Promise((resolve, reject) => {
+      Get("/google/calendarAuthStart")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  googleCalendarConnectionStatus() {
+    return new Promise((resolve, reject) => {
+      Get("/google/calendarConnection")
+        .then((res) => resolve(res))
+        .catch((err) => reject(err));
+    });
+  },
+  disconnectGoogleCalendar() {
+    return new Promise((resolve, reject) => {
+      Post("/google/calendarDisconnect", {})
         .then((res) => resolve(res))
         .catch((err) => reject(err));
     });

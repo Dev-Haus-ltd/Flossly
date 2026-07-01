@@ -1,3 +1,17 @@
+// ─── TRIGGER TYPES ────────────────────────────────────────────────────────────
+// 'offsetDays'  – shown on the Nth day since onboarding_start
+// 'condition'   – evaluated live at login/refresh from metrics + org data
+// 'event'       – fires when a specific action moment is recorded in OrgNotificationEvents
+// ──────────────────────────────────────────────────────────────────────────────
+
+// ─── LOTTIE KEYS (map to /public/lottie/<key>.json) ──────────────────────────
+// 'upgrade'      – tier 1: urgent red/amber  (upgrade triggers)
+// 'celebration'  – tier 2: gold/green        (win moments)
+// 'automation'   – tier 3: blue              (nudges)
+// 'growth'       – tier 4: purple            (reports – reserved)
+// 'retention'    – tier 5: grey              (re-engagement)
+// ──────────────────────────────────────────────────────────────────────────────
+
 export const ONBOARDING_EMAIL_TEMPLATES = [
   {
     key: "onboarding_email_day0",
@@ -198,65 +212,139 @@ export const ONBOARDING_EMAIL_TEMPLATES = [
       <p>The Flossy Team</p>
     `,
   },
+  // ─── RE-ENGAGEMENT EMAILS (sent via scheduler when user hasn't logged in) ──
+  {
+    key: "onboarding_email_no_login_7",
+    offsetDays: null,
+    triggerType: "no_login",
+    noLoginDays: 7,
+    subject: "We've missed you at Flossy, [Name]",
+    body: `
+      <p>Hi [Name],</p>
+      <p>It's been a week since your last visit to Flossy. Your practice dashboard is waiting for you.</p>
+      <p>Pick up exactly where you left off:<br/>
+      <a class="btn" href="[Base URL]" target="_blank">Jump Back In →</a></p>
+      <p>If there's anything we can help with, just reply to this email.</p>
+      <p>The Flossy Team</p>
+    `,
+  },
+  {
+    key: "onboarding_email_no_login_14",
+    offsetDays: null,
+    triggerType: "no_login",
+    noLoginDays: 14,
+    subject: "It's been a while — your Flossy tools are waiting",
+    body: `
+      <p>Hi [Name],</p>
+      <p>Two weeks since your last visit. Your leads, tasks, and team are all still here — ready when you are.</p>
+      <p><a class="btn" href="[Base URL]" target="_blank">Log Back In →</a></p>
+      <p>Need help getting started again? Book a free 20-minute session with our team:<br/>
+      <a class="btn" href="[Schedule Call URL]" target="_blank">Book a Call →</a></p>
+      <p>The Flossy Team</p>
+    `,
+  },
+  {
+    key: "onboarding_email_no_login_30",
+    offsetDays: null,
+    triggerType: "no_login",
+    noLoginDays: 30,
+    subject: "A month away — your Flossy account is still active",
+    body: `
+      <p>Hi [Name],</p>
+      <p>It's been a month. Your account is still active — everything you set up is intact.</p>
+      <p>Practices that stick with Flossy for 30+ days report saving 10+ hours a week. We'd love to help you get there.</p>
+      <p><a class="btn" href="[Base URL]" target="_blank">Come Back →</a></p>
+      <p>Or tell us what's holding you back — just reply to this email.</p>
+      <p>[Founder Name]<br/>Founder, Flossy</p>
+    `,
+  },
 ];
 
 export const ONBOARDING_INAPP_MESSAGES = [
+  // ─── TIER 1: DIRECT UPGRADE TRIGGERS ────────────────────────────────────────
+  // High priority — always shown before lower tiers.
+  // User must upgrade to resolve the block. Shown one-time (dismissed → never again).
+
   {
-    key: "onboarding_inapp_day2_meta",
-    offsetDays: 2,
-    title: "Pro tip: turn Facebook leads into booked appointments",
-    message:
-      "Right now, leads from your Meta ads are probably sitting in Facebook — while you're here in Flossy. Connect them in 60 seconds: every Facebook enquiry flows straight into your CRM dashboard, auto-reply in 2 minutes, never lose another £2,000 treatment plan.",
-    primaryLabel: "Connect Meta Ads",
-    primaryLink: "[Connect Meta Ads URL]",
+    key: "upgrade_f1_leads_80pct",
+    tier: 1,
+    lottieKey: "upgrade",
+    triggerType: "condition",
+    conditionKey: "leads_80pct",
+    offsetDays: -1,
+    title: "You're nearing your limit.",
+    message: "80% reached — expand capacity before it fills.",
+    primaryLabel: "Upgrade to CRM — £199/mo",
+    primaryLink: "[Subscribe URL]",
     secondaryLabel: "Maybe later",
   },
   {
-    key: "onboarding_inapp_day3_automation",
-    offsetDays: 3,
-    title: "Leads that get 2-minute responses convert 300% better",
-    message:
-      "Flossy Automations sends instant replies, auto-follow-ups (Day 1, 2, 4, 7), and team alerts. Upgrade to CRM (£199/mo) to unlock WhatsApp messaging and unlimited automations.",
-    primaryLabel: "Explore Flossy CRM",
-    primaryLink: "[Automation Builder URL]",
-    secondaryLabel: "See what's included",
-    secondaryLink: "[Automation Builder URL]",
+    key: "upgrade_f2_leads_limit",
+    tier: 1,
+    lottieKey: "upgrade",
+    triggerType: "condition",
+    conditionKey: "leads_limit",
+    offsetDays: -1,
+    title: "Lead limit reached.",
+    message: "Upgrade to continue receiving new leads.",
+    primaryLabel: "Upgrade to CRM — £199/mo",
+    primaryLink: "[Subscribe URL]",
+    secondaryLabel: "Maybe later",
   },
   {
-    key: "onboarding_inapp_day4_noshows",
-    offsetDays: 4,
-    title: "Cut no-shows by 40% — save £103K/year",
-    message:
-      "Every no-show costs £125–£350. Flossy Diary sends automatic reminders at 48 hours, 24 hours, and 3 hours before appointments. No-show rate drops from 18% to 7%.",
-    primaryLabel: "Set up reminders (3 min)",
-    primaryLink: "[Set Up Diary URL]",
-    secondaryLabel: "See how it works",
-    secondaryLink: "[Set Up Diary URL]",
+    key: "upgrade_f3_lead_blocked",
+    tier: 1,
+    lottieKey: "upgrade",
+    triggerType: "event",
+    offsetDays: -1,
+    title: "New lead blocked.",
+    message: "Your inbox is full — unlock more capacity with an upgrade.",
+    primaryLabel: "Upgrade to CRM — £199/mo",
+    primaryLink: "[Subscribe URL]",
+    secondaryLabel: "Maybe later",
   },
   {
-    key: "onboarding_inapp_day5_recalls",
-    offsetDays: 5,
-    title: "Recover £30K in overdue recalls",
-    message:
-      "You have patients overdue for check-ups right now. Flossy Recalls sends automatic reminders and recovers an average £30,000/year per practice.",
-    primaryLabel: "Run first recall campaign",
-    primaryLink: "[Recall Setup URL]",
-    secondaryLabel: "See overdue list",
-    secondaryLink: "[Recall Setup URL]",
+    key: "upgrade_f4_feature_locked",
+    tier: 1,
+    lottieKey: "upgrade",
+    triggerType: "event",
+    offsetDays: -1,
+    title: "Feature locked.",
+    message: "Upgrade to access this premium feature.",
+    primaryLabel: "Explore plans",
+    primaryLink: "[Subscribe URL]",
+    secondaryLabel: "Maybe later",
   },
   {
-    key: "onboarding_inapp_day6_automation",
-    offsetDays: 6,
-    title: "Eliminate 90% of manual work",
-    message:
-      "Your practice can run itself. Flossy Automations handles appointment reminders, lead follow-ups, task creation, and payment reminders — saving 14+ hours/week. Upgrade to CRM (£199/mo) to unlock the full automation builder.",
-    primaryLabel: "Explore Flossy CRM — £199/mo",
-    primaryLink: "[Activate Automation URL]",
-    secondaryLabel: "See templates",
-    secondaryLink: "[Automation Builder URL]",
+    key: "upgrade_f7_second_diary",
+    tier: 1,
+    lottieKey: "upgrade",
+    triggerType: "event",
+    offsetDays: -1,
+    title: "Extra diary requires an upgrade.",
+    message: "Unlock multi-diary support with the next plan.",
+    primaryLabel: "Upgrade now",
+    primaryLink: "[Subscribe URL]",
+    secondaryLabel: "Maybe later",
+  },
+  {
+    key: "upgrade_f8_high_engagement",
+    tier: 1,
+    lottieKey: "upgrade",
+    triggerType: "condition",
+    conditionKey: "high_engagement",
+    offsetDays: -1,
+    title: "You're getting real traction.",
+    message: "Upgrade to keep scaling your performance.",
+    primaryLabel: "Upgrade to CRM — £199/mo",
+    primaryLink: "[Subscribe URL]",
+    secondaryLabel: "Maybe later",
   },
   {
     key: "onboarding_inapp_day7_trial",
+    tier: 1,
+    lottieKey: "upgrade",
+    triggerType: "offsetDays",
     offsetDays: 7,
     title: "A week in — your trial ends in [Trial Days Remaining] [Trial Days Remaining Unit]",
     message:
@@ -268,6 +356,9 @@ export const ONBOARDING_INAPP_MESSAGES = [
   },
   {
     key: "onboarding_inapp_day13_trial",
+    tier: 1,
+    lottieKey: "upgrade",
+    triggerType: "offsetDays",
     offsetDays: 13,
     title: "Trial ends [Trial End Date] — keep everything you've built",
     message:
@@ -276,36 +367,199 @@ export const ONBOARDING_INAPP_MESSAGES = [
     primaryLink: "[Subscribe URL]",
     secondaryLabel: "Maybe later",
   },
+
+  // ─── TIER 2: CELEBRATION / 'THIS SOFTWARE WORKS' MOMENTS ───────────────────
+  // Positive reinforcement. Shown after tier-1 messages clear.
+
   {
-    key: "upgrade_f1_leads_80pct",
+    key: "celebrate_a4_first_lead",
+    tier: 2,
+    lottieKey: "celebration",
+    triggerType: "condition",
+    conditionKey: "first_lead",
     offsetDays: -1,
+    title: "Your first lead has arrived.",
+    message: "A great start — let's keep the momentum going.",
+    primaryLabel: "View leads",
+    primaryLink: "[Connect Meta Ads URL]",
+    secondaryLabel: "Dismiss",
+  },
+  {
+    key: "celebrate_b1_new_lead",
+    tier: 2,
+    lottieKey: "celebration",
     triggerType: "event",
-    title: "📈 80 leads captured — your campaigns are working",
+    offsetDays: -1,
+    title: "New lead received.",
+    message: "Stay responsive to maximize conversions.",
+    primaryLabel: "View lead",
+    primaryLink: "[Connect Meta Ads URL]",
+    secondaryLabel: "Dismiss",
+  },
+  {
+    key: "celebrate_b3_consultation",
+    tier: 2,
+    lottieKey: "celebration",
+    triggerType: "event",
+    offsetDays: -1,
+    title: "Consultation booked.",
+    message: "Great work — your system is delivering.",
+    primaryLabel: "View CRM",
+    primaryLink: "[Connect Meta Ads URL]",
+    secondaryLabel: "Dismiss",
+  },
+  {
+    key: "celebrate_b4_patient",
+    tier: 2,
+    lottieKey: "celebration",
+    triggerType: "event",
+    offsetDays: -1,
+    title: "New patient onboarded.",
+    message: "FlosslyOS helped you get another win.",
+    primaryLabel: "View patient",
+    primaryLink: "[Base URL]/patients",
+    secondaryLabel: "Dismiss",
+  },
+  {
+    key: "celebrate_g2_milestone_10",
+    tier: 2,
+    lottieKey: "celebration",
+    triggerType: "condition",
+    conditionKey: "lead_milestone_10",
+    offsetDays: -1,
+    title: "Milestone reached.",
+    message: "Your lead volume just hit 10 — great momentum.",
+    primaryLabel: "View leads",
+    primaryLink: "[Connect Meta Ads URL]",
+    secondaryLabel: "Dismiss",
+  },
+  {
+    key: "celebrate_g2_milestone_25",
+    tier: 2,
+    lottieKey: "celebration",
+    triggerType: "condition",
+    conditionKey: "lead_milestone_25",
+    offsetDays: -1,
+    title: "Milestone reached.",
+    message: "25 leads captured — your growth curve is improving.",
+    primaryLabel: "View leads",
+    primaryLink: "[Connect Meta Ads URL]",
+    secondaryLabel: "Dismiss",
+  },
+  {
+    key: "celebrate_g2_milestone_50",
+    tier: 2,
+    lottieKey: "celebration",
+    triggerType: "condition",
+    conditionKey: "lead_milestone_50",
+    offsetDays: -1,
+    title: "Milestone reached.",
+    message: "50 leads in — you're outperforming most practices at this stage.",
+    primaryLabel: "View leads",
+    primaryLink: "[Connect Meta Ads URL]",
+    secondaryLabel: "Dismiss",
+  },
+
+  // ─── TIER 3: 'YOU NEED AUTOMATION' NUDGES ───────────────────────────────────
+  // Day-offset onboarding sequence + reactive nudges.
+
+  {
+    key: "onboarding_inapp_day2_meta",
+    tier: 3,
+    lottieKey: "automation",
+    triggerType: "offsetDays",
+    offsetDays: 2,
+    title: "Pro tip: turn Facebook leads into booked appointments",
     message:
-      "You've captured 80 leads and you're close to the Flossy Lite limit of 100. Don't lose your momentum — upgrade to CRM to keep capturing and following up leads automatically.",
-    primaryLabel: "Upgrade to CRM — £199/mo",
-    primaryLink: "[Subscribe URL]",
+      "Right now, leads from your Meta ads are probably sitting in Facebook — while you're here in Flossy. Connect them in 60 seconds: every Facebook enquiry flows straight into your CRM dashboard, auto-reply in 2 minutes, never lose another £2,000 treatment plan.",
+    primaryLabel: "Connect Meta Ads",
+    primaryLink: "[Connect Meta Ads URL]",
     secondaryLabel: "Maybe later",
   },
   {
-    key: "upgrade_f2_leads_limit",
-    offsetDays: -1,
-    triggerType: "event",
-    title: "🎯 You hit 100 leads — don't lose the next one",
+    key: "onboarding_inapp_day3_automation",
+    tier: 3,
+    lottieKey: "automation",
+    triggerType: "offsetDays",
+    offsetDays: 3,
+    title: "Leads that get 2-minute responses convert 300% better",
     message:
-      "Your practice is growing fast. You've hit the Flossy Lite lead limit. Upgrade to Flossy CRM to keep capturing leads, run automations, and unlock WhatsApp messaging.",
-    primaryLabel: "Upgrade to CRM — £199/mo",
-    primaryLink: "[Subscribe URL]",
-    secondaryLabel: "Maybe later",
+      "Flossy Automations sends instant replies, auto-follow-ups (Day 1, 2, 4, 7), and team alerts. Upgrade to CRM (£199/mo) to unlock WhatsApp messaging and unlimited automations.",
+    primaryLabel: "Explore Flossy CRM",
+    primaryLink: "[Automation Builder URL]",
+    secondaryLabel: "See what's included",
+    secondaryLink: "[Automation Builder URL]",
   },
   {
-    key: "upgrade_f8_high_engagement",
-    offsetDays: 14,
-    title: "You're getting a lot from Flossy 💪",
+    key: "onboarding_inapp_day4_noshows",
+    tier: 3,
+    lottieKey: "automation",
+    triggerType: "offsetDays",
+    offsetDays: 4,
+    title: "Cut no-shows by 40% — save £103K/year",
     message:
-      "You've been using multiple features across your practice. Ready to unlock full automation, WhatsApp messaging, and unlimited leads? Upgrade to Flossy CRM.",
-    primaryLabel: "Upgrade to CRM — £199/mo",
-    primaryLink: "[Subscribe URL]",
+      "Every no-show costs £125–£350. Flossy Diary sends automatic reminders at 48 hours, 24 hours, and 3 hours before appointments. No-show rate drops from 18% to 7%.",
+    primaryLabel: "Set up reminders (3 min)",
+    primaryLink: "[Set Up Diary URL]",
+    secondaryLabel: "See how it works",
+    secondaryLink: "[Set Up Diary URL]",
+  },
+  {
+    key: "onboarding_inapp_day5_recalls",
+    tier: 3,
+    lottieKey: "automation",
+    triggerType: "offsetDays",
+    offsetDays: 5,
+    title: "Recover £30K in overdue recalls",
+    message:
+      "You have patients overdue for check-ups right now. Flossy Recalls sends automatic reminders and recovers an average £30,000/year per practice.",
+    primaryLabel: "Run first recall campaign",
+    primaryLink: "[Recall Setup URL]",
+    secondaryLabel: "See overdue list",
+    secondaryLink: "[Recall Setup URL]",
+  },
+  {
+    key: "onboarding_inapp_day6_automation",
+    tier: 3,
+    lottieKey: "automation",
+    triggerType: "offsetDays",
+    offsetDays: 6,
+    title: "Eliminate 90% of manual work",
+    message:
+      "Your practice can run itself. Flossy Automations handles appointment reminders, lead follow-ups, task creation, and payment reminders — saving 14+ hours/week. Upgrade to CRM (£199/mo) to unlock the full automation builder.",
+    primaryLabel: "Explore Flossy CRM — £199/mo",
+    primaryLink: "[Activate Automation URL]",
+    secondaryLabel: "See templates",
+    secondaryLink: "[Automation Builder URL]",
+  },
+  {
+    key: "nudge_b2_lead_unresponded",
+    tier: 3,
+    lottieKey: "automation",
+    triggerType: "event",
+    offsetDays: -1,
+    title: "Lead waiting too long.",
+    message: "Respond or enable automation to avoid drop-off.",
+    primaryLabel: "View lead",
+    primaryLink: "[Connect Meta Ads URL]",
+    secondaryLabel: "Enable automation",
+    secondaryLink: "[Automation Builder URL]",
+  },
+
+  // ─── TIER 5: RETENTION ───────────────────────────────────────────────────────
+  // Shown last. Gentle prompts for users with incomplete setup or broken integrations.
+
+  {
+    key: "retain_i3_setup_abandoned",
+    tier: 5,
+    lottieKey: "retention",
+    triggerType: "condition",
+    conditionKey: "setup_abandoned",
+    offsetDays: -1,
+    title: "Setup incomplete.",
+    message: "Finish your onboarding to unlock full value.",
+    primaryLabel: "Complete setup",
+    primaryLink: "[Start Setup URL]",
     secondaryLabel: "Maybe later",
   },
 ];

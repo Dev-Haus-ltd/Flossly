@@ -249,23 +249,50 @@ export const runStructureSync = async (orgId) => {
     }
     await setState(key, { status: 'running', startedAt, progress })
 
+    const firstNonEmptyString = (...values) => {
+      for (const value of values) {
+        const normalized = typeof value === 'string' ? value.trim() : ''
+        if (normalized) return normalized
+      }
+      return null
+    }
+
+    const pickAttachmentImage = (attachment = {}) =>
+      firstNonEmptyString(
+        attachment?.media?.image?.src,
+        attachment?.media?.image?.url,
+        attachment?.media?.image?.uri,
+        attachment?.picture,
+        attachment?.image?.src,
+        attachment?.image?.url
+      )
+
     const pickCreativeImage = (creative = {}) => {
       const story = creative?.object_story_spec || {}
       const linkData = story?.link_data || {}
       const videoData = story?.video_data || {}
       const photoData = story?.photo_data || {}
       const templateData = story?.template_data || {}
+      const assetFeedSpec = creative?.asset_feed_spec || {}
+      const childAttachmentImage = Array.isArray(linkData?.child_attachments)
+        ? linkData.child_attachments.map((attachment) => pickAttachmentImage(attachment)).find(Boolean)
+        : null
+      const assetFeedImage = Array.isArray(assetFeedSpec?.images)
+        ? assetFeedSpec.images.map((image) => firstNonEmptyString(image?.url, image?.image_url, image?.original_url)).find(Boolean)
+        : null
 
-      return (
-        creative?.image_url ||          // full-res image upload — best quality
-        videoData?.image_url ||         // full-res video frame
-        photoData?.image_url ||         // full-res photo ad image
-        photoData?.picture ||
-        photoData?.url ||
-        templateData?.picture ||
-        creative?.thumbnail_url ||      // video thumbnail — quality improved via thumbnail_width/height params
-        linkData?.picture ||            // last resort: link preview image (often small/low-res)
-        null
+      return firstNonEmptyString(
+        creative?.image_url,            // full-res image upload — best quality
+        videoData?.image_url,           // full-res video frame
+        photoData?.image_url,           // full-res photo ad image
+        linkData?.image_url,
+        photoData?.picture,
+        photoData?.url,
+        childAttachmentImage,
+        templateData?.picture,
+        assetFeedImage,
+        creative?.thumbnail_url,        // video thumbnail — quality improved via thumbnail_width/height params
+        linkData?.picture               // last resort: link preview image (often small/low-res)
       )
     }
 
@@ -286,6 +313,24 @@ export const runStructureSync = async (orgId) => {
       )
     }
 
+    const pickStoryImage = (story = {}) => {
+      const attachments = Array.isArray(story?.attachments?.data) ? story.attachments.data : []
+      for (const attachment of attachments) {
+        const directImage = pickAttachmentImage(attachment)
+        if (directImage) return directImage
+
+        const subAttachments = Array.isArray(attachment?.subattachments?.data)
+          ? attachment.subattachments.data
+          : []
+        for (const subAttachment of subAttachments) {
+          const subImage = pickAttachmentImage(subAttachment)
+          if (subImage) return subImage
+        }
+      }
+
+      return firstNonEmptyString(story?.full_picture)
+    }
+
     // ── Wave 5a: Creatives (batch, only for ads that have a creative id) ────────
     if (creativeIds.size) {
       const ids = Array.from(creativeIds.keys())
@@ -294,7 +339,7 @@ export const runStructureSync = async (orgId) => {
         // Include effective_object_story_id for boosted posts — those ads have no
         // direct image_url; the image lives on the underlying page post instead.
         // thumbnail_width/height lifts the default low-res video thumbnail to a proper HD frame.
-        relative_url: `${cid}?fields=image_url,thumbnail_url,body,instagram_permalink_url,video_id,object_story_spec,effective_object_story_id,effective_instagram_story_id&thumbnail_width=1280&thumbnail_height=720`,
+        relative_url: `${cid}?fields=image_url,image_hash,thumbnail_url,body,instagram_permalink_url,video_id,object_story_spec,asset_feed_spec,effective_object_story_id,effective_instagram_story_id&thumbnail_width=1280&thumbnail_height=720`,
       }))
       const creativeBatchRes = await metaBatch(creativeBatchReqs, userToken)
 
@@ -307,7 +352,10 @@ export const runStructureSync = async (orgId) => {
         if (!cr || pickCreativeImage(cr)) continue
         const storyId = cr.effective_object_story_id || cr.effective_instagram_story_id
         if (storyId) {
-          storyRequests.push({ method: 'GET', relative_url: `${storyId}?fields=full_picture` })
+          storyRequests.push({
+            method: 'GET',
+            relative_url: `${storyId}?fields=full_picture,attachments{picture,image,media,subattachments}`,
+          })
           storyMeta.push({ creativeIndex: i, adId: creativeIds.get(ids[i]) })
         } else {
           console.warn(`[MetaSync] No image URL and no story ID for creative ${ids[i]}, adId=${creativeIds.get(ids[i])}. Creative payload:`, JSON.stringify(cr))
@@ -318,7 +366,7 @@ export const runStructureSync = async (orgId) => {
       // Map story full_picture back to creative index
       const storyImageByCreativeIndex = new Map()
       for (let j = 0; j < storyMeta.length; j++) {
-        storyImageByCreativeIndex.set(storyMeta[j].creativeIndex, storyRes[j]?.full_picture || null)
+        storyImageByCreativeIndex.set(storyMeta[j].creativeIndex, pickStoryImage(storyRes[j]))
       }
 
       // ── Wave 5c: Cache images to S3 and write DB ─────────────────────────────
@@ -333,7 +381,12 @@ export const runStructureSync = async (orgId) => {
         const urlExt = (metaImageUrl?.split('?')[0] || '').match(/\.(jpg|jpeg|png|gif|webp)/i)?.[1]?.toLowerCase() || 'jpg'
         // Persist to S3 so the URL never expires; fall back to raw Meta URL if upload fails.
         const cachedImageUrl = metaImageUrl
-          ? await downloadUrlToS3({ url: metaImageUrl, filename: `${orgId}-${adId}.${urlExt}`, baseDir: 'meta-creatives' })
+          ? await downloadUrlToS3({
+              url: metaImageUrl,
+              filename: `${orgId}-${adId}.${urlExt}`,
+              baseDir: 'meta-creatives',
+              headers: { Authorization: `Bearer ${userToken}` },
+            })
           : null
         if (metaImageUrl && !cachedImageUrl) {
           console.warn(`[MetaSync] S3 cache failed for adId=${adId}, storing raw Meta URL as fallback`)

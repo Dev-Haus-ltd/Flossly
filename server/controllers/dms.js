@@ -22,11 +22,22 @@ const fallbackDmParticipantName = (platform) => {
   return "Unknown";
 };
 
+const isPlaceholderDmParticipantName = (value, platform = null) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return true;
+  if (isRawDmIdentifier(normalized)) return true;
+  if (normalized === "unknown") return true;
+
+  const platformFallback = String(fallbackDmParticipantName(platform) || "").trim().toLowerCase();
+  if (platformFallback && normalized === platformFallback) return true;
+  return false;
+};
+
 const resolveDmParticipantName = ({ platform, preferredName, currentName, threadId }) => {
   const candidates = [preferredName, currentName]
     .map((v) => String(v || "").trim())
     .filter(Boolean);
-  const firstHuman = candidates.find((name) => !isRawDmIdentifier(name));
+  const firstHuman = candidates.find((name) => !isPlaceholderDmParticipantName(name, platform));
   if (firstHuman) return firstHuman;
 
   const thread = String(threadId || "").trim();
@@ -42,6 +53,83 @@ const toAbsoluteUrl = (value) => {
   const base = config.public?.BASE_URL || config.BASE_URL || process.env.BASE_URL || "";
   if (!base) return raw;
   return `${String(base).replace(/\/+$/, "")}/${raw.replace(/^\/+/, "")}`;
+};
+
+const resolveMetaAttachmentType = (mimeType) => {
+  const normalized = String(mimeType || "").toLowerCase();
+  if (normalized.startsWith("image/")) return "image";
+  if (normalized.startsWith("audio/")) return "audio";
+  if (normalized.startsWith("video/")) return "video";
+  return "file";
+};
+
+const resolveMetaSendContext = async ({ organisationId, conversation, account }) => {
+  const platform = String(conversation?.platform || account?.platform || "").toLowerCase();
+  const accountMetadata = account?.metadata || {};
+  const conversationMetadata = conversation?.metadata || {};
+
+  let senderId = String(conversation?.accountId || account?.accountId || "me");
+  let accessToken = account?.accessTokenEnc ? decrypt(account.accessTokenEnc) : null;
+  let pageId = "";
+
+  if (platform === "instagram") {
+    pageId = String(
+      accountMetadata?.pageId ||
+      conversationMetadata?.pageId ||
+      ""
+    ).trim();
+  } else if (platform === "messenger") {
+    pageId = String(
+      conversation?.accountId ||
+      accountMetadata?.pageId ||
+      account?.accountId ||
+      ""
+    ).trim();
+  }
+
+  if (!pageId && platform !== "instagram") {
+    pageId = String(account?.accountId || "").trim();
+  }
+
+  if (!pageId) {
+    try {
+      const activePages = await MetaPage.findAll({
+        where: {
+          organisationId,
+          status: "Active",
+        },
+        order: [["updatedAt", "DESC"]],
+        limit: 2,
+      });
+      if (activePages.length === 1) {
+        pageId = String(activePages[0]?.pageId || "").trim();
+      }
+    } catch {}
+  }
+
+  if (pageId) {
+    try {
+      const metaPage = await MetaPage.findOne({
+        where: {
+          organisationId,
+          pageId,
+          status: "Active",
+        },
+      });
+      if (metaPage?.accessTokenEnc) {
+        accessToken = decrypt(metaPage.accessTokenEnc) || accessToken;
+      }
+      if (metaPage?.pageId) {
+        senderId = String(metaPage.pageId);
+      }
+    } catch {}
+  }
+
+  return {
+    accessToken,
+    senderId,
+    pageId: pageId || null,
+  };
 };
 
 const sendMetaMessage = async ({ accessToken, senderId, recipientId, message, messagingType = "RESPONSE", tag = null }) => {
@@ -154,18 +242,13 @@ export const processQueuedMessages = async ({ organisationId, limit = 20, messag
     }
 
     try {
-      let accessToken = decrypt(account.accessTokenEnc);
-      let senderId = String(conversation.accountId || account.accountId || "me");
-      // Instagram send requires Page Access Token + Page ID as sender node
-      if (conversation.platform === 'instagram') {
-        try {
-          const metaPage = await MetaPage.findOne({
-            where: { organisationId, status: 'Active' },
-            order: [['updatedAt', 'DESC']],
-          });
-          if (metaPage?.accessTokenEnc) accessToken = decrypt(metaPage.accessTokenEnc);
-          if (metaPage?.pageId) senderId = String(metaPage.pageId);
-        } catch {}
+      const { accessToken, senderId } = await resolveMetaSendContext({
+        organisationId,
+        conversation,
+        account,
+      });
+      if (!accessToken) {
+        throw new Error("Account token missing");
       }
       const recipientId = String(conversation.threadId);
       const lastInboundAt = await getLatestInboundMessageAt({
@@ -293,27 +376,23 @@ export const listDmConversations = async (event) => {
       }
     }
 
-    const now = new Date();
-    await CrmDmConversation.update(
-      { autoReplyEnabled: true, autoReplyDisabledUntil: null },
-      {
-        where: {
-          organisationId: orgId,
-          autoReplyDisabledUntil: { [Op.lt]: now },
-        },
-      }
-    );
-
     const rows = await CrmDmConversation.findAndCountAll({
       where,
+      attributes: ["id", "platform", "accountId", "threadId", "participantName", "participantAvatar", "lastMessageAt", "unreadCount", "autoReplyEnabled", "autoReplyDisabledUntil", "metadata", "updatedAt"],
       order: [["lastMessageAt", "DESC"], ["updatedAt", "DESC"]],
       limit: Number.isFinite(limit) ? limit : 20,
       offset: Number.isFinite(offset) ? offset : 0,
     });
 
+    const data = rows.rows.map((row) => {
+      row.setDataValue("leadId", Number(row?.metadata?.leadId || 0) || null);
+      row.setDataValue("leadSource", row?.metadata?.leadSource || null);
+      return row;
+    });
+
     return success({
       total: rows.count,
-      data: rows.rows,
+      data,
       limit: Number.isFinite(limit) ? limit : 20,
       offset: Number.isFinite(offset) ? offset : 0,
     });
@@ -349,25 +428,26 @@ export const listDmMessages = async (event) => {
       where.createdAt = { [Op.lt]: new Date(before) };
     }
 
+    // Fetch DESC to get the N most recent messages before the cursor (pagination),
+    // then reverse for chronological display. DB does the heavy sort; JS just flips 30 items.
     const rows = await CrmDmMessage.findAll({
       where,
       order: [["createdAt", "DESC"], ["id", "DESC"]],
       limit: Number.isFinite(limit) ? limit : 30,
     });
 
+    // rows[last] is the oldest — that's the cursor for loading more older messages
+    const nextCursor = rows.length ? rows[rows.length - 1].createdAt : null;
+
     const sorted = rows.slice().sort((a, b) => {
       const aTs = new Date(a.createdAt).getTime();
       const bTs = new Date(b.createdAt).getTime();
       if (aTs !== bTs) return aTs - bTs;
-
-      // Keep inbound before outbound when timestamps are identical.
       const aInbound = String(a.direction || "").toLowerCase() === "inbound";
       const bInbound = String(b.direction || "").toLowerCase() === "inbound";
       if (aInbound !== bInbound) return aInbound ? -1 : 1;
-
       return Number(a.id || 0) - Number(b.id || 0);
     });
-    const nextCursor = rows.length ? rows[rows.length - 1].createdAt : null;
 
     return success({
       data: sorted,
@@ -402,6 +482,7 @@ export const sendDmMessage = async (event) => {
     const outboundText = String(message || "").trim() || null;
     const outboundAttachments = hasAttachments ? attachments : null;
     const outboundPreview = deriveAttachmentPreview(outboundAttachments || [], outboundText) || "";
+    const storedOutboundMessage = outboundText || (outboundAttachments?.length ? "[Attachment]" : null);
 
     const newMessage = await CrmDmMessage.create({
       organisationId: orgId,
@@ -409,7 +490,7 @@ export const sendDmMessage = async (event) => {
       platform: conversation.platform,
       direction: "outbound",
       senderName: "Flossly",
-      message: outboundText,
+      message: storedOutboundMessage,
       attachments: outboundAttachments,
       status: "queued",
     });
@@ -462,6 +543,33 @@ export const markDmRead = async (event) => {
     return success({ updated: true });
   } catch (err) {
     return error(500, err.message || "Failed to mark as read");
+  }
+};
+
+export const deleteDmConversation = async (event) => {
+  try {
+    const { orgId } = event.context.user || {};
+    if (!orgId) return error(401, "Unauthenticated");
+
+    const raw = await readBody(event);
+    const payload = typeof raw === "string" ? parseJsonBody(raw) : raw || {};
+    const { conversationId } = payload;
+    if (!conversationId) return error(400, "conversationId is required");
+
+    const numericId = Number(conversationId);
+
+    await CrmDmMessage.destroy({
+      where: { organisationId: orgId, conversationId: numericId },
+    });
+    const deleted = await CrmDmConversation.destroy({
+      where: { id: numericId, organisationId: orgId },
+    });
+
+    if (!deleted) return error(404, "Conversation not found");
+
+    return success({ deleted: true, conversationId: numericId });
+  } catch (err) {
+    return error(500, err.message || "Failed to delete conversation");
   }
 };
 
@@ -522,11 +630,24 @@ export const refreshDmProfile = async (event) => {
     }
     if (!account?.accessTokenEnc) return success({ updated: false, reason: "account_token_missing" });
 
-    const accessToken = decrypt(account.accessTokenEnc);
+    // For Messenger, use the page access token from MetaPage (more reliable for profile API)
+    const messengerPageId = conversation.platform === 'messenger' ? String(conversation.accountId || '') || null : null;
+    let accessToken = decrypt(account.accessTokenEnc);
+    if (messengerPageId) {
+      try {
+        const metaPage = await MetaPage.findOne({
+          where: { organisationId: orgId, pageId: messengerPageId, status: "Active" },
+          attributes: ["accessTokenEnc"],
+        });
+        if (metaPage?.accessTokenEnc) accessToken = decrypt(metaPage.accessTokenEnc) || accessToken;
+      } catch {}
+    }
+
     const profile = await resolveDmParticipantProfile({
       platform: conversation.platform,
       senderId: conversation.threadId,
       accessToken,
+      pageId: messengerPageId,
     });
     if (!profile) return success({ updated: false });
 
@@ -602,9 +723,27 @@ export const refreshAllDmProfiles = async (event) => {
     });
 
     const toRefresh = recentConvs.filter((c) => {
-      const nameIsRaw = /^\d{10,}$/.test(String(c.participantName || "").trim());
-      return !c.participantAvatar || !c.participantName || nameIsRaw;
+      return !c.participantAvatar || isPlaceholderDmParticipantName(c.participantName, c.platform);
     });
+
+    // Cache page tokens by accountId to avoid one MetaPage lookup per conversation
+    const pageTokenCache = new Map();
+    const getPageToken = async (platform, accountId, baseToken) => {
+      if (platform !== 'messenger') return baseToken;
+      const cacheKey = String(accountId || '');
+      if (pageTokenCache.has(cacheKey)) return pageTokenCache.get(cacheKey);
+      try {
+        const metaPage = await MetaPage.findOne({
+          where: { organisationId: orgId, pageId: cacheKey, status: "Active" },
+          attributes: ["accessTokenEnc"],
+        });
+        const token = (metaPage?.accessTokenEnc ? decrypt(metaPage.accessTokenEnc) : null) || baseToken;
+        pageTokenCache.set(cacheKey, token);
+        return token;
+      } catch {
+        return baseToken;
+      }
+    };
 
     let updated = 0;
     for (const conversation of toRefresh) {
@@ -632,11 +771,14 @@ export const refreshAllDmProfiles = async (event) => {
       }
       if (!account?.accessTokenEnc) continue;
 
-      const accessToken = decrypt(account.accessTokenEnc);
+      const messengerPageId = conversation.platform === 'messenger' ? String(conversation.accountId || '') || null : null;
+      const baseToken = decrypt(account.accessTokenEnc);
+      const accessToken = await getPageToken(conversation.platform, messengerPageId, baseToken);
       const profile = await resolveDmParticipantProfile({
         platform: conversation.platform,
         senderId: conversation.threadId,
         accessToken,
+        pageId: messengerPageId,
       });
       if (!profile) continue;
 
@@ -693,7 +835,7 @@ export const uploadDmAttachment = async (event) => {
       baseDir: "chat-attachments",
     });
 
-    const attachmentType = mimeType.startsWith("image/") ? "image" : "file";
+    const attachmentType = resolveMetaAttachmentType(mimeType);
     return success({
       url: s3Path,
       name: originalName,

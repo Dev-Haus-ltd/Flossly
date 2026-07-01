@@ -1,13 +1,13 @@
 import { Op } from 'sequelize'
 import { parsePhoneNumber } from 'awesome-phonenumber'
-import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, CrmAutomationDictionaryGroup, CrmAutomationDictionaryTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation } from '../models'
+import { CrmLead, CrmLeadTreatment, CrmLeadNote, CrmOption, CrmLeadCommunication, CrmLeadAssignee, CrmAutomationTemplate, CrmAutomationGroup, CrmAutomationGroupTemplate, CrmAutomationDictionaryGroup, CrmAutomationDictionaryTemplate, MetaPage, User, UserOrganisation, CrmWhatsAppMessageLog, Organisation, CrmCustomColumnDefinition, LeadCustomField } from '../models'
 import { crmAutomationDefaults, crmAutomationGroups } from '@shared/defaults/crmAutomationDefaults.js'
 import { CONTACT_METHODS, APPOINTMENT_DAYS, BEST_TIMES } from '../models/crm/leadCommunications'
 import { formatCrmTriggerPreview } from '~/lib/misc'
 import { success, error } from '../utils/response'
 import { requireUsageAllowed } from '../utils/requireUsageAllowed'
 import { sendLeadBulkEmail } from '../utils/emailNotifications.js'
-import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName } from '../utils/crmAutomation.js'
+import { sendImmediateCrmAutomationsForLead, dispatchSendNowAutomation, dispatchSendNowAutomationWithOptions, previewSendNowAutomation, inferTriggerFromName, buildEffectiveCrmTemplates, buildCrmTemplatesByOrg, buildCrmEmail, buildCrmWhatsAppMessage } from '../utils/crmAutomation.js'
 import { sendLeadCreatedNotification, sendLeadAssignedNotification, sendLeadUnassignedNotification, sendLeadStatusChangedNotification, sendNotificationToMultipleUsers } from '../utils/fcmNotification.js'
 import { decrypt } from '../utils/crypto'
 import { normalizeWhatsAppNumber, markWhatsAppOutbound, logWhatsAppMessage, isWhatsAppLimitExceeded } from '../utils/whatsapp'
@@ -89,6 +89,31 @@ const sanitizeFilename = (filename = 'file') =>
     .replace(/[^\w.\-]+/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '')
+
+const EMAIL_ATTACHMENT_MIME_BY_EXT = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+}
+
+const inferAttachmentContentType = (filename = '') => {
+  const ext = String(filename || '').split('.').pop().toLowerCase()
+  return EMAIL_ATTACHMENT_MIME_BY_EXT[ext] || 'application/octet-stream'
+}
+
+const isAllowedEmailAttachment = ({ filename = '', contentType = '' } = {}) => {
+  const safeName = String(filename || '').toLowerCase()
+  const safeType = String(contentType || '').toLowerCase()
+  if (safeName.endsWith('.pdf') || safeType.includes('pdf')) return true
+  if (safeName.endsWith('.doc') || safeType === 'application/msword') return true
+  if (safeName.endsWith('.docx') || safeType.includes('wordprocessingml')) return true
+  if (safeName.endsWith('.png') || safeType === 'image/png') return true
+  if (safeName.endsWith('.jpg') || safeName.endsWith('.jpeg') || safeType === 'image/jpeg') return true
+  return false
+}
 
 const getLeadRawData = (lead) =>
   lead?.rawData && typeof lead.rawData === 'object' && !Array.isArray(lead.rawData)
@@ -259,7 +284,21 @@ const validateAutomationPayload = (payload) => {
   if (!key) throw new Error('key required')
   const type = normalizeAutomationType(payload.type)
   const trigger = normalizeAutomationTrigger(payload.trigger)
-  return { ...payload, key, type, trigger }
+  const attachments =
+    payload.attachments === undefined
+      ? undefined
+      : (Array.isArray(payload.attachments)
+          ? payload.attachments
+              .map((item) => ({
+                link: item?.link || item?.url || item?.path || null,
+                name: item?.name || item?.filename || item?.title || 'Attachment',
+                contentType: item?.contentType || item?.mimeType || inferAttachmentContentType(item?.name || item?.filename || item?.title || ''),
+                type: item?.type || null,
+                size: item?.size || null,
+              }))
+              .filter((item) => item.link)
+          : [])
+  return { ...payload, key, type, trigger, ...(attachments !== undefined ? { attachments } : {}) }
 }
 
 const seedAutomationGroups = async (orgId) => {
@@ -485,6 +524,12 @@ export const listLeads = async (event) => {
           as: 'assignees',
           include: [{ model: User, as: 'user', attributes: ['id', 'fullName', 'email'] }],
         },
+        {
+          model: LeadCustomField,
+          as: 'customFields',
+          attributes: ['columnDefinitionId', 'value'],
+          required: false,
+        },
       ],
       order: [[orderKey, sortDir]],
     }
@@ -655,6 +700,7 @@ export const createLead = async (event) => {
     }
 
     try {
+      await createEventNotification(logged.orgId, logged.userId, 'celebrate_b1_new_lead')
       const leadCount = await CrmLead.count({ where: { organisationId: logged.orgId } })
       if (leadCount === 80) {
         await createEventNotification(logged.orgId, logged.userId, 'upgrade_f1_leads_80pct')
@@ -675,6 +721,25 @@ export const createLead = async (event) => {
   }
 }
 
+export async function createLeadInternal({ orgId, name, telephone, email, treatment, leadSource, comments, rawData }) {
+  const existing = await CrmLead.findOne({ where: { organisationId: orgId, telephone } });
+  if (existing) return { leadId: existing.id, created: false };
+
+  const created = await CrmLead.create({
+    organisationId: orgId,
+    name,
+    telephone,
+    email: email || null,
+    leadSource: leadSource || "Meta DM",
+    leadStatus: "New",
+    treatment: treatment || null,
+    comments: comments || null,
+    rawData: rawData || null,
+    inquiryDate: new Date(),
+  });
+  return { leadId: created.id, created: true };
+}
+
 export const updateLead = async (event) => {
   try {
     const logged = event.context.user
@@ -684,12 +749,38 @@ export const updateLead = async (event) => {
     if (!id) return error(400, 'id required')
     const lead = await CrmLead.findOne({ where: { id, organisationId: Number(logged.orgId) } })
     if (!lead) return error(404, 'Lead not found')
+    const previousLeadStatus = String(lead.leadStatus || '')
     const fields = ['alert', 'name', 'email', 'telephone', 'inquiryDate', 'dob', 'occupation', 'location', 'leadSource', 'leadStatus', 'followUpDate', 'comments', 'softDeleted']
     for (const f of fields) if (payload[f] !== undefined) lead[f] = payload[f]
     if (payload.treatment !== undefined) {
       lead.treatment = payload.treatment?.name || payload.treatment || null
     }
     await lead.save()
+    try {
+      const nextLeadStatus = String(lead.leadStatus || '')
+      if (previousLeadStatus !== 'Converted' && nextLeadStatus === 'Converted') {
+        await createEventNotification(logged.orgId, logged.userId, 'celebrate_b3_consultation')
+      }
+    } catch {}
+    // Save custom fields if provided
+    if (Array.isArray(payload.customFields)) {
+      for (const cf of payload.customFields) {
+        const { columnDefinitionId, value } = cf || {}
+        if (!columnDefinitionId) continue
+        const colDef = await CrmCustomColumnDefinition.findOne({
+          where: { id: Number(columnDefinitionId), organisationId: Number(logged.orgId), isActive: true },
+        })
+        if (!colDef) continue
+        const [field, created] = await LeadCustomField.findOrCreate({
+          where: { leadId: lead.id, columnDefinitionId: Number(columnDefinitionId) },
+          defaults: { leadId: lead.id, columnDefinitionId: Number(columnDefinitionId), value: value || '' },
+        })
+        if (!created) {
+          field.value = value || ''
+          await field.save()
+        }
+      }
+    }
     // Sync assignees if provided
     if (payload.assigned !== undefined && Array.isArray(payload.assigned)) {
       const desiredUserIds = payload.assigned.filter((u) => u && u.id).map((u) => Number(u.id))
@@ -1092,7 +1183,7 @@ export const listOptions = async (event) => {
     const rows = await CrmOption.findAll({ where: { organisationId: Number(orgId), category, active: true }, order: [['ordering', 'ASC'], ['name', 'ASC']] })
     if (!rows.length && ['lead_source', 'treatment', 'lead_status'].includes(category)) {
       const defaults = {
-        lead_source: ['Google Ads', 'Website', 'Referral', 'Walk In', 'Meta Advert', 'Call'],
+        lead_source: ['Google Ads', 'Website', 'Referral', 'Walk In', 'Meta Advert', 'Call', 'Facebook DM', 'Instagram DM', 'Meta DM'],
         treatment: ['Teeth Whitening', 'Teeth Straightening', 'Composite Bonding', 'Veneer'],
         lead_status: [
           { name: 'New', color: '#1BA34C' },
@@ -1395,29 +1486,27 @@ export const uploadLeadAttachment = async (event) => {
       : null
     if (!filePart) return error(400, 'file required')
 
-    const originalName = String(filePart.filename || 'attachment.pdf')
+    const originalName = String(filePart.filename || 'attachment')
     const ext = originalName.includes('.') ? originalName.split('.').pop() : ''
-    const safeName = sanitizeFilename(originalName) || `attachment.${ext || 'pdf'}`
+    const safeName = sanitizeFilename(originalName) || `attachment.${ext || 'bin'}`
     const contentType = String(filePart.type || '').toLowerCase()
-    const isPdfByType = contentType.includes('pdf')
-    const isPdfByName = safeName.toLowerCase().endsWith('.pdf')
-    if (!isPdfByType && !isPdfByName) {
-      return error(400, 'Only PDF files are allowed')
+    if (!isAllowedEmailAttachment({ filename: safeName, contentType })) {
+      return error(400, 'Only PDF, DOC, DOCX, PNG, JPG, and JPEG files are allowed')
     }
 
     const stampedName = `${Date.now()}-${safeName}`
-    const baseDir = 'documents/crm/price-lists'
+    const baseDir = 'documents/crm/email-attachments'
     const link = await uploadBufferFile({
       data: filePart.data,
       filename: stampedName,
-      contentType: filePart.type || 'application/pdf',
+      contentType: filePart.type || inferAttachmentContentType(safeName),
       baseDir,
     })
 
     return success({
       link,
       name: originalName,
-      contentType: filePart.type || 'application/pdf',
+      contentType: filePart.type || inferAttachmentContentType(safeName),
       size: Number(filePart.data?.length || 0),
       uploadedAt: new Date().toISOString(),
     })
@@ -1746,6 +1835,7 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     leadId,
     groupKey,
     trigger,
+    attachments,
     whatsappTemplateName,
     whatsappTemplateLanguage,
   } = clean
@@ -1761,17 +1851,11 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     const overrides = { ...(raw.crmAutomationOverrides || {}) }
     const activationDates = { ...(raw.crmAutomationActivationDates || {}) }
     const existingOverride = overrides[key] || {}
-    const existingTemplate = await CrmAutomationTemplate.findOne({
-      where: { organisationId: Number(orgId), key },
-      transaction,
-    })
-    const defaultTemplate = crmAutomationDefaults.find((item) => item.key === key) || null
-    const previousEnabled =
-      existingOverride?.enabled !== undefined
-        ? !!existingOverride.enabled
-        : existingTemplate?.enabled !== undefined
-          ? !!existingTemplate.enabled
-          : !!defaultTemplate?.enabled
+    // Per-lead opt-in model: no override = automation was not active for this lead,
+    // regardless of the global template's enabled state.
+    const previousEnabled = existingOverride?.enabled !== undefined
+      ? !!existingOverride.enabled
+      : false
     const becameEnabled = !!enabled && !previousEnabled
     overrides[key] = {
       key,
@@ -1781,9 +1865,12 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
       sending: sending || '',
       enabled: !!enabled,
       template: template || '',
+      attachments: attachments !== undefined
+        ? attachments
+        : (Array.isArray(existingOverride?.attachments) ? existingOverride.attachments : []),
       whatsappTemplateName: whatsappTemplateName || '',
       whatsappTemplateLanguage: whatsappTemplateLanguage || '',
-      trigger: trigger ?? null,
+      trigger: trigger !== undefined ? (trigger ?? null) : (existingOverride?.trigger ?? null),
     }
     if (becameEnabled) {
       const activatedAt = new Date().toISOString()
@@ -1839,6 +1926,7 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     if (type !== undefined) exists.type = type
     if (template !== undefined) exists.template = template
     if (subject !== undefined) exists.subject = subject
+    if (attachments !== undefined) exists.attachments = attachments
     if (whatsappTemplateName !== undefined) exists.whatsappTemplateName = whatsappTemplateName || null
     if (whatsappTemplateLanguage !== undefined) exists.whatsappTemplateLanguage = whatsappTemplateLanguage || null
     if (trigger !== undefined) exists.trigger = trigger
@@ -1855,6 +1943,7 @@ const applyAutomationSave = async ({ orgId, payload, transaction }) => {
     sending: sending || '',
     enabled: !!enabled,
     template: template || null,
+    attachments: attachments !== undefined ? attachments : [],
     whatsappTemplateName: whatsappTemplateName || null,
     whatsappTemplateLanguage: whatsappTemplateLanguage || null,
     trigger: trigger ?? null,
@@ -2131,8 +2220,8 @@ export const sendLeadMail = async (event) => {
       ? attachments
           .map((item) => ({
             link: item?.link || item?.url || item?.path || null,
-            name: item?.name || item?.filename || 'Attachment.pdf',
-            contentType: item?.contentType || 'application/pdf',
+            name: item?.name || item?.filename || 'Attachment',
+            contentType: item?.contentType || item?.mimeType || inferAttachmentContentType(item?.name || item?.filename || ''),
           }))
           .filter((item) => item.link)
       : []
@@ -2369,13 +2458,19 @@ export const getLeadAutomationLog = async (event) => {
     if (!lead) return error(404, 'Lead not found')
 
     const sentKeys = lead.rawData?.automationSentKeys || {}
+    const automationHistory = Array.isArray(lead.rawData?.crmAutomationHistory)
+      ? lead.rawData.crmAutomationHistory
+      : []
     const manualLog = Array.isArray(lead.rawData?.manualSentLog) ? lead.rawData.manualSentLog : []
 
-    if (!Object.keys(sentKeys).length && !manualLog.length) return success({ rows: [], total: 0 })
+    if (!Object.keys(sentKeys).length && !automationHistory.length && !manualLog.length) {
+      return success({ rows: [], total: 0 })
+    }
 
     const allRows = []
+    const seenAutomationRows = new Set()
 
-    if (Object.keys(sentKeys).length) {
+    if (Object.keys(sentKeys).length || automationHistory.length) {
       const templates = await CrmAutomationTemplate.findAll({
         where: { organisationId: orgId },
         attributes: ['key', 'name', 'type'],
@@ -2383,7 +2478,24 @@ export const getLeadAutomationLog = async (event) => {
       const templateMap = new Map(templates.map((t) => [t.key, t]))
       const defaultMap = new Map(crmAutomationDefaults.map((d) => [d.key, d]))
 
+      automationHistory.forEach((entry) => {
+        const key = String(entry?.key || '')
+        const tpl = templateMap.get(key)
+        const def = defaultMap.get(key)
+        const sentAt = entry?.sentAt
+        if (!sentAt) return
+        seenAutomationRows.add(`${key}::${sentAt}`)
+        allRows.push({
+          key,
+          name: entry?.name || tpl?.name || def?.name || key || 'Automation',
+          type: entry?.type || tpl?.type || def?.type || 'Email',
+          sentAt,
+          source: entry?.source || 'automation',
+        })
+      })
+
       Object.entries(sentKeys).forEach(([key, sentAt]) => {
+        if (seenAutomationRows.has(`${key}::${sentAt}`)) return
         const tpl = templateMap.get(key)
         const def = defaultMap.get(key)
         allRows.push({
@@ -2419,6 +2531,41 @@ export const getLeadAutomationLog = async (event) => {
   }
 }
 
+export const getLeadAutomationPreview = async (event) => {
+  try {
+    const { orgId } = event.context.user || {}
+    if (!orgId) return error(401, 'Unauthenticated')
+    const { leadId, key } = getQuery(event)
+    if (!leadId || !key) return error(400, 'leadId and key required')
+
+    const lead = await CrmLead.findOne({ where: { id: leadId, organisationId: orgId } })
+    if (!lead) return error(404, 'Lead not found')
+
+    const org = await Organisation.findByPk(Number(orgId))
+    const templates = await CrmAutomationTemplate.findAll({ where: { organisationId: orgId } })
+    const templatesByOrg = buildCrmTemplatesByOrg(templates)
+    const effectiveTemplates = buildEffectiveCrmTemplates(lead, templatesByOrg)
+    const tpl = effectiveTemplates.find((t) => t.key === key)
+    if (!tpl) return error(404, 'Template not found')
+
+    const type = String(tpl.type || 'Email').toLowerCase()
+    if (type === 'whatsapp') {
+      const message = buildCrmWhatsAppMessage(lead, tpl, org)
+      return success({ type: 'WhatsApp', name: tpl.name || key, message })
+    }
+    const { subject, html } = buildCrmEmail(lead, tpl, org)
+    return success({
+      type: 'Email',
+      name: tpl.name || key,
+      subject,
+      html,
+      attachments: Array.isArray(tpl?.attachments) ? tpl.attachments : [],
+    })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
 export const updateLeadAutoReply = async (event) => {
   try {
     const { orgId } = event.context.user || {}
@@ -2439,6 +2586,88 @@ export const updateLeadAutoReply = async (event) => {
     await lead.save()
 
     return success({ id: lead.id, autoReplyEnabled: lead.autoReplyEnabled })
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const listCrmCustomColumns = async (event) => {
+  try {
+    const logged = event.context.user
+    const columns = await CrmCustomColumnDefinition.findAll({
+      where: { organisationId: Number(logged.orgId), isActive: true },
+      order: [['sortOrder', 'ASC']],
+    })
+    return success(columns)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const createCrmCustomColumn = async (event) => {
+  try {
+    const logged = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { displayName, dataType, dropdownOptions } = payload || {}
+    if (!displayName || !dataType) return error(400, 'displayName and dataType are required')
+    const validTypes = ['text', 'number', 'date', 'boolean', 'dropdown']
+    if (!validTypes.includes(dataType)) return error(400, 'Invalid dataType')
+    const columnName = `crm_col_${Date.now()}`
+    const maxSort = await CrmCustomColumnDefinition.max('sortOrder', {
+      where: { organisationId: Number(logged.orgId), isActive: true },
+    })
+    const sortOrder = (Number(maxSort) || 0) + 1
+    const col = await CrmCustomColumnDefinition.create({
+      organisationId: Number(logged.orgId),
+      columnName,
+      displayName: String(displayName).trim(),
+      dataType,
+      sortOrder,
+      isActive: true,
+      dropdownOptions: dropdownOptions || null,
+      createdBy: logged.userId,
+    })
+    return success(col)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const updateCrmCustomColumn = async (event) => {
+  try {
+    const logged = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { columnId, displayName } = payload || {}
+    if (!columnId) return error(400, 'columnId is required')
+    if (!displayName?.trim()) return error(400, 'displayName is required')
+    const col = await CrmCustomColumnDefinition.findOne({
+      where: { id: Number(columnId), organisationId: Number(logged.orgId), isActive: true },
+    })
+    if (!col) return error(404, 'Column not found')
+    col.displayName = String(displayName).trim()
+    await col.save()
+    return success(col)
+  } catch (e) {
+    return error(500, e.message)
+  }
+}
+
+export const deleteCrmCustomColumn = async (event) => {
+  try {
+    const logged = event.context.user
+    const body = await readBody(event)
+    const payload = typeof body === 'string' ? parseJsonBody(body) : body
+    const { columnId } = payload || {}
+    if (!columnId) return error(400, 'columnId is required')
+    const col = await CrmCustomColumnDefinition.findOne({
+      where: { id: Number(columnId), organisationId: Number(logged.orgId) },
+    })
+    if (!col) return error(404, 'Column not found')
+    col.isActive = false
+    await col.save()
+    return success('Column deleted')
   } catch (e) {
     return error(500, e.message)
   }

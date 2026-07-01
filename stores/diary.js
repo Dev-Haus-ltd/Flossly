@@ -9,6 +9,14 @@ export const useDiaryStore = defineStore("diaryStore", {
   getters: {},
 
   actions: {
+    _notifyOnboardingRefresh(reason, detail = {}) {
+      if (typeof window === "undefined") return;
+      window.dispatchEvent(
+        new CustomEvent("onboarding-refresh", {
+          detail: { reason, ...detail, refreshedAt: Date.now() },
+        })
+      );
+    },
     _start() {
       this._pending++;
       this.isLoading = true;
@@ -108,6 +116,7 @@ export const useDiaryStore = defineStore("diaryStore", {
           .createPatient(payload)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this._notifyOnboardingRefresh("patient-created");
             resolve(res);
           })
           .catch((err) => {
@@ -190,6 +199,7 @@ deletePatient(patientId) {
           .createAppointment(payload)
           .then((res) => {
             this.isLoading = false;
+            if (res?.code === 0) this._notifyOnboardingRefresh("appointment-created");
             resolve(res);
           })
           .catch((err) => {

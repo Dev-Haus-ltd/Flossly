@@ -12,7 +12,10 @@ import {
   selectAdsAccount,
   handleAdsLeadWebhook,
   getAdsPerformance,
-  getSearchConsoleAnalytics
+  getSearchConsoleAnalytics,
+  calendarAuthStart,
+  calendarConnectionStatus,
+  calendarDisconnect
 } from "../../controllers/google"
 
 export default defineEventHandler(async (event) => {
@@ -51,6 +54,15 @@ export default defineEventHandler(async (event) => {
       return await handleAdsLeadWebhook(event)
     case 'getAdsPerformance':
       return await getAdsPerformance(event)
+
+    // Google Calendar endpoints
+    case 'calendarAuthStart':
+      return await calendarAuthStart(event)
+    case 'calendarConnection':
+      return await calendarConnectionStatus(event)
+    case 'calendarDisconnect':
+      return await calendarDisconnect(event)
+
     default:
       return { code: 0, error: 'Not found' }
   }

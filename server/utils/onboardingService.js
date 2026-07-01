@@ -7,21 +7,19 @@ import {
   PatientAutomationTemplate,
   OnboardingEvent,
 } from "../models/index.js";
-import { ONBOARDING_EMAIL_TEMPLATES } from "@shared/defaults/onboardingCampaign.js";
+import { ONBOARDING_EMAIL_TEMPLATES, ONBOARDING_INAPP_MESSAGES } from "@shared/defaults/onboardingCampaign.js";
 
-const CLIENT_ONBOARDING_KEYS = new Set([
-  "welcome_quiz_done",
-  "welcome_video_done",
-  "onboarding_inapp_day2_meta",
-  "onboarding_inapp_day3_automation",
-  "onboarding_inapp_day4_noshows",
-  "onboarding_inapp_day5_recalls",
-  "onboarding_inapp_day6_automation",
-  "onboarding_inapp_day7_trial",
-  "onboarding_inapp_day13_trial",
+// Derived automatically from message definitions — never edit manually.
+// Includes system keys (welcome/video) plus every in-app message key.
+const SYSTEM_ONBOARDING_KEYS = ["welcome_quiz_done", "welcome_video_done"];
+
+export const CLIENT_ONBOARDING_KEYS = new Set([
+  ...SYSTEM_ONBOARDING_KEYS,
+  ...ONBOARDING_INAPP_MESSAGES.map((m) => m.key),
 ]);
 
-const ONBOARDING_PRIVILEGED_ROLE_IDS = [1, 8];
+export const ONBOARDING_PRIVILEGED_ROLE_IDS = [1, 8];
+
 export const isOnboardingRecipientRole = (roleId) =>
   ONBOARDING_PRIVILEGED_ROLE_IDS.includes(Number(roleId));
 
@@ -58,7 +56,9 @@ export const getOnboardingEventMap = async ({ userId, organisationId, keys }) =>
 };
 
 export const getOnboardingKeys = () => {
-  const emailKeys = ONBOARDING_EMAIL_TEMPLATES.map((t) => t.key);
+  const emailKeys = ONBOARDING_EMAIL_TEMPLATES
+    .filter((t) => !t.triggerType || t.triggerType === "offsetDays")
+    .map((t) => t.key);
   return [...new Set([...CLIENT_ONBOARDING_KEYS, ...emailKeys])];
 };
 
@@ -124,4 +124,3 @@ export const getDiffDaysFromStart = (startAt, now = new Date()) => {
   return Math.floor((today - startDay) / (24 * 60 * 60 * 1000));
 };
 
-export { CLIENT_ONBOARDING_KEYS, ONBOARDING_PRIVILEGED_ROLE_IDS };

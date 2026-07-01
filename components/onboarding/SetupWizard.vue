@@ -23,13 +23,23 @@
       <div v-show="currentStep === 1">
         <h3 class="text-subtitle-1 font-weight-semibold mb-4">Tell us about your practice</h3>
         <v-text-field v-model="practiceForm.name" label="Practice name" variant="outlined" density="comfortable" class="mb-3" />
-        <CommonAddressAutocompleteField v-model="practiceAddress" class="mb-3" :required="false" />
+        <v-text-field
+          v-model="practiceForm.replyToEmail"
+          label="Email"
+          type="email"
+          variant="outlined"
+          density="comfortable"
+          class="mb-3"
+          :error-messages="replyToEmailError"
+        />
         <CommonPhoneNumberField
           v-model="practiceForm.contact"
           class="mb-3"
           :error-message="phoneError"
           @update:phone-object="onPhoneObjectUpdate"
         />
+        <v-text-field
+        <CommonAddressAutocompleteField v-model="practiceAddress" class="mb-3" :required="false" />
       </div>
 
       <!-- Step 2: Invite Team -->
@@ -100,10 +110,11 @@ const stepLabels = ['Practice', 'Team', 'Meta', 'Done']
 const currentStep = ref(Number(route.query.step) || 1)
 const saving = ref(false)
 
-const practiceForm = reactive({ name: '', address: '', postalCode: '', contact: '' })
+const practiceForm = reactive({ name: '', replyToEmail: '', address: '', postalCode: '', contact: '' })
 const inviteEmails = ref([''])
 const phoneObject = ref(null)
 const phoneError = ref('')
+const replyToEmailError = ref('')
 
 const practiceAddress = computed({
   get: () => ({ address: practiceForm.address, postalCode: practiceForm.postalCode }),
@@ -124,6 +135,7 @@ const hydrateFromProfile = () => {
   )?.organisation
   if (org) {
     practiceForm.name = org.name || ''
+    practiceForm.replyToEmail = org.replyToEmail || ''
     practiceForm.address = org.address || ''
     practiceForm.postalCode = org.postalCode || ''
     practiceForm.contact = org.contact || ''
@@ -133,12 +145,21 @@ const hydrateFromProfile = () => {
 watch(() => authStore.loggedUser, () => { hydrateFromProfile() }, { immediate: true })
 
 const normalizeText = (value) => String(value || '').trim()
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeText(value))
 
 const validatePhone = () => {
   const val = normalizeText(practiceForm.contact)
   if (!val) { phoneError.value = 'Phone number is required'; return false }
   if (!phoneObject.value?.valid) { phoneError.value = 'Enter a valid phone number'; return false }
   phoneError.value = ''
+  return true
+}
+
+const validateReplyToEmail = () => {
+  const val = normalizeText(practiceForm.replyToEmail)
+  if (!val) { replyToEmailError.value = 'Reply-to email is required'; return false }
+  if (!isValidEmail(val)) { replyToEmailError.value = 'Enter a valid email address'; return false }
+  replyToEmailError.value = ''
   return true
 }
 
@@ -152,6 +173,10 @@ watch(() => practiceForm.contact, (value) => {
   if (phoneError.value) validatePhone()
 })
 
+watch(() => practiceForm.replyToEmail, () => {
+  if (replyToEmailError.value) validateReplyToEmail()
+})
+
 const recordStep = async (step) => {
   try {
     await Post('/auth/updateSetupStep', { step })
@@ -163,9 +188,10 @@ const nextStep = async () => {
   saving.value = true
   try {
     if (currentStep.value === 1) {
-      if (!validatePhone()) return
+      if (!validatePhone() || !validateReplyToEmail()) return
       const fd = new FormData()
       if (practiceForm.name) fd.append('name', practiceForm.name)
+      if (practiceForm.replyToEmail) fd.append('replyToEmail', practiceForm.replyToEmail)
       if (practiceForm.address) fd.append('address', practiceForm.address)
       if (practiceForm.postalCode) fd.append('postalCode', practiceForm.postalCode)
       if (practiceForm.contact) fd.append('contact', practiceForm.contact)

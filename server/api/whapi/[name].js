@@ -6,10 +6,23 @@ const WHATSAPP_WRITE_CASES = new Set([
   'connect', 'disconnect', 'delete', 'extend', 'editMessage', 'deleteMessage', 'reactToMessage',
 ])
 
+const isWhapiAllowed = () => {
+  const config = useRuntimeConfig()
+  const raw = config.WHAPI_ALLOW_CREATE_CHANNEL ?? process.env.WHAPI_ALLOW_CREATE_CHANNEL ?? ''
+  if (raw === '' || raw === undefined || raw === null) return true
+  return !['false', '0', 'no', 'off'].includes(String(raw).trim().toLowerCase())
+}
+
 export default defineEventHandler(async (event) => {
   const name = getRouterParam(event, "name");
 
   if (WHATSAPP_WRITE_CASES.has(name)) {
+    if (!isWhapiAllowed()) {
+      throw createError({
+        statusCode: 403,
+        data: { code: 'WHATSAPP_DISABLED', message: 'WhatsApp channel management is disabled in this environment.' },
+      })
+    }
     await requireFeature(event, 'whatsapp')
     await requirePaidWhatsApp(event)
   }

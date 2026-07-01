@@ -30,9 +30,10 @@
           <v-row>
             <v-col cols="12" md="6">
               <label class="mb-1 fld-lbl">Automation Group <span class="req">*</span></label>
-              <v-select
+              <v-autocomplete
+                ref="groupAutocomplete"
                 v-model="form.groupKey"
-                :items="groups"
+                :items="customGroups"
                 item-title="title"
                 item-value="key"
                 variant="solo"
@@ -40,8 +41,51 @@
                 class="mb-1 input-bordered"
                 flat
                 :rules="requiredRule"
-              />
+                no-data-text="No custom groups yet"
+                :menu-props="{ closeOnContentClick: true }"
+              >
+                <template #append-item>
+                  <v-divider class="my-2" />
+                  <v-list-item @click="openAddGroupDialog" class="pa-0 ms-3" density="compact">
+                    <v-list-item-title class="text-primary d-inline-flex align-center" style="gap:4px">
+                      <v-icon color="primary" size="22">mdi-plus</v-icon>
+                      <span>Add New Group</span>
+                    </v-list-item-title>
+                  </v-list-item>
+                </template>
+              </v-autocomplete>
             </v-col>
+
+            <!-- Add Group dialog -->
+            <v-dialog v-model="showAddGroupDialog" max-width="400" @after-leave="newGroupTitle = ''">
+              <v-card class="rounded-lg">
+                <div class="d-flex align-center justify-space-between px-5 py-3" style="border-bottom:1px solid #f0f0f0">
+                  <span class="font-weight-semibold" style="font-size:14px">New Automation Group</span>
+                  <v-btn icon variant="text" size="small" @click="showAddGroupDialog = false">
+                    <v-icon size="18">mdi-close</v-icon>
+                  </v-btn>
+                </div>
+                <div class="px-5 py-4">
+                  <label class="mb-1 fld-lbl d-block">Group Name</label>
+                  <v-text-field
+                    v-model="newGroupTitle"
+                    variant="solo"
+                    density="compact"
+                    class="input-bordered"
+                    flat
+                    placeholder="e.g. Post-treatment"
+                    autofocus
+                    @keyup.enter="submitNewGroup"
+                  />
+                </div>
+                <div class="px-5 pb-4 d-flex justify-end" style="gap:8px">
+                  <v-btn variant="text" @click="showAddGroupDialog = false">Cancel</v-btn>
+                  <v-btn color="primary" :loading="addingGroup" :disabled="!newGroupTitle.trim()" @click="submitNewGroup" flat>
+                    Create
+                  </v-btn>
+                </div>
+              </v-card>
+            </v-dialog>
 
             <v-col cols="12" md="6">
               <label class="mb-1 fld-lbl">Automation Type</label>
@@ -186,7 +230,13 @@
 
             <v-col cols="12">
               <label class="mb-1 fld-lbl">{{ form.type === 'WhatsApp' ? 'WhatsApp Message' : 'Email Content' }}</label>
-              <div ref="editorEl" class="editor"></div>
+              <CrmEmailTemplateEditor
+                v-if="form.type !== 'WhatsApp'"
+                v-model="form.template"
+                v-model:attachments="form.attachments"
+                :allow-attachments="form.type === 'Email'"
+              />
+              <div v-else ref="editorEl" class="editor"></div>
             </v-col>
           </v-row>
         </v-form>
@@ -239,10 +289,48 @@ const mainStore = useMainStore()
 const formRef = ref(null)
 const saving = ref(false)
 const requiredRule = [(v) => !!v || 'This field is required']
+const groupAutocomplete = ref(null)
+const showAddGroupDialog = ref(false)
+const newGroupTitle = ref('')
+const addingGroup = ref(false)
+const localCreatedGroups = ref([])
+
+const customGroups = computed(() => [
+  ...props.groups.filter(g => g.source === 'custom'),
+  ...localCreatedGroups.value,
+])
+
+const openAddGroupDialog = () => {
+  if (groupAutocomplete.value) groupAutocomplete.value.blur()
+  showAddGroupDialog.value = true
+}
+
+const submitNewGroup = async () => {
+  const title = newGroupTitle.value.trim()
+  if (!title) return
+  addingGroup.value = true
+  try {
+    const res = await crmStore.saveAutomationGroup({ title })
+    if (res?.code === 0) {
+      const created = res.data
+      localCreatedGroups.value.push(created)
+      form.value.groupKey = created.key
+      showAddGroupDialog.value = false
+      mainStore.setSnackbar({ title: 'Group created', type: 'success' })
+    } else {
+      mainStore.setSnackbar({ title: res?.message || 'Failed to create group', type: 'error' })
+    }
+  } catch (e) {
+    mainStore.setSnackbar({ title: e.message || 'Failed to create group', type: 'error' })
+  } finally {
+    addingGroup.value = false
+  }
+}
 const types = ['Email', 'WhatsApp']
 const triggerTypes = [
   { label: '— Select trigger type —', value: null },
   { label: 'After enquiry', value: 'inquiry_days' },
+  { label: 'After activation', value: 'activation_days' },
   { label: 'Birthday offset', value: 'birthday_offset' },
   { label: 'Birthday month start', value: 'birthday_month_start' },
   { label: 'Black Friday', value: 'black_friday' },
@@ -275,6 +363,7 @@ const form = ref({
   name: '',
   subject: '',
   template: '',
+  attachments: [],
   triggerType: null,
   triggerDays: 0,
   triggerOffsetDays: 0,
@@ -297,6 +386,7 @@ const resetForm = () => {
     name: '',
     subject: '',
     template: '',
+    attachments: [],
     triggerType: null,
     triggerDays: 0,
     triggerOffsetDays: 0,
@@ -305,11 +395,15 @@ const resetForm = () => {
     triggerWeekday: 1,
     triggerWeekIndex: 1,
   }
+  localCreatedGroups.value = []
   if (formRef.value) formRef.value.resetValidation()
 }
 
 const initEditor = async () => {
   if (typeof window === 'undefined') return
+  if (form.value.type !== 'WhatsApp') return
+  await nextTick()
+  if (!editorEl.value) return
   if (!EditorCtor || !Header || !List) {
     const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
       import('@editorjs/editorjs'),
@@ -345,18 +439,23 @@ const handleDrawerClose = async (newValue) => {
     if (ej) { ej.destroy(); ej = null }
   } else {
     await nextTick()
-    await initEditor()
+    if (form.value.type === 'WhatsApp') await initEditor()
   }
   emit('update:modelValue', newValue)
 }
 
+watch(() => form.value.type, async (newType) => {
+  if (ej) { ej.destroy(); ej = null }
+  if (newType === 'WhatsApp') await initEditor()
+})
+
 watch(() => props.modelValue, async (newValue) => {
   if (newValue) {
-    if (!form.value.groupKey && props.groups?.length) {
-      form.value.groupKey = props.groups[0]?.key || ''
+    if (!form.value.groupKey && customGroups.value.length) {
+      form.value.groupKey = customGroups.value[0]?.key || ''
     }
     await nextTick()
-    await initEditor()
+    if (form.value.type === 'WhatsApp') await initEditor()
   }
 })
 
@@ -432,7 +531,7 @@ const onSubmit = async () => {
   if (!validation.valid) return
   try {
     saving.value = true
-    if (ej) {
+    if (ej && form.value.type === 'WhatsApp') {
       const saved = await ej.save()
       form.value.template = blocksToHtml(saved)
     }
@@ -448,6 +547,7 @@ const onSubmit = async () => {
       sending: trigger ? formatCrmTriggerPreview(trigger) : '',
       enabled: false,
       template: form.value.template,
+      attachments: form.value.type === 'Email' ? form.value.attachments : [],
       ...(trigger ? { trigger } : {}),
     }
     const res = await crmStore.saveAutomation(payload)

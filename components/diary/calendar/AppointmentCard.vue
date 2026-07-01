@@ -23,9 +23,8 @@
     <div class="card-inner compact">
       <div class="compact-left">
         <img :src="statusIcon" alt="status" class="status-icon compact-icon" />
-        <button class="patient-name compact-name" type="button" @click.stop="$emit('open-patient', appt)">
-          {{ appt.patient }}
-        </button>
+        <!-- open-patient navigation removed -->
+        <span class="patient-name compact-name">{{ appt.patient }}</span>
       </div>
 
       <div class="compact-right">
@@ -102,9 +101,8 @@
         <div class="full-left">
           <img :src="statusIcon" alt="status" class="status-icon full-icon" />
           <div class="full-details">
-            <button class="patient-name full-name" type="button" @click.stop="$emit('open-patient', appt)">
-              {{ appt.patient }}
-            </button>
+            <!-- open-patient navigation removed -->
+            <span class="patient-name full-name">{{ appt.patient }}</span>
             <div class="appointment-time">{{ displayStart }} – {{ displayEnd }}</div>
           </div>
         </div>
@@ -202,7 +200,7 @@ const props = defineProps({
 })
 
 
-const emit = defineEmits(['update-status', 'open-patient', 'open-appointment', 'resize-start'])
+const emit = defineEmits(['update-status', 'open-appointment', 'resize-start'])
 
 // Validation
 const REQUIRED = ['patient', 'start', 'end', 'status', 'date']

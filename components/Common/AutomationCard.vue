@@ -23,7 +23,7 @@
           :disabled="disableActions"
           @click.stop="$emit('edit')"
         >
-          <v-icon size="16">mdi-pencil-outline</v-icon>
+          <img :src="editIcon" alt="Edit" width="15" height="15" />
         </v-btn>
         <v-btn
           icon
@@ -33,7 +33,7 @@
           :disabled="disableActions"
           @click.stop="$emit('delete')"
         >
-          <v-icon size="16">mdi-delete-outline</v-icon>
+          <img :src="deleteIcon" alt="Delete" width="15" height="15" />
         </v-btn>
       </div>
     </div>
@@ -66,7 +66,8 @@
           hide-details
           :color="bulkState ? bulkToggleColor : 'primary'"
           :model-value="bulkState ? isBulkFullyEnabled : enabled"
-          @click.stop="$emit('toggle', bulkState ? !isBulkFullyEnabled : !enabled)"
+          :disabled="disableToggle"
+          @click.stop="disableToggle ? null : $emit('toggle', bulkState ? !isBulkFullyEnabled : !enabled)"
         />
       </div>
     </div>
@@ -77,6 +78,8 @@
 import { computed } from 'vue'
 import CommonTruncatedText from '@/components/Common/TruncatedText.vue'
 import { formatDateTime } from '@/lib/dateFormatter'
+import editIcon from '@/assets/icons/edit.svg'
+import deleteIcon from '@/assets/crm/delete.svg'
 
 const props = defineProps({
   title: String,
@@ -111,6 +114,10 @@ const props = defineProps({
   bulkState: {
     type: Object,
     default: null,
+  },
+  disableToggle: {
+    type: Boolean,
+    default: false,
   },
 })
 

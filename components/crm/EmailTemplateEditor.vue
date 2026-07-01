@@ -33,6 +33,28 @@
           <v-btn value="preview" class="toggle-btn ete-sub-btn">Preview</v-btn>
         </v-btn-toggle>
       </Transition>
+
+      <div v-if="allowAttachments" class="ete-attachments-actions">
+        <input
+          ref="attachmentInput"
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg"
+          class="d-none"
+          @change="onAttachmentSelect"
+        >
+        <v-btn
+          size="small"
+          variant="outlined"
+          color="primary"
+          prepend-icon="mdi-paperclip"
+          :loading="uploadingAttachment"
+          :disabled="uploadingAttachment"
+          @click="openAttachmentPicker"
+        >
+          Attach files
+        </v-btn>
+      </div>
     </div>
 
     <!-- ── Rich Text (EditorJS) ──────────────────────── -->
@@ -54,39 +76,117 @@
       class="ete-html-preview"
       v-html="rawHtml"
     />
+
+    <div v-if="allowAttachments" class="ete-attachments">
+      <div class="ete-attachments__header">
+        <span class="ete-attachments__title">Email attachments</span>
+        <span class="ete-attachments__count">{{ localAttachments.length }}</span>
+      </div>
+
+      <div v-if="localAttachments.length" class="ete-attachments__list">
+        <div
+          v-for="(attachment, index) in localAttachments"
+          :key="`${attachment.link || attachment.url || attachment.name}-${index}`"
+          class="ete-attachment-row"
+        >
+          <a
+            :href="attachment.link || attachment.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ete-attachment-row__name"
+          >
+            {{ attachment.name || attachment.filename || `Attachment ${index + 1}` }}
+          </a>
+          <span class="ete-attachment-row__type">
+            {{ attachment.contentType || attachment.mimeType || 'File' }}
+          </span>
+          <v-btn icon size="x-small" variant="text" color="error" @click="removeAttachment(index)">
+            <v-icon size="16">mdi-close</v-icon>
+          </v-btn>
+        </div>
+      </div>
+
+      <div v-else class="ete-attachments__empty">No attachments added.</div>
+    </div>
   </div>
 </template>
 
 <script setup>
+import { PostFormData, Post } from '@/services/apiWrapper'
 import { htmlToBlocks, blocksToHtml } from '@/lib/editorFormatter'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
+  attachments: { type: Array, default: () => [] },
+  allowAttachments: { type: Boolean, default: false },
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'update:attachments'])
 
 const mode = ref('rich')
 const htmlView = ref('code')
 const rawHtml = ref(props.modelValue || '')
 const editorHolder = ref(null)
+const attachmentInput = ref(null)
+const uploadingAttachment = ref(false)
+const localAttachments = ref(Array.isArray(props.attachments) ? [...props.attachments] : [])
+const crmStore = useCrmStore()
+const mainStore = useMainStore()
 
 let EditorCtor = null
 let Header = null
 let List = null
+let ImageTool = null
 let ej = null
 let suppressExternalSync = false
 const lastEditorHtml = ref('')
+
+const normalizeAttachment = (item = {}) => ({
+  link: item?.link || item?.url || item?.path || null,
+  name: item?.name || item?.filename || item?.title || 'Attachment',
+  contentType: item?.contentType || item?.mimeType || 'application/octet-stream',
+  type: item?.type || null,
+  size: item?.size || null,
+})
+
+// ── Uploader for @editorjs/image ────────────────────────
+const imageUploader = {
+  async uploadByFile(file) {
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await PostFormData('/misc/uploadEmailImage', fd)
+      if (res?.code === 0 && res.data?.url) {
+        return { success: 1, file: { url: res.data.url } }
+      }
+      return { success: 0 }
+    } catch {
+      return { success: 0 }
+    }
+  },
+  async uploadByUrl(url) {
+    try {
+      const res = await Post('/misc/uploadEmailImageByUrl', { url })
+      if (res?.code === 0 && res.data?.url) {
+        return { success: 1, file: { url: res.data.url } }
+      }
+      return { success: 0 }
+    } catch {
+      return { success: 0 }
+    }
+  },
+}
 
 // ── EditorJS lifecycle ──────────────────────────────────
 
 const loadModules = async () => {
   if (EditorCtor) return
-  const [{ default: E }, { default: H }, { default: L }] = await Promise.all([
+  const [{ default: E }, { default: H }, { default: L }, { default: I }] = await Promise.all([
     import('@editorjs/editorjs'),
     import('@editorjs/header'),
     import('@editorjs/list'),
+    import('@editorjs/image'),
   ])
-  EditorCtor = E; Header = H; List = L
+  EditorCtor = E; Header = H; List = L; ImageTool = I
 }
 
 const destroyEditor = () => {
@@ -102,7 +202,14 @@ const initEditor = async (html) => {
   lastEditorHtml.value = html || ''
   ej = new EditorCtor({
     holder: editorHolder.value,
-    tools: { header: Header, list: List },
+    tools: {
+      header: Header,
+      list: List,
+      image: {
+        class: ImageTool,
+        config: { uploader: imageUploader },
+      },
+    },
     data: htmlToBlocks(html || ''),
     onChange: async (api) => {
       const saved = await api.saver.save()
@@ -135,6 +242,44 @@ const onRawInput = () => {
   emit('update:modelValue', rawHtml.value)
 }
 
+const openAttachmentPicker = () => {
+  attachmentInput.value?.click?.()
+}
+
+const onAttachmentSelect = async (event) => {
+  const files = Array.from(event?.target?.files || [])
+  if (!files.length) return
+
+  uploadingAttachment.value = true
+  try {
+    const uploaded = []
+    for (const file of files) {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await crmStore.uploadLeadAttachment(formData)
+      if (res?.code !== 0 || !res?.data) {
+        throw new Error(res?.message || `Failed to upload ${file.name}`)
+      }
+      uploaded.push(normalizeAttachment(res.data))
+    }
+    localAttachments.value = [...localAttachments.value, ...uploaded]
+    emit('update:attachments', [...localAttachments.value])
+  } catch (error) {
+    mainStore?.setSnackbar?.({
+      title: error?.message || 'Failed to upload attachment',
+      type: 'error',
+    })
+  } finally {
+    uploadingAttachment.value = false
+    if (event?.target) event.target.value = ''
+  }
+}
+
+const removeAttachment = (index) => {
+  localAttachments.value.splice(index, 1)
+  emit('update:attachments', [...localAttachments.value])
+}
+
 // ── External value sync ─────────────────────────────────
 
 watch(() => props.modelValue, (val) => {
@@ -146,6 +291,14 @@ watch(() => props.modelValue, (val) => {
   }
   if (v !== lastEditorHtml.value) initEditor(v)
 })
+
+watch(
+  () => props.attachments,
+  (val) => {
+    localAttachments.value = Array.isArray(val) ? val.map(normalizeAttachment) : []
+  },
+  { deep: true }
+)
 
 // ── Mount / unmount ─────────────────────────────────────
 
@@ -185,6 +338,10 @@ onUnmounted(destroyEditor)
   height: 46px;
   display: inline-flex;
   align-items: center;
+}
+
+.ete-attachments-actions {
+  margin-left: auto;
 }
 
 .custom-toggle {
@@ -266,6 +423,79 @@ onUnmounted(destroyEditor)
   overflow-y: auto;
   padding: 14px 16px;
   background: #fff;
+}
+
+.ete-attachments {
+  border-top: 1px solid #e4e7ec;
+  background: #fcfcfd;
+  padding: 14px 16px;
+}
+
+.ete-attachments__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ete-attachments__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #344054;
+}
+
+.ete-attachments__count {
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: #0061fb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ete-attachments__list {
+  display: grid;
+  gap: 8px;
+}
+
+.ete-attachment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.ete-attachment-row__name {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ete-attachment-row__name:hover {
+  color: #0061fb;
+}
+
+.ete-attachment-row__type {
+  font-size: 12px;
+  color: #667085;
+}
+
+.ete-attachments__empty {
+  font-size: 13px;
+  color: #667085;
 }
 
 /* ── Transitions ─────────────────────────────────────── */

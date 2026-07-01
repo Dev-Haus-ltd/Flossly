@@ -23,7 +23,6 @@
               class="lead-form-card__logo"
             />
             <div>
-              <p class="lead-form-card__eyebrow">Lead Form</p>
               <h1>{{ formMeta.formName || "Enquiry Form" }}</h1>
               <p>{{ formMeta.practiceName || "Flossly" }}</p>
             </div>
@@ -80,6 +79,7 @@
                 :placeholder="field.placeholder || ''"
                 variant="outlined"
                 density="comfortable"
+                class="lead-form-control"
                 hide-details
                 :error-messages="getFieldErrors(field)"
               />
@@ -93,6 +93,7 @@
                 :placeholder="field.placeholder || 'Select...'"
                 variant="outlined"
                 density="comfortable"
+                class="lead-form-control"
                 hide-details
                 :error-messages="getFieldErrors(field)"
               />
@@ -105,6 +106,7 @@
                 density="comfortable"
                 rows="4"
                 auto-grow
+                class="lead-form-control"
                 hide-details
                 :error-messages="getFieldErrors(field)"
               />
@@ -278,7 +280,7 @@ onMounted(loadForm);
 .lead-form-page {
   min-height: 100vh;
   padding: 24px;
-  background: linear-gradient(135deg, #eef4ff 0%, #f8fbff 48%, #edf2ff 100%);
+  background: #ffffff;
 }
 
 .lead-form-shell {
@@ -289,7 +291,7 @@ onMounted(loadForm);
 .state-card,
 .lead-form-card {
   border-radius: 28px;
-  background: #fff;
+  background: transparent;
   box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
 }
 
@@ -393,6 +395,11 @@ onMounted(loadForm);
 
 .lead-form-label__required {
   color: #ef4444;
+}
+
+.lead-form-control :deep(.v-field) {
+  border-radius: 8px !important;
+  background-color: #ffffff !important;
 }
 
 .lead-form-consent {

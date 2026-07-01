@@ -1,0 +1,2 @@
+ALTER TABLE "Organisations"
+  ADD COLUMN IF NOT EXISTS "replyToEmail" VARCHAR(255);

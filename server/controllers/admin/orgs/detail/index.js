@@ -156,9 +156,13 @@ export const searchOrganisations = async (event) => {
 
   try {
     const query = getQuery(event);
-    const { search = '', page = 1, limit = 20 } = query;
+    const { search = '', page = 1, limit = 20, sortBy = 'name', sortOrder = 'asc', createdAtFrom, createdAtTo } = query;
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const ALLOWED_SORT_FIELDS = ['name', 'createdAt', 'status', 'licenseType'];
+    const sortField = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'name';
+    const sortDir = sortOrder === 'desc' ? 'DESC' : 'ASC';
 
     const whereClause = {};
 
@@ -178,10 +182,16 @@ export const searchOrganisations = async (event) => {
       };
     }
 
+    if (createdAtFrom || createdAtTo) {
+      whereClause.createdAt = {};
+      if (createdAtFrom) whereClause.createdAt[Op.gte] = new Date(createdAtFrom);
+      if (createdAtTo) whereClause.createdAt[Op.lte] = new Date(createdAtTo);
+    }
+
     const { count, rows: organisations } = await Organisation.findAndCountAll({
       where: whereClause,
-      attributes: ['id', 'name', 'contact', 'address', 'postalCode', 'type', 'status', 'createdAt'],
-      order: [['name', 'ASC']],
+      attributes: ['id', 'name', 'contact', 'address', 'postalCode', 'type', 'status', 'licenseType', 'createdAt'],
+      order: [[sortField, sortDir]],
       limit: parseInt(limit),
       offset,
     });
@@ -303,25 +313,17 @@ export const updateOrgLicense = async (event) => {
   }
 
   try {
-    const organisation = await Organisation.findByPk(organisationId, {
-      attributes: ['id', 'name', 'managerId', 'licenseType', 'licenseBillingCycle', 'licenseRenewalDate'],
-    });
+    const organisation = await Organisation.findByPk(organisationId);
 
     if (!organisation) return error(404, 'Organisation not found');
 
-    const preferences = await UserPreference.findAll({ where: { organisationId } });
-    for (const pref of preferences) {
-      pref.licenseType = licenseType;
-      pref.licenseRenewalDate = renewalDateObj;
-      await pref.save();
-    }
+    await organisation.update({ licenseType, licenseRenewalDate: renewalDateObj });
 
     return success({
       message: `License updated to ${licenseType} for organisation ${organisationId}`,
       organisationId,
       licenseType,
       renewalDate: renewalDateObj,
-      usersUpdated: preferences.length,
     });
   } catch (err) {
     console.error('updateUserLicense error:', err);

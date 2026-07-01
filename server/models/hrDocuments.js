@@ -9,7 +9,7 @@ export const HrDocument = sequelize.define(
       autoIncrement: true,
     },
     name: {
-      type: DataTypes.STRING(150),
+      type: DataTypes.STRING(255),
       allowNull: false,
     },
     type: {

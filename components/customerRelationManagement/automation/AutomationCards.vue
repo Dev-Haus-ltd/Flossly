@@ -16,6 +16,7 @@
           :show-toggle="showCardToggle"
           :show-actions="allowGroupEdit"
           :disable-actions="card.isDefault"
+          :disable-toggle="disableToggle"
           :selected="activeKey === card.key"
           :whatsapp-warning="!whatsappEnabled && !!card.hasWhatsApp"
           :bulk-state="card.bulkState || null"
@@ -64,6 +65,10 @@ defineProps({
   whatsappEnabled: {
     type: Boolean,
     default: true,
+  },
+  disableToggle: {
+    type: Boolean,
+    default: false,
   },
 })
 

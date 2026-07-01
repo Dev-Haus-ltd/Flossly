@@ -301,7 +301,7 @@ export const adminBulkUploadTasksForOrg = async (event) => {
     }
 
     const orgCategories = await TaskCategory.findAll({
-      where: { isDeleted: false, organisationId },
+      where: { organisationId },
       attributes: ["id", "name"],
     });
     const orgCategoryIds = new Set(orgCategories.map((c) => c.id));
@@ -378,6 +378,7 @@ export const adminBulkUploadTasksForOrg = async (event) => {
         const key = rawCategoryName.toLowerCase();
         let category = orgCategoryByName.get(key);
         if (!category) {
+          console.log(`[BulkUpload] Creating new category: "${rawCategoryName}" (length: ${rawCategoryName.length}) for org ${organisationId}`);
           category = await TaskCategory.create({
             name: rawCategoryName,
             description: null,
@@ -440,6 +441,7 @@ export const adminBulkUploadTasksForOrg = async (event) => {
     });
   } catch (err) {
     console.error("Admin bulk upload org tasks error:", err);
+    console.error("Detail:", err.parent?.message || err.original?.message || err.errors?.map(e => e.message).join(', '));
     return error(500, err.message || "Failed to upload organisation tasks");
   }
 };
