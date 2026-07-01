@@ -1,234 +1,276 @@
 <template>
-  <div class="reporting-bot-page">
-    <!-- Sidebar: session history -->
-    <div class="sessions-sidebar">
-      <div class="sidebar-header">
-        <span class="sidebar-title">History</span>
-        <v-btn icon size="small" variant="text" @click="startNewSession">
-          <v-icon color="#0061FB">mdi-plus</v-icon>
-        </v-btn>
-      </div>
+  <div class="rb-page">
 
-      <div class="sessions-list">
-        <div
-          v-for="session in sessions"
-          :key="session.id"
-          class="session-item"
-          :class="{ active: activeSessionId === session.id }"
-          @click="loadSession(session)"
-        >
-          <v-icon size="16" class="session-icon">mdi-message-text-outline</v-icon>
-          <span class="session-label">{{ session.subject || 'New conversation' }}</span>
-        </div>
-        <div v-if="sessions.length === 0" class="no-sessions">No history yet</div>
-      </div>
-    </div>
+    <!-- Left column: main content + footer -->
+    <div class="rb-left">
+      <div class="rb-main">
 
-    <!-- Main area -->
-    <div class="main-area">
-      <!-- Home view: no active session -->
-      <div v-if="!activeSessionId" class="home-view">
-        <div class="home-center">
-          <div class="home-logo">
-            <v-icon size="48" color="#0061FB">mdi-chart-bar</v-icon>
+        <!-- Home view -->
+        <div v-if="!activeSessionId" class="rb-home">
+          <div class="rb-avatar-wrap">
+            <img src="/reporting-ico.svg" alt="Reporting Bot" class="rb-avatar-img" />
           </div>
-          <h1 class="home-title">FlosslyOS Reporting Bot</h1>
-          <p class="home-subtitle">Ask anything about your practice data — leads, tasks, diary, staff, and more.</p>
+          <h1 class="rb-greeting">Hello, {{ firstName }}</h1>
+          <p class="rb-subtitle">What report would you like to run for you?</p>
 
-          <!-- Suggested questions -->
-          <div class="suggestions-grid">
-            <button
-              v-for="(suggestion, i) in visibleSuggestions"
-              :key="i"
-              class="suggestion-card"
-              @click="startWithSuggestion(suggestion)"
-            >
-              <v-icon size="16" color="#0061FB" class="suggestion-icon">{{ suggestion.icon }}</v-icon>
-              <span>{{ suggestion.text }}</span>
-            </button>
-          </div>
-
-          <v-btn variant="text" size="small" color="grey" class="refresh-btn" @click="shuffleSuggestions">
-            <v-icon size="16" class="mr-1">mdi-refresh</v-icon> Show different questions
-          </v-btn>
-        </div>
-
-        <!-- Input at bottom of home view -->
-        <div class="home-input-wrapper">
-          <div class="input-bar">
-            <textarea
-              ref="homeInputRef"
-              v-model="pendingMessage"
-              class="chat-textarea"
-              placeholder="Ask a question about your practice data..."
-              rows="1"
-              @keydown.enter.exact.prevent="submitFromHome"
-              @input="autoResize($event.target)"
-            />
-            <v-btn
-              icon
-              size="small"
-              color="#0061FB"
-              :disabled="!pendingMessage.trim() || isLoading"
-              @click="submitFromHome"
-            >
-              <v-icon>mdi-send</v-icon>
-            </v-btn>
-          </div>
-        </div>
-      </div>
-
-      <!-- Chat view: active session -->
-      <div v-else class="chat-view">
-        <div class="chat-messages" ref="messagesContainer">
-          <div
-            v-for="msg in activeMessages"
-            :key="msg.id"
-            class="message-row"
-            :class="msg.senderType === 'user' ? 'user-row' : 'bot-row'"
-          >
-            <!-- Bot message -->
-            <template v-if="msg.senderType !== 'user'">
-              <div class="bot-avatar">
-                <v-icon size="18" color="white">mdi-chart-bar</v-icon>
-              </div>
-              <div class="bot-bubble">
-                <div class="markdown-content" v-html="renderMarkdown(msg.message)" />
-                <div v-if="!msg.streaming && msg.message?.length > 100" class="export-actions">
-                  <button v-if="hasTable(msg.message)" class="export-btn" @click="downloadExcel(msg.message)">
-                    <v-icon size="12">mdi-microsoft-excel</v-icon> Excel
-                  </button>
-                  <button class="export-btn" @click="openAsPdf(msg.message)">
-                    <v-icon size="12">mdi-file-pdf-box</v-icon> PDF
-                  </button>
-                </div>
-                <span v-if="msg.streaming" class="streaming-cursor">▋</span>
-              </div>
-            </template>
-
-            <!-- User message -->
-            <template v-else>
-              <div class="user-bubble">{{ msg.message }}</div>
-            </template>
-          </div>
-
-          <!-- Typing indicator -->
-          <div v-if="isWaiting && !streamingText" class="message-row bot-row">
-            <div class="bot-avatar"><v-icon size="18" color="white">mdi-chart-bar</v-icon></div>
-            <div class="bot-bubble typing-bubble">
-              <span></span><span></span><span></span>
+          <!-- Home input -->
+          <div class="rb-input-wrap rb-home-input">
+            <div class="rb-input-bar">
+              <img src="/reportpage/attach.svg" alt="attach" class="rb-input-icon rb-attach-btn" @click="triggerFileInput" />
+              <textarea
+                ref="homeInputRef"
+                v-model="pendingMessage"
+                class="rb-textarea"
+                placeholder="Ask anything"
+                rows="1"
+                @keydown.enter.exact.prevent="submitFromHome"
+                @input="autoResize($event.target)"
+              />
+              <button
+                class="rb-send-btn"
+                :disabled="(!pendingMessage.trim() && !attachedFiles.length) || isLoading"
+                @click="submitFromHome"
+              >
+                <img src="/reportpage/send.svg" alt="send" style="width:18px;height:18px;" />
+              </button>
+            </div>
+            <div v-if="attachedFiles.length" class="rb-attached-chips">
+              <span v-for="(f, i) in attachedFiles" :key="i" class="rb-file-chip">
+                <v-icon size="12">mdi-paperclip</v-icon> {{ f.name }}
+                <button class="rb-chip-remove" @click.stop="removeFile(i)">×</button>
+              </span>
             </div>
           </div>
 
-          <div ref="bottomAnchor" style="height:1px" />
+          <!-- Suggestion cards -->
+          <div class="rb-cards">
+            <button
+              v-for="(card, i) in suggestionCards"
+              :key="i"
+              class="rb-card"
+              @click="startWithText(card.question)"
+            >
+              <img :src="card.iconSrc" :alt="card.title" class="rb-card-icon-img" />
+              <div class="rb-card-title">{{ card.title }}</div>
+              <div class="rb-card-desc">{{ card.description }}</div>
+            </button>
+          </div>
+
+          <!-- Quick reports -->
+          <div class="rb-reports-section">
+            <span class="rb-reports-label">Reports</span>
+            <div class="rb-pills">
+              <button
+                v-for="(pill, i) in quickReports"
+                :key="i"
+                class="rb-pill"
+                @click="startWithText(pill.question)"
+              >
+                <v-icon size="14" color="#6b7280">{{ pill.icon }}</v-icon>
+                <span>{{ pill.label }}</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <!-- Input -->
-        <div class="chat-input-wrapper">
-          <div class="input-bar">
+
+        <!-- Chat view -->
+        <div v-else class="rb-chat">
+          <div class="rb-chat-header">
+            <v-btn icon size="small" variant="text" @click="startNewSession">
+              <v-icon>mdi-arrow-left</v-icon>
+            </v-btn>
+            <span class="rb-chat-title">{{ activeSession?.subject || 'Reporting Bot' }}</span>
+          </div>
+
+          <div class="rb-messages" ref="messagesContainer">
+            <div
+              v-for="msg in activeMessages"
+              :key="msg.id"
+              class="rb-msg-row"
+              :class="msg.senderType === 'user' ? 'rb-user-row' : 'rb-bot-row'"
+            >
+              <template v-if="msg.senderType !== 'user'">
+                <div class="rb-msg-avatar">
+                  <img src="/ava.svg" alt="bot" class="rb-bubble-avatar" />
+                </div>
+                <div class="rb-bot-bubble">
+                  <div class="rb-md" v-html="renderMarkdown(msg.message)" />
+                  <div v-if="!msg.streaming && hasTable(msg.message)" class="rb-export-row">
+                    <button class="rb-export-btn" @click="downloadExcel(msg.message)">
+                      <v-icon size="11">mdi-microsoft-excel</v-icon> Excel
+                    </button>
+                  </div>
+                  <span v-if="msg.streaming" class="rb-cursor">▋</span>
+                </div>
+              </template>
+              <template v-else>
+                <div class="rb-user-bubble">
+                  <div v-if="msg.metadata?.files?.length" class="rb-bubble-files">
+                    <span v-for="(f, i) in msg.metadata.files" :key="i" class="rb-bubble-file-chip">
+                      <v-icon size="13">{{ fileIcon(f.type) }}</v-icon> {{ f.name }}
+                    </span>
+                  </div>
+                  <span v-if="msg.message">{{ msg.message }}</span>
+                </div>
+              </template>
+            </div>
+
+            <!-- Typing / tool indicator -->
+            <div v-if="isWaiting && !streamingActive" class="rb-msg-row rb-bot-row">
+              <div class="rb-msg-avatar">
+                <img src="/ava.svg" alt="bot" class="rb-bubble-avatar" />
+              </div>
+              <div v-if="currentToolLabel" class="rb-bot-bubble rb-tool-status">
+                <span class="rb-tool-dot" /><span class="rb-tool-label">{{ currentToolLabel }}</span>
+              </div>
+              <div v-else class="rb-bot-bubble rb-typing">
+                <span /><span /><span />
+              </div>
+            </div>
+
+            <div ref="bottomAnchor" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Sticky input footer (chat view only) -->
+      <div v-if="activeSessionId" class="rb-input-footer">
+        <div class="rb-input-wrap">
+          <div class="rb-input-bar">
+            <img src="/reportpage/attach.svg" alt="attach" class="rb-input-icon rb-attach-btn" @click="triggerFileInput" />
             <textarea
               ref="chatInputRef"
               v-model="pendingMessage"
-              class="chat-textarea"
-              placeholder="Ask a follow-up question..."
+              class="rb-textarea"
+              placeholder="Ask anything"
               rows="1"
               :disabled="isWaiting"
               @keydown.enter.exact.prevent="submitMessage"
               @input="autoResize($event.target)"
             />
-            <v-btn
-              icon
-              size="small"
-              color="#0061FB"
-              :disabled="!pendingMessage.trim() || isWaiting"
+            <button
+              class="rb-send-btn"
+              :disabled="(!pendingMessage.trim() && !attachedFiles.length) || isWaiting"
               @click="submitMessage"
             >
-              <v-icon>mdi-send</v-icon>
-            </v-btn>
+              <img src="/reportpage/send.svg" alt="send" style="width:18px;height:18px;" />
+            </button>
           </div>
-          <p class="input-disclaimer">FlosslyOS Reporting Bot may make mistakes. Always verify critical figures.</p>
+          <div v-if="attachedFiles.length" class="rb-attached-chips">
+            <span v-for="(f, i) in attachedFiles" :key="i" class="rb-file-chip">
+              <v-icon size="12">mdi-paperclip</v-icon> {{ f.name }}
+              <button class="rb-chip-remove" @click.stop="removeFile(i)">×</button>
+            </span>
+          </div>
         </div>
       </div>
+      <input ref="fileInputRef" type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.csv,.txt" style="display:none" @change="onFilesSelected" />
     </div>
+
+    <!-- Recents sidebar (full height) -->
+    <div class="rb-recents">
+      <div class="rb-recents-header">
+        <img src="/reportpage/recent.svg" alt="recents" style="width:18px;height:18px;" />
+        <span class="rb-recents-title">Recents</span>
+      </div>
+      <div class="rb-recents-list">
+        <button
+          v-for="session in sessions"
+          :key="session.id"
+          class="rb-recent-item"
+          :class="{ active: activeSessionId === session.id }"
+          @click="loadSession(session)"
+        >
+          {{ session.subject || 'New conversation' }}
+        </button>
+        <div v-if="sessions.length === 0" class="rb-recents-empty">No recent conversations</div>
+      </div>
+    </div>
+
   </div>
 </template>
 
 <script setup>
-import { marked } from 'marked';
-import supportChatService from '~/services/supportChatService.js';
+import { Marked } from 'marked';
+import reportingBotService from '~/services/reportingBotService.js';
 
-marked.setOptions({ breaks: true, gfm: true });
+definePageMeta({ layout: 'home' });
 
-definePageMeta({ layout: 'default' });
+const md = new Marked({ breaks: true, gfm: true });
 
-// ─── All 213 prompts, grouped with icons ───────────────────────────────────
-const ALL_PROMPTS = [
-  { text: 'How many total leads do I have?', icon: 'mdi-account-group' },
-  { text: 'How many leads are in each status — New, Contacted, Converted, Lost?', icon: 'mdi-filter-variant' },
-  { text: 'What is my overall lead-to-conversion rate?', icon: 'mdi-percent' },
-  { text: 'How many leads have I converted this month?', icon: 'mdi-trophy' },
-  { text: 'How many leads were marked as Lost this month?', icon: 'mdi-account-off' },
-  { text: 'Show me the full pipeline breakdown for this week.', icon: 'mdi-chart-sankey' },
-  { text: 'How many leads came in this week?', icon: 'mdi-calendar-week' },
-  { text: 'How many leads have overdue follow-up dates?', icon: 'mdi-clock-alert' },
-  { text: 'Which lead source generates the most leads overall?', icon: 'mdi-source-branch' },
-  { text: 'Which lead source has the highest conversion rate?', icon: 'mdi-trending-up' },
-  { text: 'Compare Meta Leadgen vs Chatbot conversion rates.', icon: 'mdi-compare' },
-  { text: 'Which treatment is enquired about most overall?', icon: 'mdi-tooth-outline' },
-  { text: 'Which treatment has the highest conversion rate?', icon: 'mdi-star' },
-  { text: 'What is my average speed to lead — time from inquiry to first contact?', icon: 'mdi-timer-outline' },
-  { text: 'What percentage of leads are contacted within 1 hour of enquiring?', icon: 'mdi-clock-fast' },
-  { text: 'How many leads have been sitting in New status for more than 7 days?', icon: 'mdi-alert-circle' },
-  { text: 'Which team member has the highest lead conversion rate?', icon: 'mdi-account-star' },
-  { text: 'Which staff member has the most overdue follow-ups?', icon: 'mdi-account-alert' },
-  { text: 'How many follow-ups are due today?', icon: 'mdi-calendar-today' },
-  { text: 'How many follow-ups are overdue?', icon: 'mdi-calendar-alert' },
-  { text: 'Show me all hot leads that haven\'t converted yet.', icon: 'mdi-fire' },
-  { text: 'What is my total Meta ad spend this month?', icon: 'mdi-currency-gbp' },
-  { text: 'Which Meta campaign generated the most leads?', icon: 'mdi-bullhorn' },
-  { text: 'What is my average cost per lead from Meta this month?', icon: 'mdi-cash-multiple' },
-  { text: 'How many patients are in the system?', icon: 'mdi-account-heart' },
-  { text: 'How many patients are overdue for recall?', icon: 'mdi-tooth' },
-  { text: 'How many appointments are booked this week?', icon: 'mdi-calendar-check' },
-  { text: 'What is my DNA (Did Not Attend) rate this month?', icon: 'mdi-calendar-remove' },
-  { text: 'How many tasks are overdue right now?', icon: 'mdi-checkbox-marked-circle-auto-outline' },
-  { text: 'How many tasks are due today?', icon: 'mdi-checkbox-blank-circle-outline' },
-  { text: 'Which team member has the most overdue tasks?', icon: 'mdi-account-clock' },
-  { text: 'What is my team\'s overall task completion rate this week?', icon: 'mdi-chart-line' },
-  { text: 'How many rotas have been published?', icon: 'mdi-calendar-month' },
-  { text: 'How many holiday requests are currently pending approval?', icon: 'mdi-beach' },
-  { text: 'Give me a full KPI summary for this month.', icon: 'mdi-view-dashboard' },
-  { text: 'Give me a full KPI summary for the last 30 days.', icon: 'mdi-calendar-month-outline' },
-  { text: 'What is my top-of-funnel performance this month?', icon: 'mdi-funnel' },
-  { text: 'What are my top 3 lead sources by conversion rate this month?', icon: 'mdi-podium-gold' },
-  { text: 'How many leads are currently at risk of going cold?', icon: 'mdi-snowflake-alert' },
-  { text: 'Compare this month\'s performance to last month across all key metrics.', icon: 'mdi-swap-horizontal' },
+const { user } = useUser();
+const firstName = computed(() => (user.value?.fullName || 'there').split(' ')[0]);
+
+// ─── Suggestion cards ─────────────────────────────────────────────────────
+const ALL_CARDS = [
+  { iconSrc: '/reportpage/response-time.svg', title: 'Response Time',  description: "What's our average speed to lead this month vs last month?",    question: "What's our average speed to lead this month vs last month?" },
+  { iconSrc: '/reportpage/campaign.svg',       title: 'Campaigns',      description: 'Which campaign generated the most leads in the last 90 days?',  question: 'Which Meta campaign generated the most leads in the last 90 days?' },
+  { iconSrc: '/reportpage/cost.svg',           title: 'Cost Analysis',  description: "What's our cost per lead from Meta this month?",                question: "What's our cost per lead from Meta this month?" },
+  { iconSrc: '/reportpage/response-time.svg', title: 'Lead Pipeline',  description: 'Show me the full pipeline breakdown for this week.',             question: 'Show me the full pipeline breakdown for this week.' },
+  { iconSrc: '/reportpage/campaign.svg',       title: 'Top Performers', description: 'Which team member has the highest lead conversion rate?',        question: 'Which team member has the highest lead conversion rate?' },
+  { iconSrc: '/reportpage/cost.svg',           title: 'Treatment Mix',  description: 'Which treatment is enquired about most overall?',               question: 'Which treatment is enquired about most overall?' },
 ];
 
-const visibleSuggestions = ref([]);
+const QUICK_REPORTS = [
+  { icon: 'mdi-cash',                   label: 'Total income this month',       question: 'What is the total income this month?' },
+  { icon: 'mdi-account-plus-outline',   label: 'New patient per month',         question: 'How many new patients joined this month?' },
+  { icon: 'mdi-percent',                label: 'Conversion rate',               question: 'What is my overall lead-to-conversion rate?' },
+  { icon: 'mdi-calendar-remove',        label: 'DNA rate this month',           question: 'What is my DNA (Did Not Attend) rate this month?' },
+  { icon: 'mdi-account-group-outline',  label: 'Total leads this month',        question: 'How many leads came in this month?' },
+  { icon: 'mdi-trending-up',            label: 'Top converting lead source',    question: 'Which lead source has the highest conversion rate?' },
+  { icon: 'mdi-clock-alert-outline',    label: 'Overdue follow-ups',            question: 'How many follow-ups are overdue?' },
+  { icon: 'mdi-trophy-outline',         label: 'Top performer this month',      question: 'Which team member has the highest lead conversion rate this month?' },
+  { icon: 'mdi-currency-gbp',           label: 'Meta ad spend this month',      question: 'What is my total Meta ad spend this month?' },
+  { icon: 'mdi-checkbox-marked-circle-outline', label: 'Tasks completed today', question: 'How many tasks were completed today?' },
+];
 
-const shuffleSuggestions = () => {
-  const shuffled = [...ALL_PROMPTS].sort(() => Math.random() - 0.5);
-  visibleSuggestions.value = shuffled.slice(0, 6);
+const suggestionCards = ref([]);
+const quickReports = ref(QUICK_REPORTS);
+
+const pickCards = () => {
+  const shuffled = [...ALL_CARDS].sort(() => Math.random() - 0.5);
+  suggestionCards.value = shuffled.slice(0, 3);
 };
+pickCards();
 
-shuffleSuggestions();
-
-// ─── Session management ────────────────────────────────────────────────────
+// ─── Sessions ─────────────────────────────────────────────────────────────
 const sessions = ref([]);
 const activeSessionId = ref(null);
+const activeSession = ref(null);
 const activeMessages = ref([]);
 const pendingMessage = ref('');
 const isWaiting = ref(false);
-const streamingText = ref('');
+const isLoading = ref(false);
+const streamingActive = ref(false);
+const currentToolLabel = ref('');
 const messagesContainer = ref(null);
 const bottomAnchor = ref(null);
 const homeInputRef = ref(null);
 const chatInputRef = ref(null);
+const fileInputRef = ref(null);
+const attachedFiles = ref([]);
 let activeEventSource = null;
 
+const triggerFileInput = () => fileInputRef.value?.click();
+
+const onFilesSelected = (e) => {
+  const files = Array.from(e.target.files || []);
+  attachedFiles.value.push(...files);
+  e.target.value = '';
+};
+
+const removeFile = (i) => attachedFiles.value.splice(i, 1);
+
+const readFileAsBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve({ name: file.name, type: file.type, data: reader.result.split(',')[1] });
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
+
 const fetchSessions = async () => {
-  const res = await supportChatService.getConversations({ conversationType: 'reporting-bot', widgetView: true });
+  const res = await reportingBotService.getConversations();
   if (res?.success) {
     sessions.value = (res.data ?? [])
       .sort((a, b) => new Date(b.lastMessageAt || b.createdAt) - new Date(a.lastMessageAt || a.createdAt));
@@ -247,85 +289,100 @@ onMounted(async () => {
 });
 
 const startNewSession = () => {
+  closeStream();
   activeSessionId.value = null;
+  activeSession.value = null;
   activeMessages.value = [];
   pendingMessage.value = '';
-  streamingText.value = '';
   isWaiting.value = false;
-  closeStream();
+  streamingActive.value = false;
+  pickCards();
 };
 
 const loadSession = async (session) => {
   closeStream();
   activeSessionId.value = session.id;
-  streamingText.value = '';
+  activeSession.value = session;
   isWaiting.value = false;
-  const res = await supportChatService.getConversationById(session.id);
-  const msgs = res?.data?.messages ?? [];
-  activeMessages.value = msgs.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  streamingActive.value = false;
+  const res = await reportingBotService.getConversationById(session.id);
+  activeMessages.value = (res?.data?.messages ?? [])
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   await nextTick();
   scrollToBottom();
 };
 
-// ─── Sending messages ──────────────────────────────────────────────────────
+// ─── Sending ──────────────────────────────────────────────────────────────
+const startWithText = (text) => {
+  pendingMessage.value = text;
+  submitFromHome();
+};
+
 const submitFromHome = async () => {
-  if (!pendingMessage.value.trim()) return;
-  // Create conversation first
-  const convRes = await supportChatService.createConversation({
-    conversationType: 'reporting-bot',
-    subject: pendingMessage.value.trim().slice(0, 100),
+  const text = pendingMessage.value.trim();
+  if (!text || isLoading.value) return;
+  isLoading.value = true;
+  const convRes = await reportingBotService.createConversation({
+    subject: text.slice(0, 100),
   });
+  isLoading.value = false;
   if (!convRes?.success || !convRes?.data?.id) return;
   const convId = convRes.data.id;
   activeSessionId.value = convId;
+  activeSession.value = convRes.data;
   activeMessages.value = [];
   await fetchSessions();
-  await sendUserMessage(convId, pendingMessage.value.trim());
+  await sendUserMessage(convId, text);
 };
 
 const submitMessage = async () => {
-  if (!pendingMessage.value.trim() || isWaiting.value) return;
-  await sendUserMessage(activeSessionId.value, pendingMessage.value.trim());
+  const text = pendingMessage.value.trim();
+  if (!text || isWaiting.value) return;
+  await sendUserMessage(activeSessionId.value, text);
 };
 
 const sendUserMessage = async (conversationId, text) => {
-  const msg = text;
+  const filesToSend = [...attachedFiles.value];
+  attachedFiles.value = [];
   pendingMessage.value = '';
   await nextTick();
   if (chatInputRef.value) chatInputRef.value.style.height = 'auto';
+  if (homeInputRef.value) homeInputRef.value.style.height = 'auto';
 
-  const userMsg = { id: `u-${Date.now()}`, message: msg, senderType: 'user', createdAt: new Date().toISOString() };
-  activeMessages.value.push(userMsg);
+  let encodedFiles = [];
+  if (filesToSend.length) {
+    encodedFiles = await Promise.all(filesToSend.map(readFileAsBase64));
+  }
+
+  const displayText = text;
+  const tempId = `u-${Date.now()}`;
+  const tempMeta = encodedFiles.length ? { files: encodedFiles.map(f => ({ name: f.name, type: f.type })) } : null;
+  activeMessages.value.push({ id: tempId, message: displayText, senderType: 'user', createdAt: new Date().toISOString(), metadata: tempMeta });
   isWaiting.value = true;
   await nextTick();
   scrollToBottom();
 
-  // Save user message
-  const msgRes = await supportChatService.createMessage({ conversationId, message: msg, senderType: 'user' });
-  if (!msgRes?.success) {
-    isWaiting.value = false;
-    return;
-  }
-  // Replace temp with real
-  activeMessages.value = activeMessages.value.filter(m => m.id !== userMsg.id);
+  const msgRes = await reportingBotService.createMessage({
+    conversationId,
+    message: displayText,
+    senderType: 'user',
+    ...(encodedFiles.length ? { metadata: { files: encodedFiles } } : {}),
+  });
+  if (!msgRes?.success) { isWaiting.value = false; return; }
+
+  activeMessages.value = activeMessages.value.filter(m => m.id !== tempId);
   activeMessages.value.push(msgRes.data);
 
-  // Open SSE stream
   openStream(conversationId);
   await fetchSessions();
 };
 
-const startWithSuggestion = (suggestion) => {
-  pendingMessage.value = suggestion.text;
-  submitFromHome();
-};
-
-// ─── SSE streaming ─────────────────────────────────────────────────────────
-const openStream = (conversationId) => {
+// ─── SSE ──────────────────────────────────────────────────────────────────
+const openStream = (conversationId, files = []) => {
   closeStream();
-  streamingText.value = '';
-  const streamingMsgId = `stream-${Date.now()}`;
-  activeMessages.value.push({ id: streamingMsgId, message: '', senderType: 'ai', createdAt: new Date().toISOString(), streaming: true });
+  streamingActive.value = false;
+  const streamId = `s-${Date.now()}`;
+  let placeholderAdded = false;
 
   const es = new EventSource(`/api/reportingBot/stream?conversationId=${conversationId}`);
   activeEventSource = es;
@@ -333,10 +390,18 @@ const openStream = (conversationId) => {
   es.onmessage = async (event) => {
     try {
       const data = JSON.parse(event.data);
+      if (data.tool) {
+        currentToolLabel.value = data.tool;
+      }
       if (data.chunk) {
-        streamingText.value += data.chunk;
-        const streamMsg = activeMessages.value.find(m => m.id === streamingMsgId);
-        if (streamMsg) streamMsg.message = streamingText.value;
+        currentToolLabel.value = '';
+        if (!placeholderAdded) {
+          placeholderAdded = true;
+          streamingActive.value = true;
+          activeMessages.value.push({ id: streamId, message: '', senderType: 'ai', createdAt: new Date().toISOString(), streaming: true });
+        }
+        const msg = activeMessages.value.find(m => m.id === streamId);
+        if (msg) msg.message += data.chunk;
         await nextTick();
         scrollToBottom();
       }
@@ -344,26 +409,23 @@ const openStream = (conversationId) => {
         es.close();
         activeEventSource = null;
         isWaiting.value = false;
-        activeMessages.value = activeMessages.value.filter(m => m.id !== streamingMsgId);
-        if (data.message) {
-          activeMessages.value.push({ ...data.message, streaming: false });
-        }
-        streamingText.value = '';
+        streamingActive.value = false;
+        currentToolLabel.value = '';
+        activeMessages.value = activeMessages.value.filter(m => m.id !== streamId);
+        if (data.message) activeMessages.value.push({ ...data.message, streaming: false });
         await nextTick();
         scrollToBottom();
         await fetchSessions();
       }
-    } catch (e) {
-      console.error('SSE parse error', e);
-    }
+    } catch (e) { console.error('SSE error', e); }
   };
 
   es.onerror = () => {
     es.close();
     activeEventSource = null;
     isWaiting.value = false;
-    activeMessages.value = activeMessages.value.filter(m => m.id !== streamingMsgId);
-    streamingText.value = '';
+    streamingActive.value = false;
+    activeMessages.value = activeMessages.value.filter(m => m.id !== streamId);
   };
 };
 
@@ -373,24 +435,24 @@ const closeStream = () => {
 
 onUnmounted(closeStream);
 
-// ─── Markdown + scroll ─────────────────────────────────────────────────────
-const renderMarkdown = (text) => {
-  if (!text) return '';
-  return marked.parse(text);
-};
+// ─── Helpers ──────────────────────────────────────────────────────────────
+const renderMarkdown = (text) => text ? md.parse(text) : '';
 
-const scrollToBottom = () => {
-  bottomAnchor.value?.scrollIntoView({ behavior: 'smooth' });
-};
+const scrollToBottom = () => bottomAnchor.value?.scrollIntoView({ behavior: 'smooth' });
 
 const autoResize = (el) => {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 160) + 'px';
 };
 
-// ─── Export helpers ────────────────────────────────────────────────────────
 const hasTable = (text) => /^\|.+\|/m.test(text || '');
 
+const fileIcon = (type = '') => {
+  if (type.startsWith('image/')) return 'mdi-image-outline';
+  if (type === 'application/pdf') return 'mdi-file-pdf-box';
+  if (type === 'text/csv' || type.includes('spreadsheet') || type.includes('excel')) return 'mdi-file-excel-outline';
+  return 'mdi-paperclip';
+};
 const stripMd = (s) => s.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').trim();
 
 const parseMarkdownTables = (text) => {
@@ -398,12 +460,12 @@ const parseMarkdownTables = (text) => {
   const lines = (text || '').split('\n');
   let current = null;
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('|')) {
-      if (/^\|[\s|:-]+\|$/.test(trimmed)) continue;
-      const cells = trimmed.split('|').slice(1, -1).map(c => stripMd(c.trim()));
-      if (!current) { current = { headers: cells, rows: [] }; }
-      else { current.rows.push(cells); }
+    const t = line.trim();
+    if (t.startsWith('|')) {
+      if (/^\|[\s|:-]+\|$/.test(t)) continue;
+      const cells = t.split('|').slice(1, -1).map(c => stripMd(c.trim()));
+      if (!current) current = { headers: cells, rows: [] };
+      else current.rows.push(cells);
     } else {
       if (current) { tables.push(current); current = null; }
     }
@@ -419,28 +481,17 @@ const downloadExcel = async (text) => {
   const wb = XLSX.utils.book_new();
   tables.forEach((table, i) => {
     const ws = XLSX.utils.aoa_to_sheet([table.headers, ...table.rows]);
-    ws['!cols'] = table.headers.map((h, ci) => ({
-      wch: Math.max(h.length, ...table.rows.map(r => (r[ci] || '').length), 10)
-    }));
+    ws['!cols'] = table.headers.map((h, ci) => ({ wch: Math.max(h.length, ...table.rows.map(r => (r[ci] || '').length), 10) }));
     XLSX.utils.book_append_sheet(wb, ws, `Table ${i + 1}`);
   });
   XLSX.writeFile(wb, 'flossly-report.xlsx');
 };
 
 const openAsPdf = (text) => {
-  const htmlContent = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>FlosslyOS Report</title>
-    <style>
-      body { font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.6; }
-      h1,h2,h3 { color: #0061FB; }
-      table { border-collapse: collapse; width: 100%; margin: 16px 0; }
-      th { background: #0061FB; color: white; padding: 8px 12px; text-align: left; }
-      td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; }
-      tr:nth-child(even) td { background: #f9fafb; }
-      code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
-      pre { background: #f3f4f6; padding: 16px; border-radius: 8px; overflow-x: auto; }
-    </style>
-    </head><body>${marked.parse(text)}</body></html>`;
-  const blob = new Blob([htmlContent], { type: 'text/html' });
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>FlosslyOS Report</title>
+    <style>body{font-family:Arial,sans-serif;max-width:900px;margin:40px auto;padding:0 24px;color:#1a1a1a;line-height:1.6}h1,h2,h3{color:#0061FB}table{border-collapse:collapse;width:100%;margin:16px 0}th{background:#0061FB;color:white;padding:8px 12px;text-align:left}td{padding:8px 12px;border-bottom:1px solid #e5e7eb}tr:nth-child(even) td{background:#f9fafb}code{background:#f3f4f6;padding:2px 6px;border-radius:4px}pre{background:#f3f4f6;padding:16px;border-radius:8px;overflow-x:auto}</style>
+    </head><body>${md.parse(text)}</body></html>`;
+  const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   window.open(url, '_blank');
   setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -448,308 +499,135 @@ const openAsPdf = (text) => {
 </script>
 
 <style scoped>
-.reporting-bot-page {
+.rb-page {
   display: flex;
+  flex-direction: row;
   height: calc(100vh - 64px);
-  background: #f8f9fb;
+  max-height: calc(100vh - 64px);
+  background: #f9fafb;
   overflow: hidden;
 }
 
-/* ── Sidebar ── */
-.sessions-sidebar {
-  width: 260px;
-  min-width: 260px;
-  background: white;
-  border-right: 1px solid #e5e7eb;
+/* ── Left column (main + footer stacked) ── */
+.rb-left {
+  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 16px 12px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.sidebar-title {
-  font-weight: 700;
-  font-size: 14px;
-  color: #111827;
-}
-
-.sessions-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.session-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #374151;
-  transition: background 0.15s;
-  overflow: hidden;
-}
-
-.session-item:hover { background: #f3f4f6; }
-.session-item.active { background: #eff6ff; color: #0061FB; font-weight: 600; }
-
-.session-icon { flex-shrink: 0; opacity: 0.6; }
-
-.session-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.no-sessions {
-  padding: 16px;
-  color: #9ca3af;
-  font-size: 13px;
-  text-align: center;
+  min-width: 0;
 }
 
 /* ── Main ── */
-.main-area {
+.rb-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* ── Home view ── */
-.home-view {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.home-center {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 24px 16px;
-  overflow-y: auto;
-}
-
-.home-logo {
-  width: 72px;
-  height: 72px;
-  background: #eff6ff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.home-title {
-  font-size: 26px;
-  font-weight: 700;
-  color: #111827;
-  margin-bottom: 8px;
-}
-
-.home-subtitle {
-  font-size: 15px;
-  color: #6b7280;
-  margin-bottom: 32px;
-  text-align: center;
-  max-width: 500px;
-}
-
-.suggestions-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  width: 100%;
-  max-width: 680px;
-  margin-bottom: 16px;
-}
-
-.suggestion-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 14px 16px;
-  font-size: 13px;
-  color: #374151;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  line-height: 1.4;
-}
-
-.suggestion-card:hover {
-  border-color: #0061FB;
-  box-shadow: 0 0 0 1px #0061FB22;
-}
-
-.suggestion-icon { flex-shrink: 0; margin-top: 1px; }
-
-.refresh-btn { margin-top: 4px; font-size: 12px; }
-
-/* ── Home input ── */
-.home-input-wrapper {
-  padding: 16px 24px 20px;
-  border-top: 1px solid #f0f0f0;
-  background: white;
-}
-
-/* ── Chat view ── */
-.chat-view {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.message-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.bot-row { flex-direction: row; }
-.user-row { flex-direction: row-reverse; }
-
-.bot-avatar {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  border-radius: 50%;
-  background: #0061FB;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* ── Input footer ── */
+.rb-input-footer {
   flex-shrink: 0;
-}
-
-.bot-bubble {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 14px 16px;
-  max-width: 80%;
-  font-size: 14px;
-  line-height: 1.6;
-  color: #111827;
-}
-
-.user-bubble {
-  background: #0061FB;
-  color: white;
-  border-radius: 12px;
-  padding: 12px 16px;
-  max-width: 70%;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.typing-bubble {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 14px 16px;
-}
-
-.typing-bubble span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #9ca3af;
-  display: inline-block;
-  animation: bounce 1.2s infinite;
-}
-.typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
-.typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes bounce {
-  0%, 60%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-6px); }
-}
-
-.streaming-cursor {
-  display: inline-block;
-  animation: blink 1s step-end infinite;
-  color: #0061FB;
-  font-weight: bold;
-}
-
-@keyframes blink {
-  50% { opacity: 0; }
-}
-
-.export-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.export-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  background: #f9fafb;
-  font-size: 12px;
-  color: #374151;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.export-btn:hover { background: #f3f4f6; border-color: #9ca3af; }
-
-/* ── Chat input ── */
-.chat-input-wrapper {
-  padding: 12px 24px 16px;
+  padding: 10px 20px 12px;
   border-top: 1px solid #e5e7eb;
   background: white;
 }
 
-/* ── Shared input bar ── */
-.input-bar {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  background: white;
-  border: 1.5px solid #d1d5db;
-  border-radius: 14px;
-  padding: 10px 12px 10px 16px;
-  transition: border-color 0.15s;
+/* Home input wrap — inline under subtitle */
+.rb-home-input {
+  max-width: 680px;
+  margin-bottom: 32px;
 }
 
-.input-bar:focus-within { border-color: #0061FB; }
+/* Footer input bar — full width */
+.rb-input-footer .rb-input-bar {
+  max-width: 100%;
+}
 
-.chat-textarea {
+
+/* ── Home ── */
+.rb-home {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  padding: 40px 24px 32px;
+}
+
+/* Avatar */
+.rb-avatar-wrap {
+  margin-bottom: 24px;
+}
+
+.rb-avatar-img {
+  width: 200px;
+  height: 200px;
+  display: block;
+}
+
+/* Greeting */
+.rb-greeting {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 130%;
+  letter-spacing: 0%;
+  text-align: center;
+  margin-bottom: 6px;
+  background: linear-gradient(90.52deg, #FFA977 0.24%, #FF85DA 33.98%, #7D77FF 66.09%, #68ECE6 99.49%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.rb-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  font-size: 40px;
+  line-height: 130%;
+  letter-spacing: 0%;
+  text-align: center;
+  color: #111827;
+  margin-bottom: 32px;
+}
+
+/* Input wrap (bar + chips below) */
+.rb-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Input bar (shared) */
+.rb-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 10px 10px 10px 20px;
+  width: 100%;
+  transition: border-color 0.15s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.rb-input-bar:focus-within { border-color: #0061FB; }
+
+.rb-input-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.rb-textarea {
   flex: 1;
   border: none;
   outline: none;
-  font-size: 14px;
+  font-size: 15px;
   color: #111827;
   resize: none;
   line-height: 1.5;
@@ -759,27 +637,390 @@ const openAsPdf = (text) => {
   font-family: inherit;
 }
 
-.chat-textarea::placeholder { color: #9ca3af; }
+.rb-textarea::placeholder { color: #9ca3af; }
 
-.input-disclaimer {
-  font-size: 11px;
-  color: #9ca3af;
-  text-align: center;
-  margin-top: 8px;
-  margin-bottom: 0;
+.rb-send-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: #0061FB;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  flex-shrink: 0;
 }
 
-/* ── Markdown content ── */
-.markdown-content :deep(p) { margin: 0 0 10px; }
-.markdown-content :deep(p:last-child) { margin-bottom: 0; }
-.markdown-content :deep(ul), .markdown-content :deep(ol) { padding-left: 20px; margin: 8px 0; }
-.markdown-content :deep(li) { margin-bottom: 4px; }
-.markdown-content :deep(table) { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
-.markdown-content :deep(th) { background: #0061FB; color: white; padding: 8px 12px; text-align: left; }
-.markdown-content :deep(td) { padding: 7px 12px; border-bottom: 1px solid #e5e7eb; }
-.markdown-content :deep(tr:nth-child(even) td) { background: #f9fafb; }
-.markdown-content :deep(code) { background: #f3f4f6; padding: 2px 5px; border-radius: 4px; font-size: 12px; }
-.markdown-content :deep(pre) { background: #f3f4f6; padding: 12px 16px; border-radius: 8px; overflow-x: auto; }
-.markdown-content :deep(h1), .markdown-content :deep(h2), .markdown-content :deep(h3) { color: #111827; margin: 12px 0 6px; }
-.markdown-content :deep(strong) { color: #111827; }
+.rb-send-btn:disabled { background: #d1d5db; cursor: default; }
+.rb-send-btn:not(:disabled):hover { background: #0052d4; }
+
+.rb-bubble-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.rb-bubble-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: white;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-attach-btn { cursor: pointer; opacity: 0.7; transition: opacity 0.15s; }
+.rb-attach-btn:hover { opacity: 1; }
+
+.rb-attached-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.rb-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #1d4ed8;
+  white-space: nowrap;
+}
+
+.rb-chip-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 0 0 2px;
+}
+.rb-chip-remove:hover { color: #111827; }
+
+/* Cards */
+.rb-cards {
+  display: flex;
+  gap: 14px;
+  margin-top: 28px;
+  width: 100%;
+  max-width: 680px;
+}
+
+.rb-card {
+  flex: 1;
+  background: #ffffff;
+  border: 1px solid #dedede;
+  border-radius: 14px;
+  padding: 18px 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0px 8px 10px 0px rgba(0, 0, 0, 0.06);
+}
+
+.rb-card:hover {
+  box-shadow: 0px 12px 20px 0px rgba(0, 0, 0, 0.1);
+}
+
+.rb-card-icon-img {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 4px;
+}
+
+.rb-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.rb-card-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* Quick reports */
+.rb-reports-section {
+  margin-top: 24px;
+  width: 100%;
+  max-width: 680px;
+}
+
+.rb-reports-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.rb-pills {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.rb-pills::-webkit-scrollbar { display: none; }
+
+.rb-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.rb-pill:hover { border-color: #0061FB; background: #eff6ff; }
+
+/* ── Chat view ── */
+.rb-chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rb-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.rb-chat-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.rb-msg-row { display: flex; align-items: flex-start; gap: 10px; }
+.rb-bot-row { flex-direction: row; }
+.rb-user-row { flex-direction: row-reverse; }
+
+.rb-msg-avatar {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.rb-bubble-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.rb-bot-bubble {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px 16px;
+  max-width: 80%;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #111827;
+}
+
+.rb-user-bubble {
+  background: #0061FB;
+  color: white;
+  border-radius: 12px;
+  padding: 10px 16px;
+  max-width: 70%;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.rb-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 16px;
+}
+
+.rb-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9ca3af;
+  display: inline-block;
+  animation: rbBounce 1.2s infinite;
+}
+.rb-typing span:nth-child(2) { animation-delay: 0.2s; }
+.rb-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes rbBounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-5px); }
+}
+
+.rb-tool-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.rb-tool-dot {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  border-radius: 50%;
+  background: #0061FB;
+  animation: rbPulse 1.2s ease-in-out infinite;
+}
+
+.rb-tool-label {
+  font-style: italic;
+}
+
+@keyframes rbPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
+}
+
+.rb-cursor {
+  display: inline-block;
+  animation: rbBlink 1s step-end infinite;
+  color: #0061FB;
+}
+@keyframes rbBlink { 50% { opacity: 0; } }
+
+.rb-export-row { display: flex; gap: 6px; margin-top: 8px; }
+.rb-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  font-size: 11px;
+  color: #374151;
+  cursor: pointer;
+}
+.rb-export-btn:hover { background: #f3f4f6; }
+
+
+/* ── Recents sidebar ── */
+.rb-recents {
+  width: 240px;
+  min-width: 240px;
+  border-left: 1px solid #e5e7eb;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rb-recents-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 16px 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.rb-recents-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.rb-recents-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.rb-recent-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  font-size: 12.5px;
+  color: #4b5563;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 0.12s;
+  margin-bottom: 2px;
+}
+.rb-recent-item:hover { background: #f3f4f6; }
+.rb-recent-item.active { background: #eff6ff; color: #0061FB; font-weight: 600; }
+
+.rb-recents-empty {
+  padding: 16px;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* ── Markdown ── */
+.rb-md :deep(p) { margin: 0 0 10px; }
+.rb-md :deep(p:last-child) { margin-bottom: 0; }
+.rb-md :deep(ul), .rb-md :deep(ol) { padding-left: 20px; margin: 8px 0; }
+.rb-md :deep(li) { margin-bottom: 3px; }
+.rb-md :deep(table) { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+.rb-md :deep(th) { background: #0061FB; color: white; padding: 7px 12px; text-align: left; }
+.rb-md :deep(td) { padding: 6px 12px; border-bottom: 1px solid #e5e7eb; }
+.rb-md :deep(tr:nth-child(even) td) { background: #f9fafb; }
+.rb-md :deep(code) { background: #f3f4f6; padding: 2px 5px; border-radius: 4px; font-size: 12px; }
+.rb-md :deep(pre) { background: #f3f4f6; padding: 12px 16px; border-radius: 8px; overflow-x: auto; }
+.rb-md :deep(h1), .rb-md :deep(h2), .rb-md :deep(h3) { color: #111827; margin: 10px 0 6px; }
 </style>

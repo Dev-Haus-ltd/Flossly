@@ -187,7 +187,39 @@ const RUN_SQL_TOOL = {
   }
 }
 
-export async function answerReportingQuestion({ question, orgId, userId, userName, userEmail, conversationHistory = [], onChunk }) {
+const TOOL_LABELS = {
+  get_module_schema: (input) => {
+    const labels = { tasks: 'Reading Tasks', crm: 'Inspecting Leads', diary: 'Checking Diary', finance: 'Reviewing Finances', marketing: 'Analysing Marketing', staff: 'Reviewing Staff', cpd: 'Checking CPD', organisation: 'Reading Organisation', executive: 'Executive Overview', notifications: 'Checking Notifications' }
+    return labels[input.module] || `Loading ${input.module}`
+  },
+  describe_table: () => 'Inspecting data structure',
+  run_sql_query: () => 'Fetching data',
+}
+
+const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+const SUPPORTED_DOC_TYPES = ['application/pdf', 'text/plain', 'text/csv']
+
+function buildUserContent(question, attachedFiles = []) {
+  if (!attachedFiles.length) return question
+
+  const parts = []
+
+  for (const file of attachedFiles) {
+    if (SUPPORTED_IMAGE_TYPES.includes(file.type)) {
+      parts.push({ type: 'image', source: { type: 'base64', media_type: file.type, data: file.data } })
+    } else if (SUPPORTED_DOC_TYPES.includes(file.type)) {
+      parts.push({ type: 'document', source: { type: 'base64', media_type: file.type, data: file.data } })
+    } else {
+      // SVG, XLSX, DOCX etc. — not natively readable; tell the AI what was attached
+      parts.push({ type: 'text', text: `[User attached a file: "${file.name}" (${file.type || 'unknown type'}). This format cannot be read directly. Ask the user to export it as CSV, PDF, or plain text if they want you to analyse its contents.]` })
+    }
+  }
+
+  parts.push({ type: 'text', text: question })
+  return parts
+}
+
+export async function answerReportingQuestion({ question, orgId, userId, userName, userEmail, conversationHistory = [], attachedFiles = [], onChunk, onTool }) {
   const client = await initializeAnthropicClient()
   const configuredModel = getLlmModel()
   const model = configuredModel === 'claude-sonnet-4-20250514' ? 'claude-sonnet-4-5' : configuredModel
@@ -195,7 +227,7 @@ export async function answerReportingQuestion({ question, orgId, userId, userNam
 
   const messages = [
     ...conversationHistory.map(m => ({ role: m.role, content: m.content })),
-    { role: 'user', content: question }
+    { role: 'user', content: buildUserContent(question, attachedFiles) }
   ]
 
   let iterations = 0
@@ -243,6 +275,11 @@ export async function answerReportingQuestion({ question, orgId, userId, userNam
     const toolResults = []
     for (const block of response.content) {
       if (block.type !== 'tool_use') continue
+
+      if (onTool) {
+        const label = TOOL_LABELS[block.name]?.(block.input) || block.name
+        await onTool(label)
+      }
 
       let result
 

@@ -1,5 +1,5 @@
 import { createEventStream } from 'h3'
-import { ChatbotMessage, ChatbotConversation, User } from '~/server/models/index.js'
+import { ReportingBotConversation, ReportingBotMessage, User } from '~/server/models/index.js'
 import { answerReportingQuestion } from '~/server/utils/reportingBot.js'
 import { sendNotificationToUser } from '~/server/utils/fcmNotification.js'
 
@@ -10,15 +10,16 @@ export default defineEventHandler(async (event) => {
   const { conversationId } = getQuery(event)
   if (!conversationId) throw createError({ statusCode: 400, message: 'conversationId required' })
 
-  const conversation = await ChatbotConversation.findByPk(conversationId, {
-    include: [{ model: User, as: 'user', attributes: ['id', 'fullName', 'email'] }]
+  const conversation = await ReportingBotConversation.findOne({
+    where: { id: conversationId, userId: user.userId, organisationId: user.orgId },
+    include: [{ model: User, as: 'rbUser', attributes: ['id', 'fullName', 'email'] }]
   })
 
-  if (!conversation || conversation.userId !== user.userId) {
+  if (!conversation) {
     throw createError({ statusCode: 403, message: 'Forbidden' })
   }
 
-  const priorMessages = await ChatbotMessage.findAll({
+  const priorMessages = await ReportingBotMessage.findAll({
     where: { conversationId },
     order: [['createdAt', 'ASC']],
     limit: 21,
@@ -33,30 +34,36 @@ export default defineEventHandler(async (event) => {
     .filter(m => m.id !== latestUser.id)
     .map(m => ({ role: m.senderType === 'user' ? 'user' : 'assistant', content: m.message }))
 
+  const convUser = conversation.rbUser
+
   const eventStream = createEventStream(event)
 
   ;(async () => {
     let fullText = ''
     try {
+      const attachedFiles = latestUser.metadata?.files || []
+
       fullText = await answerReportingQuestion({
         question: latestUser.message,
         orgId: user.orgId,
         userId: user.userId,
-        userName: conversation.user?.fullName,
-        userEmail: conversation.user?.email,
+        userName: convUser?.fullName,
+        userEmail: convUser?.email,
         conversationHistory: history,
+        attachedFiles,
+        onTool: async (label) => {
+          await eventStream.push(JSON.stringify({ tool: label }))
+        },
         onChunk: async (chunk) => {
           fullText += chunk
           await eventStream.push(JSON.stringify({ chunk }))
         },
       })
 
-      const botMessage = await ChatbotMessage.create({
+      const botMessage = await ReportingBotMessage.create({
         conversationId,
-        senderId: null,
         senderType: 'ai',
         message: fullText,
-        isRead: false,
       })
 
       await eventStream.push(JSON.stringify({ done: true, message: botMessage.toJSON() }))
@@ -73,10 +80,9 @@ export default defineEventHandler(async (event) => {
       }).catch(() => {})
     } catch (err) {
       process.stderr.write(`[ReportingBot stream] error: ${err.message}\n`)
-      const errMsg = await ChatbotMessage.create({
-        conversationId, senderId: null, senderType: 'ai',
+      const errMsg = await ReportingBotMessage.create({
+        conversationId, senderType: 'ai',
         message: 'Sorry, I encountered an error fetching your practice data. Please try again.',
-        isRead: false,
       }).catch(() => null)
       await eventStream.push(JSON.stringify({ error: true, message: errMsg?.toJSON() }))
     } finally {

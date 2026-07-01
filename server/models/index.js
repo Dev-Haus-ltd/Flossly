@@ -79,6 +79,10 @@ import { ChatbotConversation } from "./chatbot/chatbotConversations";
 import { ChatbotMessage } from "./chatbot/chatbotMessages";
 import { ChatbotMessageAttachment } from "./chatbot/chatbotMessageAttachments";
 
+// Reporting Bot
+import { ReportingBotConversation } from "./reportingBot/reportingBotConversations";
+import { ReportingBotMessage } from "./reportingBot/reportingBotMessages";
+
 // Google Analytics (GSC & Business Profile)
 import { GoogleOAuthToken } from "./crm/google_analytics/googleOAuthTokens";
 import { GoogleSearchConsoleSite } from "./crm/google_analytics/googleSearchConsoleSites";
@@ -799,6 +803,9 @@ export {
   ChatbotConversation,
   ChatbotMessage,
   ChatbotMessageAttachment,
+  // Reporting Bot
+  ReportingBotConversation,
+  ReportingBotMessage,
   // Google Analytics (GSC & Business Profile)
   GoogleOAuthToken,
   GoogleSearchConsoleSite,
@@ -863,6 +870,14 @@ ChatbotMessageAttachment.belongsTo(ChatbotConversation, { foreignKey: "conversat
 ChatbotMessageAttachment.belongsTo(User, { foreignKey: "uploadedBy", as: "uploader", onDelete: "SET NULL" });
 
 // Bug reports and feature requests removed - using conversation metadata instead
+
+// --------------------------
+// Reporting Bot Associations
+// --------------------------
+ReportingBotConversation.belongsTo(User, { foreignKey: "userId", as: "rbUser", onDelete: "CASCADE", hooks: true });
+ReportingBotConversation.belongsTo(Organisation, { foreignKey: "organisationId", as: "rbOrganisation", onDelete: "CASCADE", hooks: true });
+ReportingBotConversation.hasMany(ReportingBotMessage, { foreignKey: "conversationId", as: "messages" });
+ReportingBotMessage.belongsTo(ReportingBotConversation, { foreignKey: "conversationId", as: "conversation", onDelete: "CASCADE", hooks: true });
 
 // --------------------------
 // FormConfig -> Organisation
